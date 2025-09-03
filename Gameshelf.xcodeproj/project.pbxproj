@@ -24,14 +24,27 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		C385B92E2E5C9E0B00388B1A /* gameshelf.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = gameshelf.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		C385B9402E5C9E0D00388B1A /* gameshelfTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = gameshelfTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		C385B94A2E5C9E0D00388B1A /* gameshelfUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = gameshelfUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C385B92E2E5C9E0B00388B1A /* Gameshelf.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Gameshelf.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C385B9402E5C9E0D00388B1A /* GameshelfTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GameshelfTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C385B94A2E5C9E0D00388B1A /* GameshelfUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GameshelfUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		C385B9882E5DD3FA00388B1A /* Exceptions for "gameshelf" folder in "Gameshelf" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = C385B92D2E5C9E0B00388B1A /* Gameshelf */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		C385B9302E5C9E0B00388B1A /* gameshelf */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				C385B9882E5DD3FA00388B1A /* Exceptions for "gameshelf" folder in "Gameshelf" target */,
+			);
 			path = gameshelf;
 			sourceTree = "<group>";
 		};
@@ -85,9 +98,9 @@
 		C385B92F2E5C9E0B00388B1A /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				C385B92E2E5C9E0B00388B1A /* gameshelf.app */,
-				C385B9402E5C9E0D00388B1A /* gameshelfTests.xctest */,
-				C385B94A2E5C9E0D00388B1A /* gameshelfUITests.xctest */,
+				C385B92E2E5C9E0B00388B1A /* Gameshelf.app */,
+				C385B9402E5C9E0D00388B1A /* GameshelfTests.xctest */,
+				C385B94A2E5C9E0D00388B1A /* GameshelfUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -95,9 +108,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		C385B92D2E5C9E0B00388B1A /* gameshelf */ = {
+		C385B92D2E5C9E0B00388B1A /* Gameshelf */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = C385B9542E5C9E0D00388B1A /* Build configuration list for PBXNativeTarget "gameshelf" */;
+			buildConfigurationList = C385B9542E5C9E0D00388B1A /* Build configuration list for PBXNativeTarget "Gameshelf" */;
 			buildPhases = (
 				C385B92A2E5C9E0B00388B1A /* Sources */,
 				C385B92B2E5C9E0B00388B1A /* Frameworks */,
@@ -110,16 +123,16 @@
 			fileSystemSynchronizedGroups = (
 				C385B9302E5C9E0B00388B1A /* gameshelf */,
 			);
-			name = gameshelf;
+			name = Gameshelf;
 			packageProductDependencies = (
 			);
 			productName = gameshelf;
-			productReference = C385B92E2E5C9E0B00388B1A /* gameshelf.app */;
+			productReference = C385B92E2E5C9E0B00388B1A /* Gameshelf.app */;
 			productType = "com.apple.product-type.application";
 		};
-		C385B93F2E5C9E0D00388B1A /* gameshelfTests */ = {
+		C385B93F2E5C9E0D00388B1A /* GameshelfTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = C385B9572E5C9E0D00388B1A /* Build configuration list for PBXNativeTarget "gameshelfTests" */;
+			buildConfigurationList = C385B9572E5C9E0D00388B1A /* Build configuration list for PBXNativeTarget "GameshelfTests" */;
 			buildPhases = (
 				C385B93C2E5C9E0D00388B1A /* Sources */,
 				C385B93D2E5C9E0D00388B1A /* Frameworks */,
@@ -133,16 +146,16 @@
 			fileSystemSynchronizedGroups = (
 				C385B9432E5C9E0D00388B1A /* gameshelfTests */,
 			);
-			name = gameshelfTests;
+			name = GameshelfTests;
 			packageProductDependencies = (
 			);
 			productName = gameshelfTests;
-			productReference = C385B9402E5C9E0D00388B1A /* gameshelfTests.xctest */;
+			productReference = C385B9402E5C9E0D00388B1A /* GameshelfTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		C385B9492E5C9E0D00388B1A /* gameshelfUITests */ = {
+		C385B9492E5C9E0D00388B1A /* GameshelfUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = C385B95A2E5C9E0D00388B1A /* Build configuration list for PBXNativeTarget "gameshelfUITests" */;
+			buildConfigurationList = C385B95A2E5C9E0D00388B1A /* Build configuration list for PBXNativeTarget "GameshelfUITests" */;
 			buildPhases = (
 				C385B9462E5C9E0D00388B1A /* Sources */,
 				C385B9472E5C9E0D00388B1A /* Frameworks */,
@@ -156,11 +169,11 @@
 			fileSystemSynchronizedGroups = (
 				C385B94D2E5C9E0D00388B1A /* gameshelfUITests */,
 			);
-			name = gameshelfUITests;
+			name = GameshelfUITests;
 			packageProductDependencies = (
 			);
 			productName = gameshelfUITests;
-			productReference = C385B94A2E5C9E0D00388B1A /* gameshelfUITests.xctest */;
+			productReference = C385B94A2E5C9E0D00388B1A /* GameshelfUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -186,7 +199,7 @@
 					};
 				};
 			};
-			buildConfigurationList = C385B9292E5C9E0B00388B1A /* Build configuration list for PBXProject "gameshelf" */;
+			buildConfigurationList = C385B9292E5C9E0B00388B1A /* Build configuration list for PBXProject "Gameshelf" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -195,14 +208,17 @@
 			);
 			mainGroup = C385B9252E5C9E0B00388B1A;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C385BA0D2E68279700388B1A /* XCLocalSwiftPackageReference "../../Downloads/GameshelfDesignSystem" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C385B92F2E5C9E0B00388B1A /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				C385B92D2E5C9E0B00388B1A /* gameshelf */,
-				C385B93F2E5C9E0D00388B1A /* gameshelfTests */,
-				C385B9492E5C9E0D00388B1A /* gameshelfUITests */,
+				C385B92D2E5C9E0B00388B1A /* Gameshelf */,
+				C385B93F2E5C9E0D00388B1A /* GameshelfTests */,
+				C385B9492E5C9E0D00388B1A /* GameshelfUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -258,12 +274,12 @@
 /* Begin PBXTargetDependency section */
 		C385B9422E5C9E0D00388B1A /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = C385B92D2E5C9E0B00388B1A /* gameshelf */;
+			target = C385B92D2E5C9E0B00388B1A /* Gameshelf */;
 			targetProxy = C385B9412E5C9E0D00388B1A /* PBXContainerItemProxy */;
 		};
 		C385B94C2E5C9E0D00388B1A /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = C385B92D2E5C9E0B00388B1A /* gameshelf */;
+			target = C385B92D2E5C9E0B00388B1A /* Gameshelf */;
 			targetProxy = C385B94B2E5C9E0D00388B1A /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -400,6 +416,7 @@
 				DEVELOPMENT_TEAM = 8Q69T5HJ26;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = gameshelf/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -431,6 +448,7 @@
 				DEVELOPMENT_TEAM = 8Q69T5HJ26;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = gameshelf/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -469,7 +487,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/gameshelf.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/gameshelf";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Gameshelf.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Gameshelf";
 			};
 			name = Debug;
 		};
@@ -490,7 +508,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/gameshelf.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/gameshelf";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Gameshelf.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Gameshelf";
 			};
 			name = Release;
 		};
@@ -535,7 +553,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		C385B9292E5C9E0B00388B1A /* Build configuration list for PBXProject "gameshelf" */ = {
+		C385B9292E5C9E0B00388B1A /* Build configuration list for PBXProject "Gameshelf" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				C385B9522E5C9E0D00388B1A /* Debug */,
@@ -544,7 +562,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		C385B9542E5C9E0D00388B1A /* Build configuration list for PBXNativeTarget "gameshelf" */ = {
+		C385B9542E5C9E0D00388B1A /* Build configuration list for PBXNativeTarget "Gameshelf" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				C385B9552E5C9E0D00388B1A /* Debug */,
@@ -553,7 +571,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		C385B9572E5C9E0D00388B1A /* Build configuration list for PBXNativeTarget "gameshelfTests" */ = {
+		C385B9572E5C9E0D00388B1A /* Build configuration list for PBXNativeTarget "GameshelfTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				C385B9582E5C9E0D00388B1A /* Debug */,
@@ -562,7 +580,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		C385B95A2E5C9E0D00388B1A /* Build configuration list for PBXNativeTarget "gameshelfUITests" */ = {
+		C385B95A2E5C9E0D00388B1A /* Build configuration list for PBXNativeTarget "GameshelfUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				C385B95B2E5C9E0D00388B1A /* Debug */,
@@ -572,6 +590,13 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		C385BA0D2E68279700388B1A /* XCLocalSwiftPackageReference "../../Downloads/GameshelfDesignSystem" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../Downloads/GameshelfDesignSystem;
+		};
+/* End XCLocalSwiftPackageReference section */
 	};
 	rootObject = C385B9262E5C9E0B00388B1A /* Project object */;
 }

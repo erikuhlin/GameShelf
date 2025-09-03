@@ -5,17 +5,22 @@
 //  Created by Erik Uhlin on 2025-08-25.
 //
 
+
 import SwiftUI
-import CoreData
 
 @main
+
+
+
 struct gameshelfApp: App {
-    let persistenceController = PersistenceController.shared
+    @StateObject private var store = LibraryStore()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environment(\.managedObjectContext, persistenceController.container.viewContext)
+                .tint(.ds.brandRed)
+                .background(Color.ds.background)
+                .environmentObject(store)
         }
     }
 }

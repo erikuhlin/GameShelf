@@ -12,7 +12,6 @@ struct LibraryView: View {
 
     @State private var search = ""
     @State private var showGrid = true
-    @AppStorage("showFilters") private var showFilters = true
     @State private var showAdd = false
     @State private var showFilterSheet = false
     @StateObject private var rawgVM = RawgSearchViewModel(api: RawgClient(), localTitles: { [] })
@@ -284,9 +283,10 @@ private extension LibraryView {
                 dbg("[LibraryView] filters tapped")
             } label: {
                 HStack(spacing: 6) {
-                    Label("Filters", systemImage: showFilters
-                          ? "line.3.horizontal.decrease.circle.fill"
-                          : "line.3.horizontal.decrease.circle")
+                    let filterIcon = (hasActiveFilters || !search.isEmpty)
+                        ? "line.3.horizontal.decrease.circle.fill"
+                        : "line.3.horizontal.decrease.circle"
+                    Label("Filters", systemImage: filterIcon)
 
                     if hasActiveFilters || !search.isEmpty {
                         Text("\(resultCount)")

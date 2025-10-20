@@ -5,7 +5,6 @@
 //  Created by Erik Uhlin on 2025-08-26.
 //
 
-
 import Foundation
 
 struct RawgClient {
@@ -20,12 +19,19 @@ struct RawgClient {
 
     enum RawgError: Error { case missingKey, badResponse, decoding }
 
-    func searchGames(query: String, pageSize: Int = 20) async throws -> [RawgGame] {
+    /// Searches RAWG games with pagination support.
+    /// - Parameters:
+    ///   - query: Search string.
+    ///   - page: 1-based page index.
+    ///   - pageSize: Results per page (default 20).
+    /// - Returns: Tuple of items and a flag whether more pages are available.
+    func search(_ query: String, page: Int, pageSize: Int = 20) async throws -> (items: [RawgGame], hasMore: Bool) {
         guard !apiKey.isEmpty else { throw RawgError.missingKey }
         var comps = URLComponents(url: base.appendingPathComponent("games"), resolvingAgainstBaseURL: false)!
         comps.queryItems = [
             .init(name: "key", value: apiKey),
             .init(name: "search", value: query),
+            .init(name: "page", value: String(max(page, 1))),
             .init(name: "page_size", value: String(pageSize)),
             .init(name: "search_precise", value: "true")
         ]
@@ -33,9 +39,10 @@ struct RawgClient {
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw RawgError.badResponse }
         do {
             let decoded = try JSONDecoder().decode(RawgSearchResponse.self, from: data)
-            return decoded.results
+            return (decoded.results, decoded.next != nil)
         } catch {
             throw RawgError.decoding
         }
     }
 }
+

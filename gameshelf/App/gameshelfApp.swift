@@ -14,13 +14,15 @@ import SwiftUI
 
 struct gameshelfApp: App {
     @StateObject private var store = LibraryStore()
+    @StateObject private var profile = ProfileStore()
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootTabView()
                 .tint(.ds.brandRed)
                 .background(Color.ds.background)
                 .environmentObject(store)
+                .environmentObject(profile)
         }
     }
 }

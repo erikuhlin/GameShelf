@@ -145,8 +145,8 @@ struct OnlineSearchView: View {
         isLoading = true
         errorText = nil
         do {
-            let items = try await client.searchGames(query: q)
-            results = items
+            let res = try await client.search(q, page: 1)
+            results = res.items
         } catch RawgClient.RawgError.missingKey {
             errorText = "Missing RAWG_API_KEY in Info.plist"
             results = []

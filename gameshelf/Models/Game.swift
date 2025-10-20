@@ -11,11 +11,13 @@ import Foundation
 struct Game: Identifiable, Hashable, Codable {
     var id = UUID()
     var title: String
-    var platform: String
+    var platforms: [String]      // changed from String to list
     var releaseYear: Int
     var genres: [String]
-    var developer: String
+    var developers: [String]     // changed from String to list
     var status: PlayStatus
-    var rating: Int?            // 1–10
+    var rating: Int?             // user rating, 1–10
+    var rawgRating: Double?      // RAWG rating, 0–5
     var coverURL: URL?
+    var notes: String = ""       // personal notes
 }

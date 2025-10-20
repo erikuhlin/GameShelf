@@ -10,14 +10,15 @@ import SwiftUI
 
 struct GameHeroHeader: View {
     let game: Game
-    var height: CGFloat = 260
+    var height: CGFloat = 300 // tidigare 260 – höj gärna för tydligare hero-känsla
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             CoverView(title: game.title,
                       url: game.coverURL,
                       corner: 0,
-                      height: height)
+                      height: height,
+                      fitMode: .fill) // tvinga täckande i hero-headern
 
             // Soft top-to-center fade for readability if you later put controls on top
             LinearGradient(colors: [Color.black.opacity(0.35), .clear],
@@ -33,7 +34,7 @@ struct GameHeroHeader: View {
 
                 HStack(spacing: Spacing.s) {
                     StatusBadge(status: game.status)
-                    Text(game.platform)
+                    Text(game.platforms.joined(separator: ", "))
                     Text("·")
                     Text("\(game.releaseYear)")
                 }
@@ -50,6 +51,7 @@ struct GameHeroHeader: View {
         // .padding(.horizontal)
     }
 }
+
 struct CompactGameHeroHeader: View {
     let game: Game
     var body: some View {
@@ -57,7 +59,8 @@ struct CompactGameHeroHeader: View {
             CoverView(title: game.title,
                       url: game.coverURL,
                       corner: Radius.m,
-                      height: 128)
+                      height: 128,
+                      fitMode: .fill) // även här, så miniatyren fyller sin yta
             .frame(width: 96)
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -67,7 +70,7 @@ struct CompactGameHeroHeader: View {
 
                 HStack(spacing: Spacing.s) {
                     StatusBadge(status: game.status)
-                    Text(game.platform)
+                    Text(game.platforms.first ?? "")
                     Text("·")
                     Text("\(game.releaseYear)")
                 }

@@ -21,7 +21,7 @@ struct GameCard: View {
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(game.title), \(game.platform), \(game.releaseYear)")
+        .accessibilityLabel("\(game.title), \(game.platforms.joined(separator: ", ")), \(game.releaseYear)")
     }
 }
 
@@ -43,13 +43,14 @@ private struct CoverSection: View {
             height: 180
         )
         .overlay(
-            LinearGradient(colors: [.clear, .black.opacity(0.28)],
+            LinearGradient(colors: [.clear, .black.opacity(0.22)],
                            startPoint: .center, endPoint: .bottom)
                 .clipShape(RoundedRectangle(cornerRadius: Radius.m, style: .continuous))
         )
         .overlay(alignment: .bottomLeading) {
             StatusBadge(status: game.status)
-                .padding(6)
+                .padding(.leading, Spacing.s)
+                .padding(.bottom, Spacing.s)
                 .shadow(radius: 1)
         }
     }
@@ -71,7 +72,7 @@ private struct MetaSection: View {
     let game: Game
     var body: some View {
         HStack(spacing: 6) {
-            Text(game.platform)
+            Text(game.platforms.first ?? "")
                 .lineLimit(1)
                 .truncationMode(.tail)
             Text("·")

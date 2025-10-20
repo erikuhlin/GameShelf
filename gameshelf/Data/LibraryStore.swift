@@ -5,8 +5,39 @@
 //  Created by Erik Uhlin on 2025-08-25.
 //
 
+
 import SwiftUI
 import Combine
+
+// MARK: - Legacy model migration (platform/developer changed to arrays)
+private struct LegacyGame: Decodable {
+    var id: UUID?
+    var title: String
+    var platform: String
+    var releaseYear: Int
+    var genres: [String]
+    var developer: String
+    var status: PlayStatus
+    var rating: Int?
+    var coverURL: URL?
+}
+
+private func migrateLegacy(_ legacy: [LegacyGame]) -> [Game] {
+    legacy.map { old in
+        Game(
+            title: old.title,
+            platforms: old.platform.isEmpty ? [] : [old.platform],
+            releaseYear: old.releaseYear,
+            genres: old.genres,
+            developers: old.developer.isEmpty ? [] : [old.developer],
+            status: old.status,
+            rating: old.rating,
+            rawgRating: nil,
+            coverURL: old.coverURL,
+            notes: ""
+        )
+    }
+}
 
 @MainActor
 final class LibraryStore: ObservableObject {
@@ -26,7 +57,7 @@ final class LibraryStore: ObservableObject {
             isLoaded = true
         } catch {
             // Om laddning misslyckas, fyll med sample och spara
-            self.games = SampleData.games
+            self.games = []
             isLoaded = true
             try? save()
         }
@@ -70,19 +101,37 @@ final class LibraryStore: ObservableObject {
     func load() throws {
         let url = try dataURL()
         guard FileManager.default.fileExists(atPath: url.path) else {
-            self.games = SampleData.games
+            self.games = []
             return
         }
         let data = try Data(contentsOf: url)
         let decoder = JSONDecoder()
-        self.games = try decoder.decode([Game].self, from: data)
+        do {
+            self.games = try decoder.decode([Game].self, from: data)
+        } catch {
+            // Try legacy decode and migrate
+            if let legacy = try? decoder.decode([LegacyGame].self, from: data) {
+                self.games = migrateLegacy(legacy)
+                // Persist immediately in new format
+                try? save()
+            } else {
+                throw error
+            }
+        }
     }
 
     // Gruppindelning per plattform (för hyllvy)
     var shelvesByPlatform: [Shelf] {
-        let groups = Dictionary(grouping: games, by: { $0.platform })
-        return groups.keys.sorted().map { key in
-            Shelf(title: key, games: groups[key]!.sorted { $0.title < $1.title })
+        // Expand each game into (platform, game) pairs so multi-platform spel hamnar på flera hyllor
+        let pairs: [(String, Game)] = games.flatMap { g in
+            let names = g.platforms.isEmpty ? ["Unspecified"] : g.platforms
+            return names.map { ($0, g) }
+        }
+        let groups = Dictionary(grouping: pairs, by: { $0.0 })
+        let keys = groups.keys.sorted()
+        return keys.map { key in
+            let items = groups[key]!.map { $0.1 }.sorted { $0.title < $1.title }
+            return Shelf(title: key, games: items)
         }
     }
 }

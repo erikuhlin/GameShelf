@@ -34,6 +34,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				Support/Previews/ContentView.swift,
 			);
 			target = C385B92D2E5C9E0B00388B1A /* Gameshelf */;
 		};

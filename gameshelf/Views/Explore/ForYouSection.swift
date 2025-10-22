@@ -32,7 +32,7 @@ struct ForYouSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(title: "Recommended for you")
+            sectionHeader(title: "For you")
             if prefs.platforms.isEmpty {
                 hint("Personalize in your profile to refine recommendations.")
             } else {

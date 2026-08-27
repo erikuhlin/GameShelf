@@ -24,6 +24,7 @@ import {
   FolderKanban,
   X,
   Smartphone,
+  Trash2,
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -471,13 +472,30 @@ export default function HomePage() {
               </div>
             </div>
 
-            <button
-              onClick={() => setIsPairingModalOpen(true)}
-              className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition whitespace-nowrap self-start sm:self-auto"
-            >
-              <Smartphone className="w-3.5 h-3.5" />
-              <span>Logga in med iPhone</span>
-            </button>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              {games.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (confirm('Vill du rensa dina lokala gästspel?')) {
+                      handleLogout();
+                    }
+                  }}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 text-zinc-400 hover:text-rose-400 text-xs font-medium border border-zinc-700/80 transition"
+                  title="Rensa lokalt gästbibliotek"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Rensa lokal data</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => setIsPairingModalOpen(true)}
+                className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition whitespace-nowrap"
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+                <span>Logga in med iPhone</span>
+              </button>
+            </div>
           </div>
         )}
 

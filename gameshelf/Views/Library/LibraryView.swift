@@ -53,6 +53,7 @@ enum OwnershipFilter: String, CaseIterable, Identifiable {
 
 struct LibraryView: View {
     @EnvironmentObject var store: LibraryStore
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var ownershipFilter: OwnershipFilter = .all
     @State private var selectedFilter: PlayStatusFilter = .all
@@ -357,6 +358,18 @@ struct LibraryView: View {
             }
             .sheet(isPresented: $showingCreateCollectionSheet) {
                 CreateOrEditCollectionSheet()
+            }
+            .onAppear {
+                Task {
+                    await store.syncWithRemote()
+                }
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .active {
+                    Task {
+                        await store.syncWithRemote()
+                    }
+                }
             }
         }
     }

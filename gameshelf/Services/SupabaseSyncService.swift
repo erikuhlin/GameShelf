@@ -13,19 +13,19 @@ private struct SupabaseGameDTO: Codable {
     var user_id: UUID?
     var title: String
     var platform: String?
-    var platforms: [String]
+    var platforms: [String]?
     var release_year: Int?
-    var genres: [String]
-    var developers: [String]
-    var status: String
-    var rating: Int?
+    var genres: [String]?
+    var developers: [String]?
+    var status: String?
+    var rating: Double?
     var igdb_rating: Double?
     var cover_url: String?
     var igdb_id: Int?
     var estimated_hours: Int?
-    var is_owned: Bool
-    var notes: String
-    var todos: [GameTodoItem]
+    var is_owned: Bool?
+    var notes: String?
+    var todos: [GameTodoItem]?
 
     init(from game: Game, userId: UUID? = nil) {
         self.id = game.id
@@ -37,7 +37,7 @@ private struct SupabaseGameDTO: Codable {
         self.genres = game.genres
         self.developers = game.developers
         self.status = game.status.rawValue
-        self.rating = game.rating
+        self.rating = game.rating.map { Double($0) }
         self.igdb_rating = game.igdbRating
         self.cover_url = game.coverURL?.absoluteString
         self.igdb_id = game.igdbID
@@ -49,7 +49,8 @@ private struct SupabaseGameDTO: Codable {
 
     func toDomainGame() -> Game {
         let playStatus: PlayStatus
-        switch status.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) {
+        let statusString = status?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) ?? "backlog"
+        switch statusString {
         case "playing", "spelar", "spelar nu", "inprogress", "in_progress", "pågående":
             playStatus = .playing
         case "backlog", "unplayed", "ej spelat", "ej påbörjat":
@@ -66,27 +67,29 @@ private struct SupabaseGameDTO: Codable {
             playStatus = .backlog
         }
 
-        var plats = platforms
+        var plats = platforms ?? []
         if plats.isEmpty, let single = platform, !single.isEmpty {
             plats = [single]
         }
+
+        let intRating: Int? = rating.map { Int(round($0)) }
 
         return Game(
             id: id,
             title: title,
             platforms: plats,
             releaseYear: release_year ?? 0,
-            genres: genres,
-            developers: developers,
+            genres: genres ?? [],
+            developers: developers ?? [],
             status: playStatus,
-            rating: rating,
+            rating: intRating,
             igdbRating: igdb_rating,
             coverURL: cover_url.flatMap { URL(string: $0) },
             igdbID: igdb_id,
             estimatedHours: estimated_hours,
-            isOwned: is_owned,
-            notes: notes,
-            todos: todos
+            isOwned: is_owned ?? true,
+            notes: notes ?? "",
+            todos: todos ?? []
         )
     }
 }
@@ -95,8 +98,8 @@ private struct SupabaseCollectionDTO: Codable {
     var id: UUID
     var user_id: UUID?
     var name: String
-    var description: String
-    var game_ids: [UUID]
+    var description: String?
+    var game_ids: [UUID]?
 
     init(from col: GameCollection, userId: UUID? = nil) {
         self.id = col.id
@@ -110,8 +113,8 @@ private struct SupabaseCollectionDTO: Codable {
         GameCollection(
             id: id,
             name: name,
-            description: description,
-            gameIDs: game_ids
+            description: description ?? "",
+            gameIDs: game_ids ?? []
         )
     }
 }

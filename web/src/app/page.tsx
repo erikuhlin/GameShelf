@@ -43,13 +43,18 @@ export default function HomePage() {
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Fetch games & collections from Supabase and localStorage on mount
+  // Fetch games & collections from Supabase (if logged in) or localStorage (if guest)
   const fetchLibrary = async () => {
     setIsSyncing(true);
 
+    let pairedProfile: string | null = null;
+    let pairedUserId: string | null = null;
+
     if (typeof window !== 'undefined') {
-      const savedProfile = localStorage.getItem('gameshelf_profile_name');
-      if (savedProfile) setProfileName(savedProfile);
+      pairedProfile = localStorage.getItem('gameshelf_profile_name');
+      pairedUserId = localStorage.getItem('gameshelf_paired_user_id');
+
+      if (pairedProfile) setProfileName(pairedProfile);
 
       const cachedGames = localStorage.getItem('gameshelf_local_games');
       const cachedCols = localStorage.getItem('gameshelf_local_collections');
@@ -71,29 +76,17 @@ export default function HomePage() {
       }
     }
 
+    // Om användaren är i gästläge (ej parkopplad/inloggad), hämta INTE från Supabase
+    if (!pairedProfile && !pairedUserId) {
+      setIsSyncing(false);
+      return;
+    }
+
     try {
-      const [gamesRes, colRes, pairRes] = await Promise.all([
+      const [gamesRes, colRes] = await Promise.all([
         supabase.from('user_games').select('*').order('created_at', { ascending: false }),
         supabase.from('collections').select('*').order('created_at', { ascending: false }),
-        supabase.from('pairing_sessions').select('*').eq('status', 'approved').order('created_at', { ascending: false }).limit(1),
       ]);
-
-      if (pairRes.data && pairRes.data.length > 0) {
-        const approvedSession = pairRes.data[0];
-        const sessionUser = approvedSession.session_data?.username || 'Erik';
-        setProfileName(sessionUser);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('gameshelf_profile_name', sessionUser);
-          if (approvedSession.user_id) {
-            localStorage.setItem('gameshelf_paired_user_id', approvedSession.user_id);
-          }
-        }
-      } else if (gamesRes.data && gamesRes.data.length > 0 && !localStorage.getItem('gameshelf_profile_name')) {
-        setProfileName('Erik');
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('gameshelf_profile_name', 'Erik');
-        }
-      }
 
       if (gamesRes.data) {
         const mapped = gamesRes.data.map(mapSupabaseGame);
@@ -119,6 +112,10 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchLibrary();
+
+    // Prenumerera endast på Supabase Realtime om användaren är inloggad
+    const isPaired = typeof window !== 'undefined' && !!localStorage.getItem('gameshelf_profile_name');
+    if (!isPaired) return;
 
     // Supabase Realtime Channel for user_games
     const gamesChannel = supabase
@@ -376,7 +373,12 @@ export default function HomePage() {
   };
 
   const handlePairedAndMerge = async (userId: string, username?: string) => {
-    if (username) setProfileName(username);
+    const user = username || 'Erik';
+    setProfileName(user);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gameshelf_profile_name', user);
+      if (userId) localStorage.setItem('gameshelf_paired_user_id', userId);
+    }
 
     // Identifiera gästspel som skapats lokalt och migrera dem till användarens konto
     try {

@@ -73,7 +73,7 @@ export function PairingModal({ isOpen, onClose, onPaired }: PairingModalProps) {
         (payload: any) => {
           if (payload.new && payload.new.status === 'approved') {
             const userId = payload.new.user_id;
-            const username = payload.new.session_data?.username || 'Erik';
+            const username = payload.new.session_data?.username || '';
             setIsSuccess(true);
             setPairedUserId(userId);
             if (typeof window !== 'undefined') {

@@ -373,10 +373,10 @@ export default function HomePage() {
   };
 
   const handlePairedAndMerge = async (userId: string, username?: string) => {
-    const user = username || 'Erik';
+    const user = username?.trim() || (userId ? 'Spelare' : '');
     setProfileName(user);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('gameshelf_profile_name', user);
+      if (user) localStorage.setItem('gameshelf_profile_name', user);
       if (userId) localStorage.setItem('gameshelf_paired_user_id', userId);
     }
 

@@ -18,7 +18,7 @@ final class ProfileStore: ObservableObject {
 
     static let defaultBirthdate: Date = Calendar.current.date(byAdding: .year, value: -16, to: Date()) ?? Date()
     static let defaultPlatforms: Set<String> = ["Nintendo Switch", "PlayStation 5"]
-    static let defaultUsername = "Erik"
+    static let defaultUsername = ""
 
     @Published var username: String {
         didSet { if username != oldValue { UserDefaults.standard.set(username, forKey: Keys.username) } }

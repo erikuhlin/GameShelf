@@ -77,17 +77,24 @@ export default function HomePage() {
       }
     }
 
+    const pairedId = pairedUserId || (typeof window !== 'undefined' ? localStorage.getItem('gameshelf_paired_user_id') : null);
+
     // Om användaren är i gästläge (ej parkopplad/inloggad), hämta INTE från Supabase
-    if (!pairedProfile && !pairedUserId) {
+    if (!pairedProfile && !pairedId) {
       setIsSyncing(false);
       return;
     }
 
     try {
-      const [gamesRes, colRes] = await Promise.all([
-        supabase.from('user_games').select('*').order('created_at', { ascending: false }),
-        supabase.from('collections').select('*').order('created_at', { ascending: false }),
-      ]);
+      let gamesQuery = supabase.from('user_games').select('*').order('created_at', { ascending: false });
+      let colQuery = supabase.from('collections').select('*').order('created_at', { ascending: false });
+
+      if (pairedId) {
+        gamesQuery = gamesQuery.eq('user_id', pairedId);
+        colQuery = colQuery.eq('user_id', pairedId);
+      }
+
+      const [gamesRes, colRes] = await Promise.all([gamesQuery, colQuery]);
 
       if (gamesRes.data) {
         const mapped = gamesRes.data.map(mapSupabaseGame);
@@ -114,16 +121,16 @@ export default function HomePage() {
   useEffect(() => {
     fetchLibrary();
 
-    // Prenumerera endast på Supabase Realtime om användaren är inloggad
-    const isPaired = typeof window !== 'undefined' && !!localStorage.getItem('gameshelf_profile_name');
-    if (!isPaired) return;
+    // Prenumerera endast på Supabase Realtime för den parkopplade användaren
+    const pairedId = typeof window !== 'undefined' ? localStorage.getItem('gameshelf_paired_user_id') : null;
+    if (!pairedId) return;
 
-    // Supabase Realtime Channel for user_games
+    // Supabase Realtime Channel för användarens specifika spel
     const gamesChannel = supabase
-      .channel('public:user_games')
+      .channel(`public:user_games:${pairedId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'user_games' },
+        { event: '*', schema: 'public', table: 'user_games', filter: `user_id=eq.${pairedId}` },
         (payload: any) => {
           if (payload.eventType === 'INSERT') {
             const newGame = mapSupabaseGame(payload.new);
@@ -162,10 +169,10 @@ export default function HomePage() {
       .subscribe();
 
     const collectionsChannel = supabase
-      .channel('public:collections')
+      .channel(`public:collections:${pairedId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'collections' },
+        { event: '*', schema: 'public', table: 'collections', filter: `user_id=eq.${pairedId}` },
         (payload: any) => {
           if (payload.eventType === 'INSERT') {
             const newCol = mapSupabaseCollection(payload.new);
@@ -178,23 +185,16 @@ export default function HomePage() {
             });
           } else if (payload.eventType === 'UPDATE') {
             const updated = mapSupabaseCollection(payload.new);
-            setCollections((prev) => {
-              const next = prev.map((c) => (c.id === updated.id ? updated : c));
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('gameshelf_local_collections', JSON.stringify(next));
-              }
-              return next;
-            });
+            setCollections((prev) =>
+              prev.map((c) => (c.id === updated.id ? updated : c))
+            );
           } else if (payload.eventType === 'DELETE') {
             const deletedId = payload.old?.id;
             if (deletedId) {
-              setCollections((prev) => {
-                const next = prev.filter((c) => c.id !== deletedId);
-                if (typeof window !== 'undefined') {
-                  localStorage.setItem('gameshelf_local_collections', JSON.stringify(next));
-                }
-                return next;
-              });
+              setCollections((prev) => prev.filter((c) => c.id !== deletedId));
+              if (selectedCollectionId === deletedId) {
+                setSelectedCollectionId(null);
+              }
             }
           }
         }
@@ -385,7 +385,8 @@ export default function HomePage() {
     try {
       const { data: dbGames } = await supabase
         .from('user_games')
-        .select('title, igdb_id');
+        .select('title, igdb_id')
+        .eq('user_id', userId);
 
       const existingTitles = new Set(
         (dbGames || []).map((g: any) => (g.title || '').trim().toLowerCase())

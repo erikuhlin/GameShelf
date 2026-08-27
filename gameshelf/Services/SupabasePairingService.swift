@@ -38,16 +38,16 @@ public actor SupabasePairingService {
             throw URLError(.badURL)
         }
 
-        let currentUserId = await MainActor.run { SupabaseAuthManager.shared.currentUser?.id }
+        let currentUserId = await MainActor.run { SupabaseAuthManager.shared.persistentUserId }
         let currentEmail = await MainActor.run { SupabaseAuthManager.shared.currentUser?.email }
         let currentToken = await MainActor.run { SupabaseAuthManager.shared.session?.accessToken }
 
         let payload: [String: Any] = [
             "status": "approved",
-            "user_id": currentUserId?.uuidString as Any,
+            "user_id": currentUserId.uuidString,
             "session_data": [
                 "email": currentEmail ?? "guest@gameshelf.local",
-                "username": username ?? "Erik",
+                "username": username ?? "",
                 "token": currentToken ?? SupabaseConfig.anonKey
             ]
         ]

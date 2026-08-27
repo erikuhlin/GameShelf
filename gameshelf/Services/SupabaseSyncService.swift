@@ -172,10 +172,11 @@ actor SupabaseSyncService {
 
     // MARK: - Games Sync
 
-    /// Hämtar alla spel från Supabase
+    /// Hämtar användarens spel från Supabase
     func fetchRemoteGames() async throws -> [Game] {
         guard SupabaseConfig.isSyncEnabled else { return [] }
-        guard let request = await makeRequest(endpoint: "user_games?select=*&order=created_at.desc") else {
+        let currentUserId = await MainActor.run { SupabaseAuthManager.shared.persistentUserId }
+        guard let request = await makeRequest(endpoint: "user_games?user_id=eq.\(currentUserId.uuidString)&select=*&order=created_at.desc") else {
             throw URLError(.badURL)
         }
 
@@ -191,7 +192,7 @@ actor SupabaseSyncService {
     /// Skapar eller uppdaterar ett spel i Supabase (upsert)
     func upsertGame(_ game: Game) async throws {
         guard SupabaseConfig.isSyncEnabled else { return }
-        let currentUserId = await MainActor.run { SupabaseAuthManager.shared.currentUser?.id }
+        let currentUserId = await MainActor.run { SupabaseAuthManager.shared.persistentUserId }
         let dto = SupabaseGameDTO(from: game, userId: currentUserId)
         let data = try JSONEncoder().encode(dto)
 
@@ -216,8 +217,9 @@ actor SupabaseSyncService {
     /// Tar bort ett spel från Supabase
     func deleteGame(id: UUID) async throws {
         guard SupabaseConfig.isSyncEnabled else { return }
+        let currentUserId = await MainActor.run { SupabaseAuthManager.shared.persistentUserId }
         guard let request = await makeRequest(
-            endpoint: "user_games?id=eq.\(id.uuidString)",
+            endpoint: "user_games?id=eq.\(id.uuidString)&user_id=eq.\(currentUserId.uuidString)",
             method: "DELETE"
         ) else {
             throw URLError(.badURL)
@@ -231,10 +233,11 @@ actor SupabaseSyncService {
 
     // MARK: - Collections Sync
 
-    /// Hämtar alla samlingar från Supabase
+    /// Hämtar användarens samlingar från Supabase
     func fetchRemoteCollections() async throws -> [GameCollection] {
         guard SupabaseConfig.isSyncEnabled else { return [] }
-        guard let request = await makeRequest(endpoint: "collections?select=*&order=created_at.desc") else {
+        let currentUserId = await MainActor.run { SupabaseAuthManager.shared.persistentUserId }
+        guard let request = await makeRequest(endpoint: "collections?user_id=eq.\(currentUserId.uuidString)&select=*&order=created_at.desc") else {
             throw URLError(.badURL)
         }
 
@@ -250,7 +253,7 @@ actor SupabaseSyncService {
     /// Skapar eller uppdaterar en samling i Supabase (upsert)
     func upsertCollection(_ collection: GameCollection) async throws {
         guard SupabaseConfig.isSyncEnabled else { return }
-        let currentUserId = await MainActor.run { SupabaseAuthManager.shared.currentUser?.id }
+        let currentUserId = await MainActor.run { SupabaseAuthManager.shared.persistentUserId }
         let dto = SupabaseCollectionDTO(from: collection, userId: currentUserId)
         let data = try JSONEncoder().encode(dto)
 

@@ -53,7 +53,18 @@ public final class SupabaseAuthManager: ObservableObject {
     @Published public var authError: String?
 
     private let sessionStorageKey = "supabase_user_session"
+    private let deviceUserKey = "device_user_uuid"
     private let urlSession: URLSession
+
+    public var persistentUserId: UUID {
+        if let current = currentUser?.id { return current }
+        if let saved = UserDefaults.standard.string(forKey: deviceUserKey), let uuid = UUID(uuidString: saved) {
+            return uuid
+        }
+        let newUUID = UUID()
+        UserDefaults.standard.set(newUUID.uuidString, forKey: deviceUserKey)
+        return newUUID
+    }
 
     private init() {
         let config = URLSessionConfiguration.default

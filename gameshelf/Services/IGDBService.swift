@@ -245,15 +245,47 @@ struct IGDBPopularityPrimitive: Decodable, Sendable {
         return try await requestGames(body: bodyString, url: url, token: token)
     }
 
-    /// Hämtar aktuella och dynamiskt populära spel från IGDB PopScore
+    /// Hämtar aktuella och dynamiskt populära spel från IGDB PopScore eller per specifik genre
     func fetchPopularGames(genre: String? = nil, limit: Int = 15) async throws -> [IGDBGame] {
         let token = try await IGDBAuthManager.shared.getValidToken()
         guard let url = URL(string: "https://api.igdb.com/v4/games") else {
             throw URLError(.badURL)
         }
-        let now = Int(Date().timeIntervalSince1970)
 
-        // 1. Försök att hämta dynamiskt populära spel från IGDB PopScore (Visits, Playing, Top Sellers)
+        // Om en specifik genre är vald: Gör en direkt och träffsäker sökning i IGDB för den genren
+        if let g = genre, !g.isEmpty {
+            let isHorror = g.lowercased() == "horror"
+            let filterClause = isHorror
+                ? "(themes.name = \"Horror\" | themes.id = 19)"
+                : "genres.name = \"\(g.replacingOccurrences(of: "\"", with: "\\\""))\""
+
+            let genreBody = """
+            fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, themes.id, themes.name, total_rating, total_rating_count, hypes;
+            where \(filterClause) & cover != null & (total_rating > 65 | total_rating_count > 10 | hypes > 0);
+            sort total_rating_count desc;
+            limit \(limit);
+            """
+
+            do {
+                let genreGames = try await requestGames(body: genreBody, url: url, token: token)
+                if !genreGames.isEmpty {
+                    return genreGames
+                }
+            } catch {
+                print("[IGDBService] fetchPopularGames for genre \(g) fallback: \(error)")
+            }
+
+            // Bredare fallback för mindre genrer
+            let fallbackBody = """
+            fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, themes.id, themes.name, total_rating, total_rating_count, hypes;
+            where \(filterClause) & cover != null;
+            sort total_rating desc;
+            limit \(limit);
+            """
+            return try await requestGames(body: fallbackBody, url: url, token: token)
+        }
+
+        // För "Alla" (genre == nil): Hämta globalt populära spel från IGDB PopScore
         do {
             let prims = try await fetchPopularityPrimitives(types: [1, 3, 9], limit: 80)
             var uniqueIDs: [Int] = []
@@ -281,18 +313,7 @@ struct IGDBPopularityPrimitive: Decodable, Sendable {
                     (game.themes?.contains(where: { $0.id == 42 || $0.name.lowercased().contains("erotic") }) ?? false)
                 }
 
-                if let g = genre, !g.isEmpty {
-                    let filtered = orderedGames.filter { game in
-                        if g.lowercased() == "horror" {
-                            return game.themes?.contains(where: { $0.name.lowercased() == "horror" }) ?? false
-                        } else {
-                            return game.genres?.contains(where: { $0.name.lowercased() == g.lowercased() }) ?? false
-                        }
-                    }
-                    if filtered.count >= min(limit, 4) {
-                        return Array(filtered.prefix(limit))
-                    }
-                } else if !orderedGames.isEmpty {
+                if !orderedGames.isEmpty {
                     return Array(orderedGames.prefix(limit))
                 }
             }
@@ -300,23 +321,14 @@ struct IGDBPopularityPrimitive: Decodable, Sendable {
             print("[IGDBService] fetchPopularGames PopScore fallback: \(error)")
         }
 
-        // 2. Fallback: Hämta de mest omtalade spelen från det senaste året
+        // Fallback om PopScore inte svarar
+        let now = Int(Date().timeIntervalSince1970)
         let oneYearAgo = now - (365 * 24 * 3600)
-        var genreFilter = ""
-        if let g = genre, !g.isEmpty {
-            let safeGenre = g.replacingOccurrences(of: "\"", with: "\\\"")
-            if safeGenre.lowercased() == "horror" {
-                genreFilter = " & themes.name = \"Horror\""
-            } else {
-                genreFilter = " & genres.name = \"\(safeGenre)\""
-            }
-        }
-
         let fallbackBody = """
         fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, themes.id, themes.name, total_rating, total_rating_count, hypes;
-        where first_release_date > \(oneYearAgo) & first_release_date <= \(now) & cover != null & (hypes > 0 | total_rating > 60)\(genreFilter);
+        where first_release_date > \(oneYearAgo) & first_release_date <= \(now) & cover != null & (hypes > 0 | total_rating > 60);
         sort hypes desc;
-        limit 30;
+        limit \(limit);
         """
         let fallbackGames = try await requestGames(body: fallbackBody, url: url, token: token)
         return Array(fallbackGames.prefix(limit))

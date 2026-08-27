@@ -26,6 +26,7 @@ struct AddGameView: View {
     @State private var popularGames: [IGDBGame] = []
     @State private var isLoadingDiscovery = false
     @State private var selectedGenreFilter: String? = nil
+    @State private var discoveryDebounceTask: Task<Void, Never>? = nil
 
     let prefillTitle: String?
 
@@ -344,11 +345,13 @@ struct AddGameView: View {
                             ], id: \.self) { genre in
                                 let isSelected = (selectedGenreFilter == genre) || (genre == "Alla" && selectedGenreFilter == nil)
                                 Button {
+                                    let newFilter = (genre == "Alla") ? nil : genre
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        selectedGenreFilter = (genre == "Alla") ? nil : genre
+                                        selectedGenreFilter = newFilter
                                     }
-                                    Task {
-                                        await loadDiscoveryData()
+                                    discoveryDebounceTask?.cancel()
+                                    discoveryDebounceTask = Task {
+                                        await loadDiscoveryData(genre: newFilter)
                                     }
                                 } label: {
                                     Text(genre)
@@ -523,13 +526,17 @@ struct AddGameView: View {
     }
 
     // MARK: - Ladda Förslag & Rekommendationer
-    private func loadDiscoveryData() async {
+    private func loadDiscoveryData(genre: String? = nil) async {
         await MainActor.run {
             isLoadingDiscovery = true
         }
 
+        let targetGenre = genre ?? selectedGenreFilter
+        let mappedGenre = targetGenre.flatMap(mapGenreName)
+
         do {
             async let recommendedFetch: [IGDBGame] = {
+                if !recommendedGames.isEmpty { return recommendedGames }
                 let userTopGenres = store.games.flatMap(\.genres)
                 var counts: [String: Int] = [:]
                 for g in userTopGenres where !g.isEmpty { counts[g, default: 0] += 1 }
@@ -539,11 +546,11 @@ struct AddGameView: View {
             }()
 
             async let popularFetch: [IGDBGame] = {
-                let mappedGenre = selectedGenreFilter.flatMap(mapGenreName)
-                return try await IGDBService.shared.fetchPopularGames(genre: mappedGenre, limit: 10)
+                return try await IGDBService.shared.fetchPopularGames(genre: mappedGenre, limit: 12)
             }()
 
             let (recommended, popular) = try await (recommendedFetch, popularFetch)
+            if Task.isCancelled { return }
 
             await MainActor.run {
                 self.recommendedGames = recommended
@@ -551,6 +558,7 @@ struct AddGameView: View {
                 self.isLoadingDiscovery = false
             }
         } catch {
+            if Task.isCancelled { return }
             await MainActor.run {
                 self.isLoadingDiscovery = false
             }

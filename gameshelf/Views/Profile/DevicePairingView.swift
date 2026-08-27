@@ -16,12 +16,13 @@ struct DevicePairingView: View {
     @State private var pairingCode: String = ""
     @State private var isProcessing: Bool = false
     @State private var errorMessage: String?
+    @State private var isShowingScanner: Bool = false
     @State private var isSuccess: Bool = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 28) {
+                VStack(spacing: 24) {
                     // Header Graphic
                     VStack(spacing: 12) {
                         ZStack {
@@ -38,7 +39,7 @@ struct DevicePairingView: View {
                             .font(.title2.bold())
                             .foregroundStyle(.primary)
 
-                        Text("Öppna http://localhost:3000 i webbläsaren och klicka på 'Anslut iPhone' för att visa din parkopplingskod eller QR-kod.")
+                        Text("Öppna https://mygameshelf.vercel.app i webbläsaren och klicka på 'Logga in med iPhone' för att visa din QR-kod.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -79,64 +80,86 @@ struct DevicePairingView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 20))
                         .padding(.horizontal, 20)
                     } else {
-                        // Code Input Card
-                        VStack(alignment: .leading, spacing: 18) {
-                            Text("Ange kod från webben")
-                                .font(.caption.bold())
-                                .foregroundStyle(.secondary)
-                                .textCase(.uppercase)
-
-                            HStack {
-                                TextField("t.ex. GS-4821", text: $pairingCode)
-                                    .font(.system(size: 24, weight: .bold, design: .monospaced))
-                                    .textInputAutocapitalization(.characters)
-                                    .autocorrectionDisabled()
-                                    .multilineTextAlignment(.center)
-                                    .padding(.vertical, 12)
-                                    .background(Color(.tertiarySystemBackground))
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                                if UIPasteboard.general.hasStrings {
-                                    Button {
-                                        if let str = UIPasteboard.general.string {
-                                            pairingCode = str.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-                                        }
-                                    } label: {
-                                        Image(systemName: "doc.on.clipboard")
-                                            .font(.title3)
-                                            .padding(12)
-                                            .background(Color(.tertiarySystemBackground))
-                                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                                    }
-                                }
-                            }
-
-                            if let error = errorMessage {
-                                Text(error)
-                                    .font(.caption)
-                                    .foregroundStyle(.red)
-                            }
-
+                        VStack(spacing: 18) {
+                            // Primary Action: Camera Scanner Button
                             Button {
-                                handleApprove()
+                                isShowingScanner = true
                             } label: {
-                                HStack {
-                                    Spacer()
-                                    if isProcessing {
-                                        ProgressView()
-                                            .tint(.white)
-                                    } else {
-                                        Image(systemName: "arrow.right.circle.fill")
-                                        Text("Godkänn och anslut webben")
-                                            .bold()
-                                    }
-                                    Spacer()
+                                HStack(spacing: 10) {
+                                    Image(systemName: "camera.viewfinder")
+                                        .font(.title3)
+                                    Text("Scanna QR-kod med kameran")
+                                        .font(.headline)
                                 }
+                                .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
                             }
                             .buttonStyle(.borderedProminent)
                             .tint(Color.ds.brandRed)
-                            .disabled(pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isProcessing)
+
+                            // Divider
+                            HStack {
+                                Rectangle().fill(Color.secondary.opacity(0.2)).frame(height: 1)
+                                Text("ELLER MANUELL KOD")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.secondary)
+                                Rectangle().fill(Color.secondary.opacity(0.2)).frame(height: 1)
+                            }
+                            .padding(.vertical, 4)
+
+                            // Manual Code Input
+                            VStack(alignment: .leading, spacing: 14) {
+                                HStack {
+                                    TextField("t.ex. GS-4821", text: $pairingCode)
+                                        .font(.system(size: 22, weight: .bold, design: .monospaced))
+                                        .textInputAutocapitalization(.characters)
+                                        .autocorrectionDisabled()
+                                        .multilineTextAlignment(.center)
+                                        .padding(.vertical, 10)
+                                        .background(Color(.tertiarySystemBackground))
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                                    if UIPasteboard.general.hasStrings {
+                                        Button {
+                                            if let str = UIPasteboard.general.string {
+                                                pairingCode = str.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+                                            }
+                                        } label: {
+                                            Image(systemName: "doc.on.clipboard")
+                                                .font(.title3)
+                                                .padding(10)
+                                                .background(Color(.tertiarySystemBackground))
+                                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                        }
+                                    }
+                                }
+
+                                if let error = errorMessage {
+                                    Text(error)
+                                        .font(.caption)
+                                        .foregroundStyle(.red)
+                                }
+
+                                Button {
+                                    handleApprove()
+                                } label: {
+                                    HStack {
+                                        Spacer()
+                                        if isProcessing {
+                                            ProgressView()
+                                                .tint(.white)
+                                        } else {
+                                            Image(systemName: "arrow.right.circle.fill")
+                                            Text("Godkänn kod")
+                                                .bold()
+                                        }
+                                        Spacer()
+                                    }
+                                    .padding(.vertical, 12)
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isProcessing)
+                            }
                         }
                         .padding(20)
                         .background(Color(.secondarySystemBackground))
@@ -155,6 +178,22 @@ struct DevicePairingView: View {
                         dismiss()
                     }
                 }
+            }
+            .sheet(isPresented: $isShowingScanner) {
+                QRCodeScannerView { scannedCode in
+                    isShowingScanner = false
+                    var code = scannedCode.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if let url = URL(string: code),
+                       let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                       let queryItem = components.queryItems?.first(where: { $0.name == "code" })?.value {
+                        code = queryItem
+                    }
+                    self.pairingCode = code
+                    self.handleApprove()
+                } onCancel: {
+                    isShowingScanner = false
+                }
+                .ignoresSafeArea()
             }
         }
     }

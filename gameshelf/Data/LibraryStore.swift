@@ -80,52 +80,33 @@ final class LibraryStore: ObservableObject {
     func syncWithRemote() async {
         guard SupabaseConfig.isSyncEnabled else { return }
 
-        // 1. Synka spel från servern och slå ihop med lokala spel
+        let initialMigrationKey = "has_migrated_legacy_local_games_to_supabase"
+        let isFirstSync = !UserDefaults.standard.bool(forKey: initialMigrationKey)
+
+        // Engångsmigrering av befintliga lokala spel vid allra första anslutningen
+        if isFirstSync && !self.games.isEmpty {
+            for game in self.games {
+                try? await SupabaseSyncService.shared.upsertGame(game)
+            }
+            for col in self.collections {
+                try? await SupabaseSyncService.shared.upsertCollection(col)
+            }
+            UserDefaults.standard.set(true, forKey: initialMigrationKey)
+        }
+
+        // 1. Synka spel från servern (speglar direkt tillägg och raderingar)
         do {
             let remoteGames = try await SupabaseSyncService.shared.fetchRemoteGames()
-            var merged: [Game] = []
-            var seen = Set<UUID>()
-
-            // Lägg till alla remote games
-            for remote in remoteGames {
-                merged.append(remote)
-                seen.insert(remote.id)
-            }
-
-            // Behåll lokala spel som inte nått servern än och ladda upp dem
-            for local in self.games {
-                if !seen.contains(local.id) {
-                    merged.append(local)
-                    seen.insert(local.id)
-                    try? await SupabaseSyncService.shared.upsertGame(local)
-                }
-            }
-
-            self.games = merged
+            self.games = remoteGames
+            UserDefaults.standard.set(true, forKey: initialMigrationKey)
         } catch {
             // Ignorera offline / nätverksfel så lokal data fortsätter fungera
         }
 
-        // 2. Synka samlingar från servern och slå ihop med lokala samlingar
+        // 2. Synka samlingar från servern
         do {
             let remoteCollections = try await SupabaseSyncService.shared.fetchRemoteCollections()
-            var mergedCols: [GameCollection] = []
-            var seenCols = Set<UUID>()
-
-            for remote in remoteCollections {
-                mergedCols.append(remote)
-                seenCols.insert(remote.id)
-            }
-
-            for local in self.collections {
-                if !seenCols.contains(local.id) {
-                    mergedCols.append(local)
-                    seenCols.insert(local.id)
-                    try? await SupabaseSyncService.shared.upsertCollection(local)
-                }
-            }
-
-            self.collections = mergedCols
+            self.collections = remoteCollections
         } catch {
             // Ignorera nätverksfel
         }

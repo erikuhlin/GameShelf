@@ -5,7 +5,6 @@
 //  Created by Erik Uhlin on 2025-09-09.
 //
 
-
 import SwiftUI
 
 struct TrendingSection: View {
@@ -16,10 +15,12 @@ struct TrendingSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Trending now").font(.title3.bold())
+                Text("Trendar just nu")
+                    .font(.title3.bold())
                 Spacer()
-                Button("See all", action: onSeeAll)
+                Button("Visa alla", action: onSeeAll)
                     .font(.callout)
+                    .foregroundStyle(.red)
             }
             .padding(.horizontal)
 
@@ -30,7 +31,7 @@ struct TrendingSection: View {
                             RecCard(
                                 title: g.title,
                                 subtitle: g.platformText,
-                                rating: Double(Int(g.rating.rounded())),
+                                rating: g.rating / 2,
                                 imageURL: g.image
                             )
                         }

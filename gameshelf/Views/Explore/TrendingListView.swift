@@ -38,7 +38,7 @@ struct TrendingListView: View {
                             HStack(spacing: 6) {
                                 Text(g.platformText).lineLimit(1)
                                 if g.rating > 0 {
-                                    Text("· \(String(format: "%.1f", g.rating))/5")
+                                    Text("· \(String(format: "%.1f", g.rating))/10")
                                         .foregroundStyle(.secondary)
                                 }
                             }
@@ -49,7 +49,7 @@ struct TrendingListView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .navigationTitle("Trending")
+            .navigationTitle("Trendar just nu")
         }
     }
 }

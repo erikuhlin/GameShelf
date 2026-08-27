@@ -1,0 +1,16 @@
+{
+  "folders": [
+    {
+      "name": "Gameshelf Web",
+      "path": "web"
+    },
+    {
+      "name": "Supabase Backend",
+      "path": "supabase"
+    }
+  ],
+  "settings": {
+    "editor.formatOnSave": true,
+    "typescript.tsdk": "web/node_modules/typescript/lib"
+  }
+}

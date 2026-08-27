@@ -127,7 +127,16 @@ iOSInjectionProject/
 !*.xcodeproj/xcshareddata/
 !*.xcodeproj/project.xcworkspace/
 !*.xcworkspace/contents.xcworkspacedata
-/*.gcno
-**/xcshareddata/WorkspaceSettings.xcsettings
-
 # End of https://www.toptal.com/developers/gitignore/api/swift,xcode,macos
+
+### Node & Next.js ###
+node_modules/
+.next/
+out/
+build/
+dist/
+*.log
+.env.local
+.env.*.local
+combined_migration.sql
+build_error.log

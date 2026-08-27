@@ -8,20 +8,25 @@ import SwiftUI
 import Combine
 import SafariServices
 
-extension URL: Identifiable {
+extension URL: @retroactive Identifiable {
     public var id: String { absoluteString }
 }
 
-// MARK: - Lightweight preferences (to be replaced by real Profile later)
+// MARK: - Lightweight preferences
 struct ExplorePrefs: Equatable {
     var minAge: Int
     var platforms: [String]
-    
 
-    static let example = ExplorePrefs(minAge: 16, platforms: ["PlayStation 5", "Nintendo Switch"]) // fallback until Profile exists
+    static let example = ExplorePrefs(minAge: 16, platforms: ["PlayStation 5", "Nintendo Switch"])
 }
 
-enum ExploreTab: String, CaseIterable, Identifiable { case forYou = "For You", news = "News"; var id: String { rawValue } }
+enum ExploreTab: String, CaseIterable, Identifiable {
+    case forYou = "För dig"
+    case news = "Nyheter"
+
+    var id: String { rawValue }
+}
+
 private enum ExploreSheet: Identifiable {
     case safari(URL)
     case game(Int)
@@ -38,57 +43,57 @@ private enum ExploreSheet: Identifiable {
     }
 }
 
+enum NewsFilterCategory: String, CaseIterable, Identifiable {
+    case all = "Alla"
+    case myGames = "Mina spel"
+    case updates = "Uppdateringar"
+    case reviews = "Recensioner"
+    case trailers = "Trailers"
+    case previews = "Förhandstittar"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .all: return "sparkles"
+        case .myGames: return "gamecontroller.fill"
+        case .updates: return "arrow.triangle.2.circlepath"
+        case .reviews: return "star.fill"
+        case .trailers: return "play.circle.fill"
+        case .previews: return "eye.fill"
+        }
+    }
+
+    var kind: NewsKind? {
+        switch self {
+        case .all, .myGames: return nil
+        case .updates: return .update
+        case .reviews: return .review
+        case .trailers: return .video
+        case .previews: return .preview
+        }
+    }
+}
+
 struct ExploreView: View {
-    // Read from ProfileStore (age + platforms)
     @EnvironmentObject var profile: ProfileStore
+    @EnvironmentObject var store: LibraryStore
     @State private var tab: ExploreTab = .forYou
     @StateObject private var news = NewsFetcher()
     @StateObject private var trending = TrendingFetcher()
     @State private var sheet: ExploreSheet? = nil
-    
+
     @State private var findError: String? = nil
+    @State private var forYouRefreshID = UUID()
 
-  
-    @State private var newsPlatformFilter: NewsPlatformFilter = .all
-    @State private var newsKindFilter: NewsKind? = nil
-
-    private enum NewsPlatformFilter: String, CaseIterable {
-        case all = "All", playstation = "PlayStation", xbox = "Xbox", nintendo = "Nintendo", pc = "PC", mobile = "Mobile"
-    }
-
-    private func keywords(for filter: NewsPlatformFilter) -> [String] {
-        switch filter {
-        case .all:
-            return []
-        case .playstation:
-            return [
-                "ps5", "ps4", "playstation", "playstation 5", "playstation 4"
-            ]
-        case .xbox:
-            return [
-                "xbox", "xbox series x", "xbox series s", "series x", "series s", "xbox one"
-            ]
-        case .nintendo:
-            return [
-                "switch", "nintendo switch", "nintendo"
-            ]
-        case .pc:
-            return [
-                "pc", "steam", "epic games store", "epic store", "gog"
-            ]
-        case .mobile:
-            return [
-                "iphone", "ios", "ipad", "ipadOS", "android", "mobile"
-            ]
-        }
-    }
-
+    // Filter för nyheter
+    @State private var selectedNewsCategory: NewsFilterCategory = .all
+    @State private var newsSearchText: String = ""
 
     private var prefs: ExplorePrefs {
         .init(minAge: profile.age, platforms: Array(profile.platforms))
     }
 
- 
     private var findAlertBinding: Binding<Bool> {
         Binding<Bool>(
             get: { findError != nil },
@@ -97,205 +102,294 @@ struct ExploreView: View {
     }
 
     private func runInitialLoad() async {
-        news.reload(platforms: prefs.platforms, minAge: prefs.minAge)
-        news.setFilters(platformKeywords: keywords(for: newsPlatformFilter), kind: newsKindFilter)
+        news.reload(platforms: prefs.platforms, minAge: prefs.minAge, libraryGames: store.games)
         await trending.fetch(platformFamilies: prefs.platforms, news: news.items)
     }
 
-    @ViewBuilder
-    private var content: some View {
-        switch tab {
-        case .forYou:
-            forYouContent
-        case .news:
-            newsContent
-        }
-    }
-
     var body: some View {
-        AnyView(
-            NavigationStack {
-                content
-                    .id(tab)
-            }
-        )
-        .background(Color.ds.background.ignoresSafeArea())
-        .navigationTitle("Explore")
-        .task { await runInitialLoad() }
-        .onChange(of: profile.platforms) { _ in
-            news.reload(platforms: prefs.platforms, minAge: prefs.minAge)
-            news.setFilters(platformKeywords: keywords(for: newsPlatformFilter), kind: newsKindFilter)
-            Task { await trending.fetch(platformFamilies: prefs.platforms, news: news.items) }
-        }
-        .onChange(of: profile.birthdate) { _ in
-            news.reload(platforms: prefs.platforms, minAge: prefs.minAge)
-            news.setFilters(platformKeywords: keywords(for: newsPlatformFilter), kind: newsKindFilter)
-        }
-        .sheet(item: $sheet) { route in
-            switch route {
-            case .safari(let url):
-                SafariSheet(url: url)
-                    .ignoresSafeArea()
-            case .game(let rawgID):
-                GameDetailView(rawgID: rawgID)
-                    .ignoresSafeArea(edges: .bottom)
-            case .trending:
-                TrendingListView(items: trending.items) { id in
-                    sheet = .game(id)
-                }
-                .presentationDetents([.large])
-            case .newsList:
-                NewsListView(
-                    items: news.items,
-                    canLoadMore: news.canLoadMore,
-                    isLoadingMore: news.isLoadingMore,
-                    onOpen: { url in sheet = .safari(url) },
-                    onFindRawg: { title in openRawgFrom(title: title) },
-                    onLoadMore: { news.loadMore() },
-                    initialPlatformRaw: newsPlatformFilter.rawValue,
-                    initialKind: newsKindFilter
-                )
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-            }
-        }
-        .alert("Find on RAWG", isPresented: findAlertBinding) {
-            Button("OK", role: .cancel) { findError = nil }
-        } message: {
-            Text(findError ?? "")
-        }
-    }
+        NavigationStack {
+            VStack(spacing: 0) {
+                tabPicker
+                    .padding(.vertical, 8)
 
-    private var forYouContent: some View {
-        AnyView(
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    tabPicker
-                    ForYouSection(prefs: prefs)
-                    Spacer(minLength: 20)
+                if tab == .forYou {
+                    forYouContent
+                } else {
+                    newsContent
                 }
-                .padding(.vertical, 8)
             }
-        )
-    }
-
-    @ViewBuilder
-    private func newsRow(_ a: NewsItem) -> some View {
-        if let url = a.link {
-            Button { sheet = .safari(url) } label: { ArticleRow(item: a) }
-                .buttonStyle(.plain)
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button { openRawgFrom(title: a.title) } label: { Label("Find on RAWG", systemImage: "magnifyingglass") }
-                        .tint(.ds.brandRed)
-                }
-                .contextMenu {
-                    Button { openRawgFrom(title: a.title) } label: { Label("Find on RAWG", systemImage: "magnifyingglass") }
-                    Button { UIApplication.shared.open(url) } label: { Label("Open in Safari", systemImage: "safari") }
-                }
-        } else {
-            HStack {
-                ArticleRow(item: a)
-                Button { openRawgFrom(title: a.title) } label: { Image(systemName: "magnifyingglass") }
-                    .buttonStyle(.borderless)
+            .background(Color.ds.background.ignoresSafeArea())
+            .navigationTitle("Utforska")
+            .navigationBarTitleDisplayMode(.inline)
+            .task { await runInitialLoad() }
+            .onChange(of: profile.platforms) { _ in
+                news.reload(platforms: prefs.platforms, minAge: prefs.minAge, libraryGames: store.games)
+                Task { await trending.fetch(platformFamilies: prefs.platforms, news: news.items) }
             }
-        }
-    }
-
-    private var latestNewsHeader: some View {
-        HStack {
-            Text("Latest news")
-            Spacer()
-            Menu {
-                ForEach(NewsPlatformFilter.allCases, id: \.self) { f in
-                    Button(action: {
-                        newsPlatformFilter = f
-                        news.setFilters(platformKeywords: keywords(for: f), kind: newsKindFilter)
-                    }) {
-                        if newsPlatformFilter == f { Image(systemName: "checkmark") }
-                        Text(f.rawValue)
+            .onChange(of: profile.birthdate) { _ in
+                news.reload(platforms: prefs.platforms, minAge: prefs.minAge, libraryGames: store.games)
+            }
+            .onChange(of: store.games.count) { _ in
+                news.reload(platforms: prefs.platforms, minAge: prefs.minAge, libraryGames: store.games)
+            }
+            .sheet(item: $sheet) { route in
+                switch route {
+                case .safari(let url):
+                    SafariSheet(url: url)
+                        .ignoresSafeArea()
+                case .game(let igdbID):
+                    GameDetailView(igdbID: igdbID)
+                        .ignoresSafeArea(edges: .bottom)
+                case .trending:
+                    TrendingListView(items: trending.items) { id in
+                        sheet = .game(id)
                     }
-                }
-            } label: {
-                Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
-            }
-            Menu {
-                Button(action: {
-                    newsKindFilter = nil
-                    news.setFilters(platformKeywords: keywords(for: newsPlatformFilter), kind: nil)
-                }) {
-                    if newsKindFilter == nil { Image(systemName: "checkmark") }
-                    Text("All types")
-                }
-                Divider()
-                ForEach([NewsKind.review, .preview, .guide, .opinion, .interview, .video, .deal, .feature, .news], id: \.self) { k in
-                    Button(action: {
-                        newsKindFilter = k
-                        news.setFilters(platformKeywords: keywords(for: newsPlatformFilter), kind: k)
-                    }) {
-                        if newsKindFilter == k { Image(systemName: "checkmark") }
-                        Text(k.rawValue.capitalized)
-                    }
-                }
-            } label: {
-                Label("Type", systemImage: "line.3.horizontal.decrease")
-            }
-            Button("See all") { sheet = .newsList }
-                .font(.callout)
-        }
-    }
-
-    private var newsContent: some View {
-        AnyView(
-            List {
-                // Tab picker as the first section header
-                Section { EmptyView() } header: { tabPicker }
-
-                // Trending carousel section
-                Section {
-                    TrendingSection(
-                        items: trending.items,
-                        onSelect: { sheet = .game($0) },
-                        onSeeAll: { sheet = .trending }
+                    .presentationDetents([.large])
+                case .newsList:
+                    NewsListView(
+                        items: news.items,
+                        canLoadMore: news.canLoadMore,
+                        isLoadingMore: news.isLoadingMore,
+                        onOpen: { url in sheet = .safari(url) },
+                        onFindIGDB: { title in openIGDBFrom(title: title) },
+                        onLoadMore: { news.loadMore() },
+                        initialPlatformRaw: "Alla",
+                        initialKind: selectedNewsCategory.kind
                     )
-                    .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
                 }
+            }
+            .alert("Hitta spel i IGDB", isPresented: findAlertBinding) {
+                Button("OK", role: .cancel) { findError = nil }
+            } message: {
+                Text(findError ?? "")
+            }
+        }
+    }
 
-                // Latest news list section
-                Section {
-                    ForEach(news.items) { a in
-                        newsRow(a)
-                    }
+    // MARK: - För Dig (Dynamisk Feed)
+    private var forYouContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                // 1. Smart Spelslumpare (Vad ska du spela ikväll?)
+                SmartGameRouletteCard()
 
-                    if news.canLoadMore {
-                        Button(action: news.loadMore) {
-                            HStack(spacing: 8) {
-                                if news.isLoadingMore { ProgressView().scaleEffect(0.9) }
-                                Text(news.isLoadingMore ? "Loading…" : "See more")
-                            }
-                            .frame(maxWidth: .infinity)
+                // 2. Fortsätt spela (visas bara om man har aktiva spel)
+                ContinuePlayingSection()
+
+                // 3. Hur mycket tid har du? (Speltidsväljare)
+                PlaytimeFilterSection()
+
+                // 4. Från din backlog (ospelade spel)
+                BacklogSpotlightSection()
+
+                // 5. Live IGDB Discovery (För dig, Populärt, Genrer, Kommande)
+                LiveDiscoverySection(refreshTrigger: forYouRefreshID)
+
+                Spacer(minLength: 30)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+        }
+        .refreshable {
+            forYouRefreshID = UUID()
+            news.reload(platforms: prefs.platforms, minAge: prefs.minAge, libraryGames: store.games)
+            await trending.fetch(platformFamilies: prefs.platforms, news: news.items)
+        }
+    }
+
+    // MARK: - Nyheter (Magasin & Kortlayout)
+    private var newsContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // Sökfält för nyheter
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("Sök bland nyheter, spel & källor...", text: $newsSearchText)
+                        .textFieldStyle(.plain)
+                    if !newsSearchText.isEmpty {
+                        Button {
+                            newsSearchText = ""
+                            applyNewsFilters()
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
                         }
-                        .buttonStyle(.bordered)
-                        .tint(.ds.brandRed)
                     }
-                } header: {
-                    latestNewsHeader
                 }
+                .padding(10)
+                .background(Color(.secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .onChange(of: newsSearchText) { _, _ in
+                    applyNewsFilters()
+                }
+
+                // Kategori- och Snabbchips
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(NewsFilterCategory.allCases) { category in
+                            let isSelected = selectedNewsCategory == category
+                            Button {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    selectedNewsCategory = category
+                                    applyNewsFilters()
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: category.icon)
+                                        .font(.caption)
+                                    Text(category.rawValue)
+                                        .font(.subheadline.weight(.semibold))
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 7)
+                                .background(isSelected ? Color.red : Color(.secondarySystemGroupedBackground))
+                                .foregroundStyle(isSelected ? Color.white : Color.primary)
+                                .clipShape(Capsule())
+                                .shadow(color: .black.opacity(0.03), radius: 3, x: 0, y: 1)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+
+                // Trendar just nu (Karusell)
+                TrendingSection(
+                    items: trending.items,
+                    onSelect: { sheet = .game($0) },
+                    onSeeAll: { sheet = .trending }
+                )
+
+                // Nyhetsflöde
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        Text("Senaste nyheterna (\(news.items.count))")
+                            .font(.title3.bold())
+                            .foregroundStyle(.primary)
+
+                        Spacer()
+
+                        if news.isLoading {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        }
+                    }
+
+                    if news.isLoading && news.items.isEmpty {
+                        HStack {
+                            Spacer()
+                            ProgressView("Hämtar nyheter...")
+                                .padding(.vertical, 30)
+                            Spacer()
+                        }
+                    } else if news.items.isEmpty {
+                        VStack(spacing: 8) {
+                            Image(systemName: "newspaper")
+                                .font(.largeTitle)
+                                .foregroundStyle(.secondary)
+                            Text("Inga nyheter matchar ditt val.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 40)
+                    } else {
+                        // 1. Hero-artikel (Första nyheten)
+                        if let hero = news.items.first {
+                            NewsHeroCard(
+                                item: hero,
+                                onOpen: { url in sheet = .safari(url) },
+                                onFindIGDB: { title in openIGDBFrom(title: title) }
+                            )
+                        }
+
+                        // 2. Resterande artiklar
+                        ForEach(news.items.dropFirst()) { item in
+                            if let url = item.link {
+                                Button {
+                                    sheet = .safari(url)
+                                } label: {
+                                    ArticleRow(item: item)
+                                }
+                                .buttonStyle(.plain)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button {
+                                        openIGDBFrom(title: item.title)
+                                    } label: {
+                                        Label("Hitta i IGDB", systemImage: "magnifyingglass")
+                                    }
+                                    .tint(.red)
+                                }
+                                .contextMenu {
+                                    Button {
+                                        openIGDBFrom(title: item.title)
+                                    } label: {
+                                        Label("Hitta spel i IGDB", systemImage: "magnifyingglass")
+                                    }
+                                    Button {
+                                        UIApplication.shared.open(url)
+                                    } label: {
+                                        Label("Öppna i Safari", systemImage: "safari")
+                                    }
+                                }
+                            } else {
+                                ArticleRow(item: item)
+                            }
+                        }
+
+                        // Ladda fler-knapp
+                        if news.canLoadMore {
+                            Button {
+                                news.loadMore()
+                            } label: {
+                                HStack(spacing: 8) {
+                                    if news.isLoadingMore { ProgressView().scaleEffect(0.9) }
+                                    Text(news.isLoadingMore ? "Laddar…" : "Visa fler nyheter")
+                                        .font(.subheadline.bold())
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color(.secondarySystemGroupedBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 4)
+                        }
+                    }
+                }
+
+                Spacer(minLength: 30)
             }
-            .listStyle(.insetGrouped)
-            .refreshable {
-                news.reload(platforms: prefs.platforms, minAge: prefs.minAge)
-                news.setFilters(platformKeywords: keywords(for: newsPlatformFilter), kind: newsKindFilter)
-            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+        }
+        .refreshable {
+            news.reload(platforms: prefs.platforms, minAge: prefs.minAge, libraryGames: store.games)
+            await trending.fetch(platformFamilies: prefs.platforms, news: news.items)
+        }
+    }
+
+    private func applyNewsFilters() {
+        let onlyMyGames = (selectedNewsCategory == .myGames)
+        news.setFilters(
+            platformKeywords: [],
+            kind: selectedNewsCategory.kind,
+            onlyLibrary: onlyMyGames,
+            categoryName: selectedNewsCategory.rawValue,
+            searchText: newsSearchText
         )
     }
 
-    private func openRawgFrom(title: String) {
+    private func openIGDBFrom(title: String) {
         Task {
             do {
-                if let id = try await RawgSearchClient.firstID(for: title) {
+                if let id = try await OnlineSearchClient.firstID(for: title) {
                     sheet = .game(id)
                 } else {
-                    findError = "No matching game found on RAWG."
+                    findError = "Hittade inget matchande spel i IGDB."
                 }
             } catch {
                 findError = error.localizedDescription
@@ -303,9 +397,9 @@ struct ExploreView: View {
         }
     }
 
-    // MARK: - Components
+    // MARK: - Komponenter
     private var tabPicker: some View {
-        Picker("Explore", selection: $tab) {
+        Picker("Utforska", selection: $tab) {
             ForEach(ExploreTab.allCases) { t in
                 Text(t.rawValue).tag(t)
             }
@@ -314,28 +408,6 @@ struct ExploreView: View {
         .padding(.horizontal)
     }
 }
-
-// MARK: - Sections (scaffold)
-
-
-// MARK: - Small components
-private func sectionHeader(title: String) -> some View {
-    HStack {
-        Text(title).font(.title3.bold())
-        Spacer()
-        Button { /* TODO: push full list */ } label: { Text("See all").font(.callout) }
-    }
-    .padding(.horizontal)
-}
-
-private func hint(_ text: String) -> some View {
-    Text(text)
-        .font(.footnote)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal)
-}
-
-
 
 // MARK: - In-app Safari sheet
 private struct SafariSheet: UIViewControllerRepresentable {

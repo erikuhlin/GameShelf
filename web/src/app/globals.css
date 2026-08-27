@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0d0e12;
+  --foreground: #f3f4f6;
+  --card-bg: #16181f;
+  --card-border: #262936;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #11131a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2d3244;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3f455e;
+}
+
+/* 3D Book / Game Spine Perspective for Shelf */
+.game-spine {
+  box-shadow: 2px 4px 10px rgba(0, 0, 0, 0.6);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+}
+
+.game-spine:hover {
+  transform: translateY(-8px) scale(1.03);
+  box-shadow: 0 12px 24px rgba(229, 62, 62, 0.25), 0 4px 12px rgba(0, 0, 0, 0.8);
+}
+
+/* Wooden shelf effect */
+.shelf-plank {
+  background: linear-gradient(180deg, #2a201b 0%, #1d1612 100%);
+  border-top: 3px solid #4a382e;
+  border-bottom: 2px solid #0f0b09;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 16px rgba(0, 0, 0, 0.7);
+}

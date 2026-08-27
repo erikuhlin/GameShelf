@@ -1,583 +1,531 @@
-//
-//  LibraryView.swift
-//  gameshelf
-//
-//  Created by Erik Uhlin on 2025-08-25.
-//
+// LibraryView.swift
+// gameshelf
 
 import SwiftUI
+
+enum ViewStyle {
+    case list
+    case grid
+}
+
+// MARK: - Sorteringsalternativ
+enum SortOption: String, CaseIterable, Identifiable {
+    case title = "Titel (A-Ö)"
+    case rating = "Högst betyg"
+    case releaseYear = "Lanseringsår"
+
+    var id: String { rawValue }
+}
+
+// MARK: - Filteralternativ
+enum PlayStatusFilter: String, CaseIterable, Identifiable {
+    case all = "Alla"
+    case playing = "Spelar nu"
+    case backlog = "Backlog"
+    case paused = "Pausat"
+    case completed = "Klara"
+    case abandoned = "Avbrutet"
+    case wishlist = "Önskelista"
+
+    var id: String { rawValue }
+
+    var status: PlayStatus? {
+        switch self {
+        case .all: return nil
+        case .playing: return .playing
+        case .backlog: return .backlog
+        case .paused: return .paused
+        case .completed: return .completed
+        case .abandoned: return .abandoned
+        case .wishlist: return .wishlist
+        }
+    }
+}
+
+// MARK: - Ägarskapsfilter
+enum OwnershipFilter: String, CaseIterable, Identifiable {
+    case all = "Alla spel"
+    case owned = "I ägo 🎮"
+    case memories = "Spelminnen 📜"
+
+    var id: String { rawValue }
+}
 
 struct LibraryView: View {
     @EnvironmentObject var store: LibraryStore
 
-    @State private var search = ""
-    @State private var showGrid = true
-    @State private var showAdd = false
-    @State private var showFilterSheet = false
-    @StateObject private var rawgVM = RawgSearchViewModel(api: RawgClient(), localTitles: { [] })
-    @FocusState private var searchFocused: Bool
-    @State private var prefillTitle: String? = nil
+    @State private var ownershipFilter: OwnershipFilter = .all
+    @State private var selectedFilter: PlayStatusFilter = .all
+    @State private var selectedSort: SortOption = .title
+    @State private var viewStyle: ViewStyle = .list
+    @State private var showingAddGameSheet = false
+    @State private var showingCreateCollectionSheet = false
+    @State private var searchText = ""
+    @State private var isSearching = false
 
-    // Toggle debug logs (only active in DEBUG)
-    #if DEBUG
-    private let debugLogs = true
-    #else
-    private let debugLogs = false
-    #endif
-
-    private var hasActiveFilters: Bool {
-        selectedStatus != nil
-        || (selectedPlatform != nil && selectedPlatform != "All")
-        || sortOption != .title
-    }
-
-    private var filterSummary: String {
-        var parts: [String] = []
-        if let s = selectedStatus { parts.append(s.rawValue) }
-        if let p = selectedPlatform { parts.append(p) }
-        if sortOption != .title { parts.append("Sort: \(sortOption.label)") }
-        return parts.isEmpty ? "No filters" : parts.joined(separator: " · ")
-    }
-
-    private func clearFilters() {
-        selectedStatus = nil
-        selectedPlatform = nil
-        sortOption = .title
-    }
-
-    private var resultCount: Int {
-        if search.isEmpty { return filtered.count }
-        return filtered.count + rawgVM.results.count
-    }
-
-    // Filters & sorting
-    @State private var selectedStatus: PlayStatus? = nil
-    @State private var selectedPlatform: String? = nil
-    @State private var sortOption: SortOption = .title
-
-    private enum SortOption: String, CaseIterable, Identifiable {
-        case title, year, rating
-        var id: String { rawValue }
-        var label: String {
-            switch self {
-            case .title:  return "Title"
-            case .year:   return "Year"
-            case .rating: return "Rating"
+    private var filteredAndSortedGames: [Game] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return store.games.filter { game in
+            let matchesOwnership: Bool = {
+                switch ownershipFilter {
+                case .all: return true
+                case .owned: return game.isOwned
+                case .memories: return !game.isOwned
+                }
+            }()
+            let matchesStatus = (selectedFilter.status == nil) || (game.status == selectedFilter.status)
+            let matchesSearch = query.isEmpty ||
+                game.title.lowercased().contains(query) ||
+                game.developers.contains(where: { $0.lowercased().contains(query) }) ||
+                game.genres.contains(where: { $0.lowercased().contains(query) }) ||
+                game.platforms.contains(where: { $0.lowercased().contains(query) })
+            return matchesOwnership && matchesStatus && matchesSearch
+        }
+        .sorted { g1, g2 in
+            switch selectedSort {
+            case .title:
+                return g1.title.localizedCaseInsensitiveCompare(g2.title) == .orderedAscending
+            case .rating:
+                return (g1.rating ?? 0) > (g2.rating ?? 0)
+            case .releaseYear:
+                return g1.releaseYear > g2.releaseYear
             }
         }
     }
 
-    private var allPlatforms: [String] {
-        let names = store.games.flatMap { $0.platforms }
-        let set = Set(names)
-        return ["All"] + set.sorted()
-    }
-
-    private var filtered: [Game] {
-        var list = store.games
-
-        // Sök
-        if !search.isEmpty {
-            list = list.filter { game in
-                game.title.localizedCaseInsensitiveContains(search)
-                || game.platforms.joined(separator: ", ").localizedCaseInsensitiveContains(search)
-                || game.genres.joined(separator: ", ").localizedCaseInsensitiveContains(search)
-            }
-        }
-        // Statusfilter
-        if let status = selectedStatus {
-            list = list.filter { $0.status == status }
-        }
-        // Plattformfilter
-        if let platform = selectedPlatform, platform != "All" {
-            list = list.filter { $0.platforms.contains(platform) }
-        }
-        // Sortering
-        switch sortOption {
-        case .title:
-            list.sort { $0.title.localizedCompare($1.title) == .orderedAscending }
-        case .year:
-            list.sort { $0.releaseYear > $1.releaseYear }
-        case .rating:
-            list.sort { ($0.rating ?? -1) > ($1.rating ?? -1) }
-        }
-        return list
-    }
+    private let gridColumns = [
+        GridItem(.flexible(), spacing: 16),
+        GridItem(.flexible(), spacing: 16)
+    ]
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 8) {
-                // Keep header & searchBar mounted at the same level to avoid focus loss
-                headerRow
-                searchBar
+            VStack(spacing: 0) {
+                // Expanderbar sökruta
+                if isSearching {
+                    HStack(spacing: 10) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundStyle(.secondary)
 
-                if search.isEmpty {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 24) {
-                            filtersSummaryRow
-                            contentSection
-                            LibraryStatsView(games: filtered)
-                                .padding(.horizontal)
+                            TextField("Sök i ditt bibliotek...", text: $searchText)
+                                .textFieldStyle(.plain)
+                                .font(.subheadline)
+
+                            if !searchText.isEmpty {
+                                Button {
+                                    searchText = ""
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.bottom, Spacing.xxl)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(Color(.tertiarySystemFill))
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                        Button("Avbryt") {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                searchText = ""
+                                isSearching = false
+                            }
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.red)
                     }
-                } else {
-                    List {
-                        Section("In your library") {
-                            let local = filtered
-                            if local.isEmpty {
-                                Text("No local matches").foregroundStyle(.secondary)
-                            } else {
-                                ForEach(local) { game in
-                                    NavigationLink(destination: GameDetailView(game: game)) {
-                                        LocalRow(game: game) { }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 6)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
+                // Ägarskapsväljare & Statusfilter
+                VStack(spacing: 6) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(OwnershipFilter.allCases) { opt in
+                                let isSelected = ownershipFilter == opt
+                                Button {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        ownershipFilter = opt
+                                    }
+                                } label: {
+                                    Text(opt.rawValue)
+                                        .font(.subheadline.weight(.semibold))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(isSelected ? Color.red : Color(.secondarySystemGroupedBackground))
+                                        .foregroundStyle(isSelected ? Color.white : Color.primary)
+                                        .clipShape(Capsule())
+                                        .shadow(color: .black.opacity(0.04), radius: 2, x: 0, y: 1)
+                                }
+                                .buttonStyle(.plain)
+                            }
+
+                            Rectangle()
+                                .fill(Color.secondary.opacity(0.3))
+                                .frame(width: 1, height: 20)
+                                .padding(.horizontal, 4)
+
+                            ForEach(PlayStatusFilter.allCases) { filter in
+                                SelectableChip(
+                                    label: filter.rawValue,
+                                    isSelected: selectedFilter == filter
+                                ) {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        selectedFilter = filter
                                     }
                                 }
                             }
                         }
-                        Section("From RAWG") {
-                            if rawgVM.isLoading && rawgVM.results.isEmpty {
-                                HStack { Spacer(); ProgressView("Searching…"); Spacer() }
-                            }
-                            if !search.isEmpty && rawgVM.results.isEmpty {
-                                Button {
-                                    presentAddManually(prefillTitle: search)
-                                } label: {
-                                    Label("Add manually \"\(search)\"", systemImage: "plus")
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
+                    }
+                }
+                Divider()
+
+                // Innehåll
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 22) {
+                        // --- Mina samlingar (Karusell) ---
+                        collectionsSection
+
+                        // --- Mina spel ---
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Mina spel (\(filteredAndSortedGames.count))")
+                                .font(.title3.bold())
+                                .foregroundStyle(.primary)
+                                .padding(.horizontal, 16)
+
+                            if !filteredAndSortedGames.isEmpty {
+                                if viewStyle == .list {
+                                    LazyVStack(spacing: 12) {
+                                        ForEach(filteredAndSortedGames) { game in
+                                            NavigationLink(destination: GameDetailView(game: game)) {
+                                                LibraryGameCardRow(game: game)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .contextMenu {
+                                                Button(role: .destructive) {
+                                                    store.delete(game)
+                                                } label: {
+                                                    Label("Ta bort", systemImage: "trash")
+                                                }
+                                                Menu("Ändra status") {
+                                                    ForEach(PlayStatus.allCases, id: \.self) { status in
+                                                        Button {
+                                                            var copy = game
+                                                            copy.status = status
+                                                            store.update(copy)
+                                                        } label: {
+                                                            Label(status.rawValue, systemImage: icon(for: status))
+                                                        }
+                                                    }
+                                                }
+                                                Menu("Samlingar") {
+                                                    ForEach(store.collections) { col in
+                                                        let inCol = col.gameIDs.contains(game.id)
+                                                        Button {
+                                                            store.toggleGame(game.id, in: col.id)
+                                                        } label: {
+                                                            Label(col.name, systemImage: inCol ? "checkmark.circle.fill" : "circle")
+                                                        }
+                                                    }
+                                                    Divider()
+                                                    Button {
+                                                        showingCreateCollectionSheet = true
+                                                    } label: {
+                                                        Label("Ny samling...", systemImage: "plus")
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    .padding(.horizontal, 16)
+                                } else {
+                                    LazyVGrid(columns: gridColumns, spacing: 16) {
+                                        ForEach(filteredAndSortedGames) { game in
+                                            NavigationLink(destination: GameDetailView(game: game)) {
+                                                LibraryGameGridCard(game: game)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .contextMenu {
+                                                Button(role: .destructive) {
+                                                    store.delete(game)
+                                                } label: {
+                                                    Label("Ta bort", systemImage: "trash")
+                                                }
+                                                Menu("Ändra status") {
+                                                    ForEach(PlayStatus.allCases, id: \.self) { status in
+                                                        Button {
+                                                            var copy = game
+                                                            copy.status = status
+                                                            store.update(copy)
+                                                        } label: {
+                                                            Label(status.rawValue, systemImage: icon(for: status))
+                                                        }
+                                                    }
+                                                }
+                                                Menu("Samlingar") {
+                                                    ForEach(store.collections) { col in
+                                                        let inCol = col.gameIDs.contains(game.id)
+                                                        Button {
+                                                            store.toggleGame(game.id, in: col.id)
+                                                        } label: {
+                                                            Label(col.name, systemImage: inCol ? "checkmark.circle.fill" : "circle")
+                                                        }
+                                                    }
+                                                    Divider()
+                                                    Button {
+                                                        showingCreateCollectionSheet = true
+                                                    } label: {
+                                                        Label("Ny samling...", systemImage: "plus")
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    .padding(.horizontal, 16)
                                 }
-                            }
-                            ForEach(rawgVM.results) { item in
-                                RawgSearchRow(
-                                    item: item,
-                                    added: rawgVM.isAlreadyAdded(item),
-                                    onAdd: { quickAdd(item) }
-                                )
-                            }
-                            if rawgVM.hasMore && !rawgVM.isLoading {
-                                HStack { Spacer(); Button("Load more…") { rawgVM.loadMoreIfNeeded() }; Spacer() }
                             }
                         }
                     }
-                    .listStyle(.insetGrouped)
-                    .scrollDismissesKeyboard(.interactively)
+                    .padding(.vertical, 12)
+
+                    if filteredAndSortedGames.isEmpty && store.collections.isEmpty {
+                        ContentUnavailableView(
+                            "Inga spel i biblioteket",
+                            systemImage: "gamecontroller",
+                            description: Text("Tryck på +-knappen för att lägga till spel.")
+                        )
+                        .padding(.top, 40)
+                    }
+                }
+                .refreshable {
+                    await store.syncWithRemote()
                 }
             }
-            .onChange(of: search) {
-                rawgVM.query = search
-                if !search.isEmpty { searchFocused = true }
-                dbg("[LibraryView] search changed:", search)
-            }
+            .navigationTitle("Bibliotek")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    if !search.isEmpty {
-                        Button("Back") {
-                            withAnimation { search = "" }
-                            rawgVM.reset()
-                            searchFocused = false
-                            dbg("[LibraryView] back tapped, clearing search and resetting RAWG VM")
-                        }
+                    Button {
+                        showingAddGameSheet = true
+                    } label: {
+                        Label("Lägg till", systemImage: "plus")
                     }
                 }
-                // No trailing menu
-            }
-            .sheet(isPresented: $showAdd) {
-                AddGameView()
-                    .environmentObject(store)
-            }
-            .sheet(isPresented: $showFilterSheet) {
-                FilterSheet(
-                    selectedStatus: $selectedStatus,
-                    selectedPlatform: $selectedPlatform,
-                    sortOption: $sortOption,
-                    allPlatforms: allPlatforms,
-                    clearAction: { clearFilters() }
-                )
-            }
-            .background(Color.ds.background.ignoresSafeArea())
-            .contentMargins(.horizontal, 0, for: .scrollContent)
-            .scrollContentBackground(.hidden)
-            .onAppear {
-                rawgVM.localTitles = { store.games.map { $0.title } }
-                dbg("[LibraryView] appeared. Games:", store.games.count)
-            }
-        }
-        .background(Color.ds.background.ignoresSafeArea())
-        .tint(.ds.brandRed)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .containerBackground(Color.ds.background, for: .navigation)
-        .transaction { t in t.disablesAnimations = true }
-    }
-}
-
-private extension LibraryView {
-    func presentAddManually(prefillTitle title: String? = nil) {
-        prefillTitle = title
-        showAdd = true
-        dbg("[LibraryView] presentAddManually prefill:", title ?? "nil")
-    }
-    func openGame(_ game: Game) {
-        // Navigation is currently handled via NavigationLink in grid/shelves.
-        // Here we can push a detail view using a NavigationLink destination inside the row.
-        // For simplicity, LocalRow uses onTap to open via a temporary sheet or future navigation.
-        dbg("[LibraryView] openGame:", game.title)
-    }
-
-    func quickAdd(_ item: RawgGame) {
-        let title = item.name
-        let year = item.released.flatMap { Int($0.prefix(4)) } ?? 0
-        let firstPlatform = (item.platforms ?? []).first?.platform.name
-        let platforms = firstPlatform.map { [$0] } ?? []
-
-        // Kandidater: primary, additional, första screenshot
-        let candidates: [String] = [
-            item.background_image,
-            item.background_image_additional,
-            item.short_screenshots?.first?.image
-        ].compactMap { $0 }
-
-        // Använd normalize för första fungerande URL
-        let cover: URL? = {
-            for s in candidates {
-                if let normalized = RawgImage.normalize(from: s, width: 600) {
-                    return normalized
-                }
-                if let original = URL(string: s) {
-                    return original
-                }
-            }
-            return nil
-        }()
-
-        let newGame = Game(
-            title: title,
-            platforms: platforms,
-            releaseYear: year,
-            genres: [],
-            developers: [],
-            status: .wishlist,
-            rating: nil,
-            rawgRating: item.rating,
-            coverURL: cover
-        )
-        store.add(newGame)
-        dbg("[LibraryView] quickAdd:", title, "year:", year, "platforms:", platforms.joined(separator: ", "), "cover:", cover?.absoluteString ?? "nil")
-    }
-}
-
-private extension LibraryView {
-    @ViewBuilder
-    var headerRow: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Library")
-                    .font(Typography.h1)
-                    .foregroundColor(.ds.textPrimary)
-                Text("\(store.games.count) games total")
-                    .font(Typography.footnote)
-                    .foregroundColor(.ds.textSecondary)
-            }
-            Spacer()
-            Button {
-                showFilterSheet = true
-                dbg("[LibraryView] filters tapped")
-            } label: {
-                HStack(spacing: 6) {
-                    let filterIcon = (hasActiveFilters || !search.isEmpty)
-                        ? "line.3.horizontal.decrease.circle.fill"
-                        : "line.3.horizontal.decrease.circle"
-                    Label("Filters", systemImage: filterIcon)
-
-                    if hasActiveFilters || !search.isEmpty {
-                        Text("\(resultCount)")
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(
-                                Capsule()
-                                    .fill(Color.ds.brandRed.opacity(0.12))
-                                    .overlay(Capsule().stroke(Color.ds.brandRed, lineWidth: 1))
-                            )
-                            .foregroundColor(.ds.brandRed)
-                            .accessibilityLabel("\(resultCount) results")
-                    }
-                }
-            }
-            Picker("Layout", selection: $showGrid) {
-                Image(systemName: "square.grid.2x2").tag(true)
-                Image(systemName: "rectangle.3.offgrid").tag(false)
-            }
-            .pickerStyle(.segmented)
-            .tint(.ds.brandRed)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.ds.surface.opacity(0.3))
-            )
-            .frame(width: 140)
-        }
-    }
-
-    @ViewBuilder
-    var searchBar: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField("Search games, platform, genre", text: $search)
-                .textInputAutocapitalization(.never)
-                .disableAutocorrection(true)
-                .focused($searchFocused)
-            if !search.isEmpty {
-                Button {
-                    search = ""
-                    rawgVM.reset()
-                    dbg("[LibraryView] clear search")
-                } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-            if search.isEmpty {
-                Button { presentAddManually() } label: {
-                    Image(systemName: "plus.circle.fill").imageScale(.medium)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.ds.surface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.black.opacity(0.06), lineWidth: 0.5)
-                )
-        )
-        .padding(.horizontal, Spacing.m)
-    }
-
-    @ViewBuilder
-    var filtersBlock: some View { EmptyView() }
-
-    @ViewBuilder
-    var filtersSummaryRow: some View {
-        HStack(spacing: 12) {
-            Label(filterSummary, systemImage: "slider.horizontal.3")
-                .font(Typography.footnote)
-                .foregroundColor(hasActiveFilters ? .ds.textPrimary : .ds.textSecondary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .onTapGesture { showFilterSheet = true }
-            Spacer()
-            if hasActiveFilters {
-                Button("Clear") {
-                    clearFilters()
-                    dbg("[LibraryView] clear filters")
-                }
-                .font(Typography.footnote)
-            }
-        }
-        .padding(.horizontal, Spacing.m)
-    }
-
-
-    private struct FilterSheet: View {
-        @Binding var selectedStatus: PlayStatus?
-        @Binding var selectedPlatform: String?
-        @Binding var sortOption: LibraryView.SortOption
-        let allPlatforms: [String]
-        var clearAction: () -> Void
-
-        @Environment(\.dismiss) private var dismiss
-
-        var body: some View {
-            NavigationStack {
-                Form {
-                    Section(header: Text("Status")) {
-                        Picker("Status", selection: $selectedStatus) {
-                            Text("All").tag(PlayStatus?.none)
-                            ForEach(PlayStatus.allCases) { st in
-                                Text(st.rawValue).tag(PlayStatus?.some(st))
-                            }
-                        }
-                    }
-                    Section(header: Text("Platform")) {
-                        Picker("Platform", selection: $selectedPlatform) {
-                            Text("All").tag(String?.none)
-                            ForEach(allPlatforms.filter { $0 != "All" }, id: \.self) { p in
-                                Text(p).tag(String?.some(p))
-                            }
-                        }
-                    }
-                    Section(header: Text("Sort")) {
-                        Picker("Sort by", selection: $sortOption) {
-                            ForEach(LibraryView.SortOption.allCases) { opt in
-                                Text(opt.label).tag(opt)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                    }
-                }
-                .navigationTitle("Filters")
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Clear") { clearAction() }
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { dismiss() }
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    var contentSection: some View {
-        if showGrid {
-            GridSection(games: filtered)
-                .environmentObject(store)
-        } else {
-            ShelvesSection(shelves: store.shelvesByPlatform)
-                .environmentObject(store)
-        }
-    }
-}
-
-// MARK: - Grid
-
-struct GridSection: View {
-    @EnvironmentObject var store: LibraryStore
-    let games: [Game]
-
-    // Stabil två–tre kolumner beroende på skärm (öka till 160 vid behov)
-    private let columns = [GridItem(.adaptive(minimum: 160), spacing: Spacing.xl)]
-
-    var body: some View {
-        LazyVGrid(columns: columns, alignment: .center, spacing: Spacing.xl) {
-            ForEach(games) { game in
-                NavigationLink(destination: GameDetailView(game: game)) {
-                    GameCard(game: game)
-                        .contextMenu {
-                            Button("Delete", role: .destructive) {
-                                store.delete(game)
-                                // dbg in nested struct would require plumbing; keeping silent here
-                            }
-                        } preview: {
-                            EmptyView() // ← ingen lyft/zoom
-                        }
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, Spacing.l)
-    }
-}
-
-// MARK: - Shelves (horisontell hylla)
-struct ShelvesSection: View {
-    @EnvironmentObject var store: LibraryStore
-    var shelves: [Shelf]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.l) {
-            ForEach(shelves) { shelf in
-                VStack(alignment: .leading, spacing: Spacing.m) {
-                    Text(shelf.title)
-                        .font(.title3.bold())
-                        .padding(.horizontal, Spacing.m)
-
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: Spacing.l) {
-                            ForEach(shelf.games) { game in
-                                NavigationLink(destination: GameDetailView(game: game)) {
-                                    GameCard(game: game)
-                                        .frame(width: 140)   // bara bredd – låt kortet bestämma höjd själv
-                                        .contextMenu {
-                                            Button("Delete", role: .destructive) {
-                                                store.delete(game)
-                                            }
-                                        } preview: {
-                                            EmptyView() // ← ingen lyft/zoom
-                                        }
+                ToolbarItem(placement: .topBarTrailing) {
+                    HStack(spacing: 12) {
+                        // Sök-ikon (expanderar sökrutan)
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isSearching.toggle()
+                                if !isSearching {
+                                    searchText = ""
                                 }
-                                .buttonStyle(.plain)
+                            }
+                        } label: {
+                            Image(systemName: isSearching ? "magnifyingglass.circle.fill" : "magnifyingglass")
+                        }
+
+                        // Växla mellan list- och gridvy
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                viewStyle = (viewStyle == .list) ? .grid : .list
+                            }
+                        } label: {
+                            Image(systemName: viewStyle == .list ? "square.grid.2x2" : "list.bullet")
+                        }
+
+                        // Sorteringsmeny
+                        Menu {
+                            Picker("Sortera efter", selection: $selectedSort) {
+                                ForEach(SortOption.allCases) { option in
+                                    Label(option.rawValue, systemImage: iconForSort(option)).tag(option)
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "arrow.up.arrow.down")
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $showingAddGameSheet) {
+                AddGameView()
+            }
+            .sheet(isPresented: $showingCreateCollectionSheet) {
+                CreateOrEditCollectionSheet()
+            }
+        }
+    }
+
+    // MARK: - Samlingskarusell
+    private var collectionsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Mina samlingar (\(store.collections.count))")
+                    .font(.title3.bold())
+                    .foregroundStyle(.primary)
+
+                Spacer()
+
+                Button {
+                    showingCreateCollectionSheet = true
+                } label: {
+                    Label("Ny", systemImage: "plus")
+                        .font(.subheadline.bold())
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
+            }
+            .padding(.horizontal, 16)
+
+            if store.collections.isEmpty {
+                Button {
+                    showingCreateCollectionSheet = true
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(.red)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Skapa din första samling")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.primary)
+                            Text("Organisera dina spel efter tema, genre eller humör")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(14)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(store.collections) { collection in
+                            NavigationLink(destination: CollectionDetailView(collection: collection)) {
+                                CollectionCard(collection: collection)
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    store.deleteCollection(collection)
+                                } label: {
+                                    Label("Ta bort samling", systemImage: "trash")
+                                }
                             }
                         }
-                        .padding(.horizontal, Spacing.m)
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 4)
                 }
             }
         }
     }
+
+    private func iconForSort(_ option: SortOption) -> String {
+        switch option {
+        case .title: return "textformat"
+        case .rating: return "star"
+        case .releaseYear: return "calendar"
+        }
+    }
+
+    private func icon(for status: PlayStatus) -> String {
+        status.icon
+    }
 }
 
-// MARK: - Search Rows
-struct LocalRow: View {
+// MARK: - Förbättrad Radvy (Kortformat i Lista)
+struct LibraryGameCardRow: View {
     let game: Game
-    var onTap: () -> Void
+
     var body: some View {
-        HStack(spacing: 12) {
-            CoverView(title: game.title, url: game.coverURL)
-                .frame(width: 52, height: 68)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        HStack(spacing: 14) {
+            CoverView(title: game.title, url: game.coverURL, corner: 8, height: 80)
+                .frame(width: 60)
+                .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(game.title)
+                    .font(.headline)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .foregroundStyle(.primary)
+
+                HStack(spacing: 8) {
+                    StatusBadge(status: game.status)
+
+                    if game.releaseYear > 0 {
+                        Text(String(game.releaseYear))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    if let rating = game.rating, rating > 0 {
+                        HStack(spacing: 3) {
+                            Image(systemName: "star.fill")
+                                .foregroundStyle(.yellow)
+                            Text("\(rating)")
+                        }
+                        .font(.subheadline.bold())
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 3, x: 0, y: 1)
+    }
+}
+
+// MARK: - Ny Gridvy-kortkomponent
+struct LibraryGameGridCard: View {
+    let game: Game
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            CoverView(title: game.title, url: game.coverURL, corner: 10, height: 180)
+                .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
+
             VStack(alignment: .leading, spacing: 4) {
-                Text(game.title).font(.headline)
-                Text("\(game.platforms.first ?? "") \(game.releaseYear > 0 ? "· \(game.releaseYear)" : "")")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                Text(game.title)
+                    .font(.subheadline.bold())
+                    .lineLimit(2)
+                    .foregroundStyle(.primary)
+
+                HStack {
+                    StatusBadge(status: game.status)
+
+                    Spacer()
+
+                    if let rating = game.rating, rating > 0 {
+                        HStack(spacing: 2) {
+                            Image(systemName: "star.fill")
+                                .foregroundStyle(.yellow)
+                            Text("\(rating)")
+                        }
+                        .font(.caption.bold())
+                    }
+                }
             }
-            Spacer()
+            .padding(.horizontal, 2)
         }
-        .contentShape(Rectangle())
-        .onTapGesture { onTap() }
-    }
-}
-
-
-// MARK: - Stats
-struct LibraryStatsView: View {
-    let games: [Game]
-    var body: some View {
-        let total = games.count
-        let playing = games.filter { $0.status == .playing }.count
-        let completed = games.filter { $0.status == .completed }.count
-        let wishlist = games.filter { $0.status == .wishlist }.count
-        let avg = games.compactMap { $0.rating }.averageOrNil
-        return VStack(alignment: .leading, spacing: 6) {
-            Divider()
-            HStack {
-                Text("Total: \(total)")
-                Spacer()
-                Text("Playing: \(playing)")
-                Spacer()
-                Text("Completed: \(completed)")
-                Spacer()
-                Text("Wishlist: \(wishlist)")
-            }
-            .font(Typography.footnote)
-            if let avg {
-                Text("Average rating: \(String(format: "%.1f", avg))")
-                    .font(Typography.footnote)
-                    .foregroundColor(.ds.textSecondary)
-            }
-        }
-    }
-}
-
-private extension LibraryView {
-    func dbg(_ items: Any...) {
-        #if DEBUG
-        if debugLogs {
-            let line = items.map { String(describing: $0) }.joined(separator: " ")
-            print(line)
-        }
-        #endif
-    }
-}
-
-private extension Collection where Element == Int {
-    var averageOrNil: Double? {
-        guard !isEmpty else { return nil }
-        let total = reduce(0, +)
-        return Double(total) / Double(count)
     }
 }

@@ -13,10 +13,16 @@ final class ProfileStore: ObservableObject {
     private enum Keys {
         static let birthdate = "profile.birthdate"
         static let platforms = "profile.platforms"
+        static let username = "profile.username"
     }
 
     static let defaultBirthdate: Date = Calendar.current.date(byAdding: .year, value: -16, to: Date()) ?? Date()
     static let defaultPlatforms: Set<String> = ["Nintendo Switch", "PlayStation 5"]
+    static let defaultUsername = "Erik"
+
+    @Published var username: String {
+        didSet { if username != oldValue { UserDefaults.standard.set(username, forKey: Keys.username) } }
+    }
 
     @Published var birthdate: Date {
         didSet { if birthdate != oldValue { UserDefaults.standard.set(birthdate, forKey: Keys.birthdate) } }
@@ -31,6 +37,8 @@ final class ProfileStore: ObservableObject {
     }
 
     init() {
+        self.username = UserDefaults.standard.string(forKey: Keys.username) ?? Self.defaultUsername
+
         if let saved = UserDefaults.standard.object(forKey: Keys.birthdate) as? Date {
             self.birthdate = saved
         } else {

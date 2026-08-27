@@ -4,27 +4,28 @@
 //
 //  Created by Erik Uhlin on 2025-09-08.
 //
+
 import SwiftUI
 
 struct RootTabView: View {
-    enum Tab { case explore, library, profile }
+    enum Tab { case explore, library, activity }
 
     @State private var selection: Tab = .library
 
     var body: some View {
         TabView(selection: $selection) {
             ExploreView()
-                .tabItem { Label("Explore", systemImage: "sparkles") }
+                .tabItem { Label("Utforska", systemImage: "sparkles") }
                 .tag(Tab.explore)
 
             LibraryView()
-                .tabItem { Label("Library", systemImage: "books.vertical.fill") }
+                .tabItem { Label("Bibliotek", systemImage: "books.vertical.fill") }
                 .tag(Tab.library)
 
-            ProfileView() // ← ny vy
-                    .tabItem { Label("Profile", systemImage: "person.crop.circle") }
-                    .tag(Tab.profile)
+            ActivityView()
+                .tabItem { Label("Aktivitet", systemImage: "chart.bar.xaxis") }
+                .tag(Tab.activity)
         }
-        .tint(.ds.brandRed) // din accentfärg
+        .tint(.ds.brandRed)
     }
 }

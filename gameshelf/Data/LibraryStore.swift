@@ -5,7 +5,6 @@
 //  Created by Erik Uhlin on 2025-08-25.
 //
 
-
 import SwiftUI
 import Combine
 
@@ -32,7 +31,7 @@ private func migrateLegacy(_ legacy: [LegacyGame]) -> [Game] {
             developers: old.developer.isEmpty ? [] : [old.developer],
             status: old.status,
             rating: old.rating,
-            rawgRating: nil,
+            igdbRating: nil,
             coverURL: old.coverURL,
             notes: ""
         )
@@ -44,38 +43,227 @@ final class LibraryStore: ObservableObject {
     @Published var games: [Game] = [] {
         didSet {
             guard isLoaded else { return }
-            try? save()
+            try? saveGames()
+        }
+    }
+
+    @Published var collections: [GameCollection] = [] {
+        didSet {
+            guard isLoaded else { return }
+            try? saveCollections()
         }
     }
 
     private var isLoaded = false
-    private let fileName = "library.json"
+    private let gamesFileName = "library.json"
+    private let collectionsFileName = "collections.json"
 
     init() {
         do {
-            try load()
+            try loadGames()
+            try loadCollections()
             isLoaded = true
         } catch {
-            // Om laddning misslyckas, fyll med sample och spara
             self.games = []
+            self.collections = []
             isLoaded = true
-            try? save()
+        }
+
+        // Initiera anonym auth och synk mot Supabase i bakgrunden
+        Task { [weak self] in
+            await SupabaseAuthManager.shared.ensureAnonymousAuth()
+            await self?.syncWithRemote()
         }
     }
 
-    // MARK: - Public API
+    // MARK: - Remote Synchronization
+    func syncWithRemote() async {
+        guard SupabaseConfig.isSyncEnabled else { return }
+
+        // Engångsmigrering av befintliga lokala spel vid första körning
+        await SupabaseSyncService.shared.migrateLocalGamesIfNeeded(localGames: self.games)
+
+        // Synka spel
+        do {
+            let remoteGames = try await SupabaseSyncService.shared.fetchRemoteGames()
+            if !remoteGames.isEmpty {
+                // Skapa en sammanslagen lista (remote + lokala)
+                var merged = self.games
+                for remote in remoteGames {
+                    if let idx = merged.firstIndex(where: { $0.id == remote.id }) {
+                        merged[idx] = remote
+                    } else {
+                        merged.append(remote)
+                    }
+                }
+                self.games = merged
+
+                // Skicka upp lokala spel som saknas på servern
+                for local in self.games {
+                    if !remoteGames.contains(where: { $0.id == local.id }) {
+                        try? await SupabaseSyncService.shared.upsertGame(local)
+                    }
+                }
+            } else if !self.games.isEmpty {
+                // Om fjärrdatabasen är tom, ladda upp hela det lokala biblioteket
+                for game in self.games {
+                    try? await SupabaseSyncService.shared.upsertGame(game)
+                }
+            }
+        } catch {
+            // Ignorera offline / nätverksfel så lokal data fortsätter fungera
+        }
+
+        // Synka samlingar
+        do {
+            let remoteCollections = try await SupabaseSyncService.shared.fetchRemoteCollections()
+            if !remoteCollections.isEmpty {
+                var merged = self.collections
+                for remote in remoteCollections {
+                    if let idx = merged.firstIndex(where: { $0.id == remote.id }) {
+                        merged[idx] = remote
+                    } else {
+                        merged.append(remote)
+                    }
+                }
+                self.collections = merged
+
+                for local in self.collections {
+                    if !remoteCollections.contains(where: { $0.id == local.id }) {
+                        try? await SupabaseSyncService.shared.upsertCollection(local)
+                    }
+                }
+            } else if !self.collections.isEmpty {
+                for col in self.collections {
+                    try? await SupabaseSyncService.shared.upsertCollection(col)
+                }
+            }
+        } catch {
+            // Ignorera nätverksfel
+        }
+    }
+
+    // MARK: - Game Public API
     func add(_ game: Game) {
         games.insert(game, at: 0)
+        Task {
+            try? await SupabaseSyncService.shared.upsertGame(game)
+        }
     }
 
     func delete(_ game: Game) {
+        let gameId = game.id
         if let idx = games.firstIndex(of: game) {
             games.remove(at: idx)
+            removeGameFromAllCollections(gameId)
+        }
+        Task {
+            try? await SupabaseSyncService.shared.deleteGame(id: gameId)
         }
     }
 
     func delete(at offsets: IndexSet) {
+        let removedIDs = offsets.map { games[$0].id }
         games.remove(atOffsets: offsets)
+        for id in removedIDs {
+            removeGameFromAllCollections(id)
+            Task {
+                try? await SupabaseSyncService.shared.deleteGame(id: id)
+            }
+        }
+    }
+
+    func update(_ game: Game) {
+        if let idx = games.firstIndex(where: { $0.id == game.id }) {
+            games[idx] = game
+            Task {
+                try? await SupabaseSyncService.shared.upsertGame(game)
+            }
+        }
+    }
+
+    // MARK: - Collections Public API
+
+    @discardableResult
+    func createCollection(name: String, description: String = "", initialGameIDs: [UUID] = []) -> GameCollection {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let collection = GameCollection(
+            name: trimmed.isEmpty ? "Ny samling" : trimmed,
+            description: description.trimmingCharacters(in: .whitespacesAndNewlines),
+            gameIDs: initialGameIDs
+        )
+        collections.insert(collection, at: 0)
+        Task {
+            try? await SupabaseSyncService.shared.upsertCollection(collection)
+        }
+        return collection
+    }
+
+    func updateCollection(_ collection: GameCollection) {
+        if let idx = collections.firstIndex(where: { $0.id == collection.id }) {
+            collections[idx] = collection
+            Task {
+                try? await SupabaseSyncService.shared.upsertCollection(collection)
+            }
+        }
+    }
+
+    func deleteCollection(_ collection: GameCollection) {
+        let id = collection.id
+        collections.removeAll(where: { $0.id == id })
+        Task {
+            try? await SupabaseSyncService.shared.deleteCollection(id: id)
+        }
+    }
+
+    func toggleGame(_ gameID: UUID, in collectionID: UUID) {
+        guard let idx = collections.firstIndex(where: { $0.id == collectionID }) else { return }
+        var col = collections[idx]
+        if col.gameIDs.contains(gameID) {
+            col.gameIDs.removeAll(where: { $0 == gameID })
+        } else {
+            col.gameIDs.append(gameID)
+        }
+        collections[idx] = col
+        Task {
+            try? await SupabaseSyncService.shared.upsertCollection(col)
+        }
+    }
+
+    func addGame(_ gameID: UUID, to collectionID: UUID) {
+        guard let idx = collections.firstIndex(where: { $0.id == collectionID }) else { return }
+        if !collections[idx].gameIDs.contains(gameID) {
+            collections[idx].gameIDs.append(gameID)
+            let updatedCol = collections[idx]
+            Task {
+                try? await SupabaseSyncService.shared.upsertCollection(updatedCol)
+            }
+        }
+    }
+
+    func removeGame(_ gameID: UUID, from collectionID: UUID) {
+        guard let idx = collections.firstIndex(where: { $0.id == collectionID }) else { return }
+        collections[idx].gameIDs.removeAll(where: { $0 == gameID })
+        let updatedCol = collections[idx]
+        Task {
+            try? await SupabaseSyncService.shared.upsertCollection(updatedCol)
+        }
+    }
+
+    func collections(for gameID: UUID) -> [GameCollection] {
+        collections.filter { $0.gameIDs.contains(gameID) }
+    }
+
+    func games(in collection: GameCollection) -> [Game] {
+        collection.gameIDs.compactMap { id in
+            games.first(where: { $0.id == id })
+        }
+    }
+
+    private func removeGameFromAllCollections(_ gameID: UUID) {
+        for idx in collections.indices {
+            collections[idx].gameIDs.removeAll(where: { $0 == gameID })
+        }
     }
 
     // MARK: - Persistence (JSON)
@@ -85,21 +273,32 @@ final class LibraryStore: ObservableObject {
         return url
     }
 
-    private func dataURL() throws -> URL {
-        // Use a simple path without UniformTypeIdentifiers to avoid extra imports
-        return try documentsURL().appendingPathComponent(fileName)
+    private func gamesURL() throws -> URL {
+        try documentsURL().appendingPathComponent(gamesFileName)
     }
 
-    func save() throws {
-        let url = try dataURL()
+    private func collectionsURL() throws -> URL {
+        try documentsURL().appendingPathComponent(collectionsFileName)
+    }
+
+    func saveGames() throws {
+        let url = try gamesURL()
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
         let data = try encoder.encode(games)
         try data.write(to: url, options: .atomic)
     }
 
-    func load() throws {
-        let url = try dataURL()
+    func saveCollections() throws {
+        let url = try collectionsURL()
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+        let data = try encoder.encode(collections)
+        try data.write(to: url, options: .atomic)
+    }
+
+    func loadGames() throws {
+        let url = try gamesURL()
         guard FileManager.default.fileExists(atPath: url.path) else {
             self.games = []
             return
@@ -109,20 +308,28 @@ final class LibraryStore: ObservableObject {
         do {
             self.games = try decoder.decode([Game].self, from: data)
         } catch {
-            // Try legacy decode and migrate
             if let legacy = try? decoder.decode([LegacyGame].self, from: data) {
                 self.games = migrateLegacy(legacy)
-                // Persist immediately in new format
-                try? save()
+                try? saveGames()
             } else {
                 throw error
             }
         }
     }
 
+    func loadCollections() throws {
+        let url = try collectionsURL()
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            self.collections = []
+            return
+        }
+        let data = try Data(contentsOf: url)
+        let decoder = JSONDecoder()
+        self.collections = (try? decoder.decode([GameCollection].self, from: data)) ?? []
+    }
+
     // Gruppindelning per plattform (för hyllvy)
     var shelvesByPlatform: [Shelf] {
-        // Expand each game into (platform, game) pairs so multi-platform spel hamnar på flera hyllor
         let pairs: [(String, Game)] = games.flatMap { g in
             let names = g.platforms.isEmpty ? ["Unspecified"] : g.platforms
             return names.map { ($0, g) }

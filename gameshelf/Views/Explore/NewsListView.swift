@@ -7,155 +7,218 @@
 
 import SwiftUI
 
-private enum NewsPlatformFilter: String, CaseIterable { case all = "All", playstation = "PlayStation", xbox = "Xbox", nintendo = "Nintendo", pc = "PC", mobile = "Mobile" }
-private func keywords(for filter: NewsPlatformFilter) -> [String] {
-    switch filter {
-    case .all: return []
-    case .playstation: return ["ps5", "playstation"]
-    case .xbox: return ["xbox", "series x", "series s"]
-    case .nintendo: return ["switch", "nintendo"]
-    case .pc: return ["pc", "steam"]
-    case .mobile: return ["iphone", "android", "mobile"]
+// MARK: - Hero Nyhetskort för Toppnyheten
+struct NewsHeroCard: View {
+    let item: NewsItem
+    var onOpen: (URL) -> Void
+    var onFindIGDB: (String) -> Void
+
+    var body: some View {
+        Button {
+            if let u = item.link { onOpen(u) }
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                ZStack(alignment: .topLeading) {
+                    if let imgURL = item.image {
+                        AsyncImage(url: imgURL) { phase in
+                            switch phase {
+                            case .success(let img):
+                                img.resizable()
+                                    .scaledToFill()
+                                    .frame(height: 180)
+                                    .clipped()
+                            default:
+                                Color(.tertiarySystemFill)
+                                    .frame(height: 180)
+                            }
+                        }
+                    } else {
+                        Color(.tertiarySystemFill)
+                            .frame(height: 180)
+                            .overlay(
+                                Image(systemName: "newspaper.fill")
+                                    .font(.system(size: 40))
+                                    .foregroundStyle(.secondary.opacity(0.5))
+                            )
+                    }
+
+                    // Tagg
+                    HStack {
+                        Label(item.kind.localizedName, systemImage: item.kind.icon)
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .foregroundStyle(.primary)
+
+                        Spacer()
+
+                        if let matched = item.matchedGameTitle {
+                            HStack(spacing: 4) {
+                                Image(systemName: "gamecontroller.fill")
+                                Text(matched)
+                                    .lineLimit(1)
+                            }
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.red.opacity(0.85), in: Capsule())
+                            .foregroundStyle(.white)
+                        }
+                    }
+                    .padding(10)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(item.title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(3)
+                        .multilineTextAlignment(.leading)
+
+                    HStack(spacing: 6) {
+                        Text(item.source)
+                            .font(.caption.bold())
+                            .foregroundStyle(.red)
+
+                        if !item.relativePublishedTime.isEmpty {
+                            Text("• \(item.relativePublishedTime)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(.horizontal, 4)
+            }
+            .padding(12)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: .black.opacity(0.06), radius: 5, x: 0, y: 2)
+        }
+        .buttonStyle(.plain)
     }
-}
-private func applyPlatform(_ items: [NewsItem], filter: NewsPlatformFilter) -> [NewsItem] {
-    let keys = keywords(for: filter)
-    guard !keys.isEmpty else { return items }
-    return items.filter { it in
-        let t = it.title.lowercased()
-        return keys.contains(where: { t.contains($0) })
-    }
-}
-private func applyKind(_ items: [NewsItem], kind: NewsKind?) -> [NewsItem] {
-    guard let kind = kind else { return items }
-    return items.filter { $0.kind == kind }
 }
 
+// MARK: - Artikelrad för Nyhetslistan
 struct ArticleRow: View {
     let item: NewsItem
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             ZStack {
-                RoundedRectangle(cornerRadius: 8).fill(.quaternary)
                 if let url = item.image {
                     AsyncImage(url: url) { phase in
                         switch phase {
-                        case .success(let img): img.resizable().scaledToFill()
-                        default: Color.clear
+                        case .success(let img):
+                            img.resizable()
+                                .scaledToFill()
+                        default:
+                            Color(.tertiarySystemFill)
                         }
                     }
-                    .clipped()
                 } else {
-                    Image(systemName: "newspaper").imageScale(.large)
+                    Color(.tertiarySystemFill)
+                        .overlay(
+                            Image(systemName: "newspaper")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                        )
                 }
             }
-            .frame(width: 64, height: 64)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .frame(width: 80, height: 80)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.title).font(.headline).lineLimit(3)
-                HStack(spacing: 4) {
-                    Text(item.source)
-                    if let d = item.published { Text("· \(relative(d))") }
-                }
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                Text(item.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
 
-                // Kind chip
-                HStack {
-                    Text(item.kind.rawValue.capitalized)
-                        .font(.caption2)
+                HStack(spacing: 6) {
+                    Text(item.source)
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+
+                    if !item.relativePublishedTime.isEmpty {
+                        Text("• \(item.relativePublishedTime)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                HStack(spacing: 6) {
+                    Label(item.kind.localizedName, systemImage: item.kind.icon)
+                        .font(.system(size: 10, weight: .bold))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(.ultraThinMaterial)
+                        .background(Color(.tertiarySystemFill))
                         .clipShape(Capsule())
-                    Spacer(minLength: 0)
+                        .foregroundStyle(.secondary)
+
+                    if let matched = item.matchedGameTitle {
+                        HStack(spacing: 3) {
+                            Image(systemName: "gamecontroller.fill")
+                                .font(.system(size: 8))
+                            Text(matched)
+                                .font(.system(size: 10, weight: .bold))
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.red.opacity(0.12))
+                        .foregroundStyle(.red)
+                        .clipShape(Capsule())
+                    }
                 }
+                .padding(.top, 2)
             }
-            Spacer()
+
+            Spacer(minLength: 0)
         }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.ds.surface))
-        .shadow(color: .black.opacity(0.05), radius: 6, y: 3)
+        .padding(10)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
-private func relative(_ date: Date) -> String {
-    let r = RelativeDateTimeFormatter()
-    r.unitsStyle = .short
-    return r.localizedString(for: date, relativeTo: Date())
-}
-
+// MARK: - Helskärms-Nyhetslista
 struct NewsListView: View {
     let items: [NewsItem]
     let canLoadMore: Bool
     let isLoadingMore: Bool
     let onOpen: (URL) -> Void
-    let onFindRawg: (String) -> Void
+    let onFindIGDB: (String) -> Void
     let onLoadMore: () -> Void
     let initialPlatformRaw: String
     let initialKind: NewsKind?
 
-    @State private var platformFilter: NewsPlatformFilter = .all
-    @State private var kindFilter: NewsKind? = nil
-
-    init(items: [NewsItem],
-         canLoadMore: Bool,
-         isLoadingMore: Bool,
-         onOpen: @escaping (URL) -> Void,
-         onFindRawg: @escaping (String) -> Void,
-         onLoadMore: @escaping () -> Void,
-         initialPlatformRaw: String,
-         initialKind: NewsKind?) {
-        self.items = items
-        self.canLoadMore = canLoadMore
-        self.isLoadingMore = isLoadingMore
-        self.onOpen = onOpen
-        self.onFindRawg = onFindRawg
-        self.onLoadMore = onLoadMore
-        self.initialPlatformRaw = initialPlatformRaw
-        self.initialKind = initialKind
-        if let pf = NewsPlatformFilter(rawValue: initialPlatformRaw) {
-            _platformFilter = State(initialValue: pf)
-        } else {
-            _platformFilter = State(initialValue: .all)
-        }
-        _kindFilter = State(initialValue: initialKind)
-    }
-
-    private var filtered: [NewsItem] {
-        applyKind(applyPlatform(items, filter: platformFilter), kind: kindFilter)
-    }
+    @State private var searchText = ""
 
     var body: some View {
         NavigationStack {
             List {
-                ForEach(filtered) { a in
+                ForEach(items) { a in
                     if let url = a.link {
                         Button { onOpen(url) } label: { ArticleRow(item: a) }
                             .buttonStyle(.plain)
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button { onFindRawg(a.title) } label: {
-                                    Label("Find on RAWG", systemImage: "magnifyingglass")
+                                Button { onFindIGDB(a.title) } label: {
+                                    Label("Hitta i IGDB", systemImage: "magnifyingglass")
                                 }
-                                .tint(.ds.brandRed)
+                                .tint(.red)
                             }
                             .contextMenu {
-                                Button { onFindRawg(a.title) } label: {
-                                    Label("Find on RAWG", systemImage: "magnifyingglass")
+                                Button { onFindIGDB(a.title) } label: {
+                                    Label("Hitta i IGDB", systemImage: "magnifyingglass")
                                 }
                                 Button { UIApplication.shared.open(url) } label: {
-                                    Label("Open in Safari", systemImage: "safari")
+                                    Label("Öppna i Safari", systemImage: "safari")
                                 }
                             }
                     } else {
-                        HStack {
-                            ArticleRow(item: a)
-                            Button { onFindRawg(a.title) } label: {
-                                Image(systemName: "magnifyingglass")
-                            }
-                            .buttonStyle(.borderless)
-                        }
+                        ArticleRow(item: a)
                     }
                 }
 
@@ -163,49 +226,17 @@ struct NewsListView: View {
                     Button(action: onLoadMore) {
                         HStack(spacing: 8) {
                             if isLoadingMore { ProgressView().scaleEffect(0.9) }
-                            Text(isLoadingMore ? "Loading…" : "See more")
+                            Text(isLoadingMore ? "Laddar…" : "Visa fler nyheter")
                         }
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
-                    .tint(.ds.brandRed)
+                    .tint(.red)
                 }
             }
-            .navigationTitle("All news")
-            .listStyle(.insetGrouped)
-            .toolbar {
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
-                    Menu {
-                        ForEach(NewsPlatformFilter.allCases, id: \.self) { f in
-                            Button(action: { platformFilter = f }) {
-                                if platformFilter == f { Image(systemName: "checkmark") }
-                                Text(f.rawValue)
-                            }
-                        }
-                    } label: {
-                        Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
-                    }
-
-                    Menu {
-                        Button(action: { kindFilter = nil }) {
-                            if kindFilter == nil { Image(systemName: "checkmark") }
-                            Text("All types")
-                        }
-                        Divider()
-                        ForEach([NewsKind.review, .preview, .guide, .opinion, .interview, .video, .deal, .feature, .news], id: \.self) { k in
-                            Button(action: { kindFilter = k }) {
-                                if kindFilter == k { Image(systemName: "checkmark") }
-                                Text(k.rawValue.capitalized)
-                            }
-                        }
-                    } label: {
-                        Label("Type", systemImage: "line.3.horizontal.decrease")
-                    }
-                }
-            }
-            .refreshable {
-                // här kan du koppla till reload om du vill
-            }
+            .listStyle(.plain)
+            .navigationTitle("Alla nyheter")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }

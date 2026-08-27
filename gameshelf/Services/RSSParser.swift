@@ -168,6 +168,12 @@ enum RSSParser {
             return .review
         }
 
+        // --- Updates / Patches ---
+        let updateTokens = ["update", "patch", "patch notes", "hotfix", "dlc", "expansion", "season", "changelog", "uppdatering", "fix"]
+        if has(updateTokens) || catsContain(["update", "updates", "patch", "dlc"]) || linkLC.contains("/patch-notes/") || linkLC.contains("/update/") {
+            return .update
+        }
+
         // --- Guides / How-to ---
         let guideWords = ["guide", "walkthrough"]
         let hasGuideWord = guideWords.contains { containsWord(haystack, $0) }
@@ -191,13 +197,13 @@ enum RSSParser {
         }
 
         // --- Video / Trailer ---
-        let videoTokens = ["trailer", "gameplay", "watch the", "video:", "livestream"]
-        if has(videoTokens) || catsContain(["video"]) || linkLC.contains("/trailer/") {
+        let videoTokens = ["trailer", "gameplay", "watch the", "video:", "livestream", "teaser"]
+        if has(videoTokens) || catsContain(["video", "trailers"]) || linkLC.contains("/trailer/") || linkLC.contains("/videos/") {
             return .video
         }
 
         // --- Deals ---
-        let dealTokens = ["deal", "reapris", "sale", "discount", "offer", "bundle", "free weekend"]
+        let dealTokens = ["deal", "reapris", "sale", "discount", "offer", "bundle", "free weekend", "gratis"]
         if has(dealTokens) || catsContain(["deal", "deals"]) || linkLC.contains("/deals/") {
             return .deal
         }

@@ -61,7 +61,9 @@ export function CollectionsView({
 
     setIsSubmitting(true);
     try {
+      const pairedUserId = typeof window !== 'undefined' ? localStorage.getItem('gameshelf_paired_user_id') : null;
       const payload = {
+        user_id: pairedUserId,
         name: name.trim(),
         description: description.trim(),
         game_ids: [],

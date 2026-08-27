@@ -35,6 +35,7 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [profileName, setProfileName] = useState<string>('');
+  const [pairedUserId, setPairedUserId] = useState<string | null>(null);
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -44,93 +45,92 @@ export default function HomePage() {
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Fetch games & collections from Supabase (if logged in) or localStorage (if guest)
-  const fetchLibrary = async () => {
-    setIsSyncing(true);
-
-    let pairedProfile: string | null = null;
-    let pairedUserId: string | null = null;
-
+  // 1. Initialisera sessionsdata vid första rendering
+  useEffect(() => {
     if (typeof window !== 'undefined') {
-      pairedProfile = localStorage.getItem('gameshelf_profile_name');
-      pairedUserId = localStorage.getItem('gameshelf_paired_user_id');
-
-      if (pairedProfile) setProfileName(pairedProfile);
-
-      const cachedGames = localStorage.getItem('gameshelf_local_games');
-      const cachedCols = localStorage.getItem('gameshelf_local_collections');
-      if (cachedGames) {
-        try {
-          const parsed = JSON.parse(cachedGames);
-          if (Array.isArray(parsed)) {
-            setGames(parsed);
-          }
-        } catch (e) {}
-      }
-      if (cachedCols) {
-        try {
-          const parsedCols = JSON.parse(cachedCols);
-          if (Array.isArray(parsedCols)) {
-            setCollections(parsedCols);
-          }
-        } catch (e) {}
-      }
+      const savedUserId = localStorage.getItem('gameshelf_paired_user_id');
+      const savedName = localStorage.getItem('gameshelf_profile_name');
+      if (savedName) setProfileName(savedName);
+      if (savedUserId) setPairedUserId(savedUserId);
     }
+  }, []);
 
-    const pairedId = pairedUserId || (typeof window !== 'undefined' ? localStorage.getItem('gameshelf_paired_user_id') : null);
-
-    // Om användaren är i gästläge (ej parkopplad/inloggad), hämta INTE från Supabase
-    if (!pairedProfile && !pairedId) {
+  // 2. Hämta bibliotek & prenumerera på Supabase Realtime för den parkopplade användaren
+  useEffect(() => {
+    // Om ej inloggad / gästläge: Ladda från webbläsarens lokala minne
+    if (!pairedUserId) {
+      if (typeof window !== 'undefined') {
+        const cachedGames = localStorage.getItem('gameshelf_local_games');
+        const cachedCols = localStorage.getItem('gameshelf_local_collections');
+        if (cachedGames) {
+          try {
+            const parsed = JSON.parse(cachedGames);
+            if (Array.isArray(parsed)) setGames(parsed);
+          } catch (e) {}
+        }
+        if (cachedCols) {
+          try {
+            const parsedCols = JSON.parse(cachedCols);
+            if (Array.isArray(parsedCols)) setCollections(parsedCols);
+          } catch (e) {}
+        }
+      }
       setIsSyncing(false);
       return;
     }
 
-    try {
-      let gamesQuery = supabase.from('user_games').select('*').order('created_at', { ascending: false });
-      let colQuery = supabase.from('collections').select('*').order('created_at', { ascending: false });
+    setIsSyncing(true);
 
-      if (pairedId) {
-        gamesQuery = gamesQuery.eq('user_id', pairedId);
-        colQuery = colQuery.eq('user_id', pairedId);
-      }
+    async function loadRemoteLibrary() {
+      try {
+        const [gamesRes, colRes] = await Promise.all([
+          supabase
+            .from('user_games')
+            .select('*')
+            .eq('user_id', pairedUserId)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('collections')
+            .select('*')
+            .eq('user_id', pairedUserId)
+            .order('created_at', { ascending: false }),
+        ]);
 
-      const [gamesRes, colRes] = await Promise.all([gamesQuery, colQuery]);
-
-      if (gamesRes.data) {
-        const mapped = gamesRes.data.map(mapSupabaseGame);
-        setGames(mapped);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('gameshelf_local_games', JSON.stringify(mapped));
+        if (gamesRes.data) {
+          const mapped = gamesRes.data.map(mapSupabaseGame);
+          setGames(mapped);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('gameshelf_local_games', JSON.stringify(mapped));
+          }
         }
-      }
 
-      if (colRes.data) {
-        const mappedCols = colRes.data.map(mapSupabaseCollection);
-        setCollections(mappedCols);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('gameshelf_local_collections', JSON.stringify(mappedCols));
+        if (colRes.data) {
+          const mappedCols = colRes.data.map(mapSupabaseCollection);
+          setCollections(mappedCols);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('gameshelf_local_collections', JSON.stringify(mappedCols));
+          }
         }
+      } catch (err) {
+        console.warn('Could not fetch from Supabase:', err);
+      } finally {
+        setIsSyncing(false);
       }
-    } catch (err) {
-      console.warn('Could not fetch from Supabase, using local cache:', err);
-    } finally {
-      setIsSyncing(false);
     }
-  };
 
-  useEffect(() => {
-    fetchLibrary();
+    loadRemoteLibrary();
 
-    // Prenumerera endast på Supabase Realtime för den parkopplade användaren
-    const pairedId = typeof window !== 'undefined' ? localStorage.getItem('gameshelf_paired_user_id') : null;
-    if (!pairedId) return;
-
-    // Supabase Realtime Channel för användarens specifika spel
+    // Supabase Realtime Channel för användarens spel
     const gamesChannel = supabase
-      .channel(`public:user_games:${pairedId}`)
+      .channel(`public:user_games:${pairedUserId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'user_games', filter: `user_id=eq.${pairedId}` },
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_games',
+          filter: `user_id=eq.${pairedUserId}`,
+        },
         (payload: any) => {
           if (payload.eventType === 'INSERT') {
             const newGame = mapSupabaseGame(payload.new);
@@ -168,11 +168,17 @@ export default function HomePage() {
       )
       .subscribe();
 
+    // Supabase Realtime Channel för användarens samlingar
     const collectionsChannel = supabase
-      .channel(`public:collections:${pairedId}`)
+      .channel(`public:collections:${pairedUserId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'collections', filter: `user_id=eq.${pairedId}` },
+        {
+          event: '*',
+          schema: 'public',
+          table: 'collections',
+          filter: `user_id=eq.${pairedUserId}`,
+        },
         (payload: any) => {
           if (payload.eventType === 'INSERT') {
             const newCol = mapSupabaseCollection(payload.new);
@@ -205,7 +211,7 @@ export default function HomePage() {
       supabase.removeChannel(gamesChannel);
       supabase.removeChannel(collectionsChannel);
     };
-  }, []);
+  }, [pairedUserId]);
 
   // Filtered games
   const filteredGames = useMemo(() => {
@@ -368,6 +374,7 @@ export default function HomePage() {
       localStorage.removeItem('gameshelf_local_collections');
     }
     setProfileName('');
+    setPairedUserId(null);
     setGames([]);
     setCollections([]);
     setSelectedCollectionId(null);
@@ -375,11 +382,11 @@ export default function HomePage() {
 
   const handlePairedAndMerge = async (userId: string, username?: string) => {
     const user = username?.trim() || (userId ? 'Spelare' : '');
-    setProfileName(user);
     if (typeof window !== 'undefined') {
       if (user) localStorage.setItem('gameshelf_profile_name', user);
       if (userId) localStorage.setItem('gameshelf_paired_user_id', userId);
     }
+    setProfileName(user);
 
     // Identifiera gästspel som skapats lokalt och migrera dem till användarens konto
     try {
@@ -425,7 +432,7 @@ export default function HomePage() {
       console.error('Error merging guest games during pairing:', err);
     }
 
-    await fetchLibrary();
+    setPairedUserId(userId);
   };
 
   const activeCollection = collections.find((c) => c.id === selectedCollectionId);

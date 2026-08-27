@@ -72,7 +72,10 @@ export function AddGameModal({
       const ratingScore = igdbGame.total_rating || igdbGame.rating;
       const igdbRating = ratingScore ? Math.round((ratingScore / 10) * 10) / 10 : null;
 
+      const pairedUserId = typeof window !== 'undefined' ? localStorage.getItem('gameshelf_paired_user_id') : null;
+
       const newGamePayload = {
+        user_id: pairedUserId,
         title: igdbGame.name,
         platforms,
         release_year: releaseYear,

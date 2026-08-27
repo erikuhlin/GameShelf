@@ -41,13 +41,12 @@ export function ShelfView({ games, onSelectGame }: ShelfViewProps) {
         <section key={`shelf-row-${rowIndex}`} className="relative">
           {/* Games on Shelf */}
           <div className="relative">
-            <div className="flex items-end gap-5 overflow-x-auto pb-4 pt-6 px-4 scrollbar-none">
+            <div className="flex items-end gap-3.5 sm:gap-5 overflow-x-auto pb-4 pt-4 sm:pt-6 px-2 sm:px-4 scrollbar-none">
               {rowGames.map((game) => (
                 <div
                   key={game.id}
                   onClick={() => onSelectGame(game)}
-                  className="flex-shrink-0 cursor-pointer group flex flex-col items-center"
-                  style={{ width: '145px' }}
+                  className="w-28 sm:w-36 flex-shrink-0 cursor-pointer group flex flex-col items-center"
                 >
                   {/* Game Box Art */}
                   <div className="relative w-full aspect-[3/4] rounded-lg overflow-hidden game-spine bg-zinc-800 border border-zinc-700/60 shadow-xl group-hover:border-zinc-500 transition duration-300">
@@ -69,7 +68,7 @@ export function ShelfView({ games, onSelectGame }: ShelfViewProps) {
 
                     {/* User Rating badge */}
                     {game.rating && (
-                      <div className="absolute top-2 right-2 flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-black/75 backdrop-blur-md text-amber-400 text-[11px] font-bold border border-amber-500/30">
+                      <div className="absolute top-2 right-2 flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-black/75 backdrop-blur-md text-amber-400 text-[10px] sm:text-[11px] font-bold border border-amber-500/30">
                         <Star className="w-2.5 h-2.5 fill-current" />
                         <span>{game.rating}</span>
                       </div>
@@ -77,20 +76,20 @@ export function ShelfView({ games, onSelectGame }: ShelfViewProps) {
 
                     {/* Ownership badge if not owned */}
                     {!game.is_owned && (
-                      <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-zinc-900/90 text-zinc-400 text-[10px] border border-zinc-700">
-                        Spelminne
+                      <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-zinc-900/90 text-zinc-400 text-[9px] sm:text-[10px] border border-zinc-700">
+                        Minne
                       </div>
                     )}
                   </div>
 
-                  {/* Title and Status below spine */}
-                  <div className="mt-3 w-full text-center px-1">
-                    <p className="text-xs font-semibold text-zinc-200 truncate group-hover:text-brand-red transition">
+                  {/* Title & Platform label */}
+                  <div className="w-full mt-2 sm:mt-2.5 text-center px-1">
+                    <h4 className="text-xs sm:text-sm font-semibold text-zinc-200 group-hover:text-brand-red transition text-center line-clamp-1">
                       {game.title}
+                    </h4>
+                    <p className="text-[10px] sm:text-xs text-zinc-500 truncate mt-0.5">
+                      {game.platforms?.join(', ') || 'Okänd'}
                     </p>
-                    <div className="mt-1 flex justify-center">
-                      <StatusBadge status={game.status} size="sm" />
-                    </div>
                   </div>
                 </div>
               ))}

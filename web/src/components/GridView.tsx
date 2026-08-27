@@ -26,7 +26,7 @@ export function GridView({ games, onSelectGame }: GridViewProps) {
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5 pb-16">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-5 pb-16">
       {games.map((game) => {
         const completedTodos = game.todos?.filter((t) => t.isDone).length || 0;
         const totalTodos = game.todos?.length || 0;

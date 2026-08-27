@@ -451,7 +451,7 @@ export default function HomePage() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-6 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6 pb-28 md:pb-12">
         {/* Guest Mode Banner */}
         {!profileName && (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-emerald-900/30 to-zinc-900/80 border border-emerald-500/40 shadow-lg animate-in fade-in duration-200">

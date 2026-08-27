@@ -166,7 +166,7 @@ export function CollectionsView({
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-5">
             {filteredCollectionGames.map((game) => (
               <div
                 key={game.id}
@@ -318,7 +318,7 @@ export function CollectionsView({
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {collections.map((col) => {
             const colGames = games.filter((g) => col.game_ids?.includes(g.id));
             const previewCovers = colGames.slice(0, 4);

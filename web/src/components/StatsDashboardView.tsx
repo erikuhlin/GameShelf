@@ -140,51 +140,51 @@ export function StatsDashboardView({ games, onSelectGame }: StatsDashboardViewPr
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Total Games */}
-        <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 shadow-md flex flex-col justify-between">
+        <div className="p-3.5 sm:p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 shadow-md flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Totalt</span>
-            <div className="w-8 h-8 rounded-xl bg-brand-red/10 border border-brand-red/30 flex items-center justify-center text-brand-red">
-              <Gamepad2 className="w-4 h-4" />
+            <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-zinc-400">Totalt</span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-brand-red/10 border border-brand-red/30 flex items-center justify-center text-brand-red">
+              <Gamepad2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="mt-4">
-            <div className="text-3xl font-extrabold text-white">{totalGames}</div>
-            <div className="text-xs text-zinc-400 mt-1">
-              {ownedGames} ägda titlar • {totalGames - ownedGames} spelminnen
+          <div className="mt-3 sm:mt-4">
+            <div className="text-2xl sm:text-3xl font-extrabold text-white">{totalGames}</div>
+            <div className="text-[11px] sm:text-xs text-zinc-400 mt-1">
+              {ownedGames} ägda titlar
             </div>
           </div>
         </div>
 
         {/* Total Playtime */}
-        <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 shadow-md flex flex-col justify-between">
+        <div className="p-3.5 sm:p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 shadow-md flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Speltid (est.)</span>
-            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-              <Clock className="w-4 h-4" />
+            <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-zinc-400">Speltid (est.)</span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="mt-4">
-            <div className="text-3xl font-extrabold text-white">{totalEstimatedHours}h</div>
-            <div className="text-xs text-zinc-400 mt-1">
-              ca {backlogHours}h kvar att spela i backloggen
+          <div className="mt-3 sm:mt-4">
+            <div className="text-2xl sm:text-3xl font-extrabold text-white">{totalEstimatedHours}h</div>
+            <div className="text-[11px] sm:text-xs text-zinc-400 mt-1">
+              {backlogHours}h i backloggen
             </div>
           </div>
         </div>
 
         {/* Completion Rate */}
-        <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 shadow-md flex flex-col justify-between">
+        <div className="p-3.5 sm:p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 shadow-md flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Avklarade</span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-              <Trophy className="w-4 h-4" />
+            <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-zinc-400">Avklarade</span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+              <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="mt-4">
-            <div className="text-3xl font-extrabold text-white">{completionRate}%</div>
-            <div className="text-xs text-zinc-400 mt-1">
-              {completedGames} av {playedCount} spel klara
+          <div className="mt-3 sm:mt-4">
+            <div className="text-2xl sm:text-3xl font-extrabold text-white">{completionRate}%</div>
+            <div className="text-[11px] sm:text-xs text-zinc-400 mt-1">
+              {completedGames} av {playedCount} klara
             </div>
           </div>
         </div>

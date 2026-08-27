@@ -80,64 +80,33 @@ final class LibraryStore: ObservableObject {
     func syncWithRemote() async {
         guard SupabaseConfig.isSyncEnabled else { return }
 
-        // Engångsmigrering av befintliga lokala spel vid första körning
-        await SupabaseSyncService.shared.migrateLocalGamesIfNeeded(localGames: self.games)
+        let initialSyncKey = "has_completed_initial_supabase_sync"
+        let isFirstSync = !UserDefaults.standard.bool(forKey: initialSyncKey)
 
-        // Synka spel
+        // Engångsmigrering av befintliga lokala spel vid allra första anslutningen
+        if isFirstSync && !self.games.isEmpty {
+            for game in self.games {
+                try? await SupabaseSyncService.shared.upsertGame(game)
+            }
+            for col in self.collections {
+                try? await SupabaseSyncService.shared.upsertCollection(col)
+            }
+            UserDefaults.standard.set(true, forKey: initialSyncKey)
+        }
+
+        // Synka spel från servern
         do {
             let remoteGames = try await SupabaseSyncService.shared.fetchRemoteGames()
-            if !remoteGames.isEmpty {
-                // Skapa en sammanslagen lista (remote + lokala)
-                var merged = self.games
-                for remote in remoteGames {
-                    if let idx = merged.firstIndex(where: { $0.id == remote.id }) {
-                        merged[idx] = remote
-                    } else {
-                        merged.append(remote)
-                    }
-                }
-                self.games = merged
-
-                // Skicka upp lokala spel som saknas på servern
-                for local in self.games {
-                    if !remoteGames.contains(where: { $0.id == local.id }) {
-                        try? await SupabaseSyncService.shared.upsertGame(local)
-                    }
-                }
-            } else if !self.games.isEmpty {
-                // Om fjärrdatabasen är tom, ladda upp hela det lokala biblioteket
-                for game in self.games {
-                    try? await SupabaseSyncService.shared.upsertGame(game)
-                }
-            }
+            self.games = remoteGames
+            UserDefaults.standard.set(true, forKey: initialSyncKey)
         } catch {
             // Ignorera offline / nätverksfel så lokal data fortsätter fungera
         }
 
-        // Synka samlingar
+        // Synka samlingar från servern
         do {
             let remoteCollections = try await SupabaseSyncService.shared.fetchRemoteCollections()
-            if !remoteCollections.isEmpty {
-                var merged = self.collections
-                for remote in remoteCollections {
-                    if let idx = merged.firstIndex(where: { $0.id == remote.id }) {
-                        merged[idx] = remote
-                    } else {
-                        merged.append(remote)
-                    }
-                }
-                self.collections = merged
-
-                for local in self.collections {
-                    if !remoteCollections.contains(where: { $0.id == local.id }) {
-                        try? await SupabaseSyncService.shared.upsertCollection(local)
-                    }
-                }
-            } else if !self.collections.isEmpty {
-                for col in self.collections {
-                    try? await SupabaseSyncService.shared.upsertCollection(col)
-                }
-            }
+            self.collections = remoteCollections
         } catch {
             // Ignorera nätverksfel
         }

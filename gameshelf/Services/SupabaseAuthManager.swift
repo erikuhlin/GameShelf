@@ -57,11 +57,10 @@ public final class SupabaseAuthManager: ObservableObject {
     private let urlSession: URLSession
 
     public var persistentUserId: UUID {
-        if let current = currentUser?.id { return current }
         if let saved = UserDefaults.standard.string(forKey: deviceUserKey), let uuid = UUID(uuidString: saved) {
             return uuid
         }
-        let newUUID = UUID()
+        let newUUID = currentUser?.id ?? UUID()
         UserDefaults.standard.set(newUUID.uuidString, forKey: deviceUserKey)
         return newUUID
     }

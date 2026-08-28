@@ -14,6 +14,7 @@ import { GameDetailModal } from '@/components/GameDetailModal';
 import { CollectionsModal } from '@/components/CollectionsModal';
 import { PairingModal } from '@/components/PairingModal';
 import { GameRouletteModal } from '@/components/GameRouletteModal';
+import { DiscoverView } from '@/components/DiscoverView';
 import { StatusBadge } from '@/components/StatusBadge';
 import {
   Layers,
@@ -569,6 +570,56 @@ export default function HomePage() {
     setPairedUserId(userId);
   };
 
+  const handleAddFromDiscover = async (gameToAdd: Game) => {
+    const newGamePayload = {
+      id: crypto.randomUUID(),
+      user_id: pairedUserId || undefined,
+      title: gameToAdd.title,
+      cover_url: gameToAdd.cover_url || null,
+      platforms: gameToAdd.platforms || [],
+      release_year: gameToAdd.release_year || null,
+      first_release_date: gameToAdd.first_release_date || null,
+      genres: gameToAdd.genres || [],
+      developers: gameToAdd.developers || [],
+      status: 'Önskelista' as PlayStatus,
+      rating: null,
+      igdb_rating: gameToAdd.igdb_rating || null,
+      igdb_id: gameToAdd.igdb_id || null,
+      estimated_hours: null,
+      is_owned: false,
+      notes: '',
+      todos: [],
+    };
+
+    if (pairedUserId) {
+      let { data, error } = await supabase
+        .from('user_games')
+        .insert([newGamePayload])
+        .select()
+        .single();
+
+      if (error && error.message?.includes('first_release_date')) {
+        const { first_release_date, ...fallbackPayload } = newGamePayload;
+        const retry = await supabase.from('user_games').insert([fallbackPayload]).select().single();
+        data = retry.data;
+      }
+    }
+
+    const createdGame: Game = {
+      ...newGamePayload,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    setGames((prev) => {
+      const updated = [createdGame, ...prev];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('gameshelf_local_games', JSON.stringify(updated));
+      }
+      return updated;
+    });
+  };
+
   const activeCollection = collections.find((c) => c.id === selectedCollectionId);
 
   return (
@@ -660,7 +711,7 @@ export default function HomePage() {
         )}
 
         {/* Status Filter Tabs (Only shown in Library views) */}
-        {viewMode !== 'collections' && viewMode !== 'stats' && games.length > 0 && (
+        {viewMode !== 'collections' && viewMode !== 'stats' && viewMode !== 'discover' && games.length > 0 && (
           <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
             <button
               onClick={() => setSelectedStatus('Alla')}
@@ -707,8 +758,15 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Views Switcher: Collections, Stats, or Library (Shelf, Grid, List) */}
-        {viewMode === 'collections' ? (
+        {/* Views Switcher: Discover, Collections, Stats, or Library (Shelf, Grid, List) */}
+        {viewMode === 'discover' ? (
+          <DiscoverView
+            games={games}
+            onSelectGame={setSelectedGame}
+            onAddGame={handleAddFromDiscover}
+            onOpenRouletteModal={() => setIsRouletteModalOpen(true)}
+          />
+        ) : viewMode === 'collections' ? (
           <CollectionsView
             collections={collections}
             games={games}

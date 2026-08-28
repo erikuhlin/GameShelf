@@ -3,31 +3,58 @@ import { queryIGDB } from '@/lib/igdb-server';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
+  const category = searchParams.get('category') || 'trending';
+  const genre = searchParams.get('genre')?.trim();
   const excludeIdsParam = searchParams.get('exclude_ids') || '';
   const excludeIds = new Set(excludeIdsParam.split(',').map((id) => Number(id.trim())).filter(Boolean));
 
-  // Nuvarande generation: från 2021 (timestamp: 1609459200)
+  const nowSeconds = Math.floor(Date.now() / 1000);
   const minReleaseTimestamp = 1609459200; // 2021-01-01
 
   try {
-    // Bygg IGDB query för aktuella, högt rankade spel
-    let igdbQuery = `
-      fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary, hypes;
-      where first_release_date >= ${minReleaseTimestamp} & (rating >= 75 | total_rating >= 75 | hypes >= 10) & cover != null;
-      sort rating desc;
-      limit 40;
-    `;
+    let igdbQuery = '';
+
+    if (category === 'upcoming') {
+      igdbQuery = `
+        fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary, hypes;
+        where first_release_date > ${nowSeconds} & cover != null;
+        sort hypes desc;
+        limit 25;
+      `;
+    } else if (category === 'top_rated') {
+      igdbQuery = `
+        fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary, total_rating_count;
+        where (rating >= 88 | total_rating >= 88) & total_rating_count >= 15 & cover != null;
+        sort rating desc;
+        limit 25;
+      `;
+    } else if (genre) {
+      const sanitizedGenre = genre.replace(/"/g, '\\"');
+      igdbQuery = `
+        fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary;
+        where genres.name = "${sanitizedGenre}" & first_release_date >= ${minReleaseTimestamp} & (rating >= 70 | total_rating >= 70 | hypes >= 5) & cover != null;
+        sort rating desc;
+        limit 25;
+      `;
+    } else {
+      // Trending / For you default
+      igdbQuery = `
+        fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary, hypes;
+        where first_release_date >= ${minReleaseTimestamp} & (rating >= 75 | total_rating >= 75 | hypes >= 10) & cover != null;
+        sort hypes desc;
+        limit 30;
+      `;
+    }
 
     let data: any[] = [];
     try {
       data = await queryIGDB('games', igdbQuery);
     } catch (e) {
-      // Fallback query if sorting/filters are strict
       const fallbackQuery = `
         fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary;
-        where first_release_date >= ${minReleaseTimestamp} & cover != null;
+        where cover != null;
         sort first_release_date desc;
-        limit 30;
+        limit 25;
       `;
       data = await queryIGDB('games', fallbackQuery);
     }

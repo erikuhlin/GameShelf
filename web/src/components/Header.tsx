@@ -11,10 +11,11 @@ import {
   Search,
   BarChart3,
   Dices,
+  Sparkles,
 } from 'lucide-react';
 import { ProfileMenu } from './ProfileMenu';
 
-export type ViewMode = 'shelf' | 'grid' | 'list' | 'collections' | 'stats';
+export type ViewMode = 'shelf' | 'grid' | 'list' | 'discover' | 'collections' | 'stats';
 
 interface HeaderProps {
   viewMode: ViewMode;
@@ -110,13 +111,24 @@ export function Header({
               <button
                 onClick={() => onViewModeChange('shelf')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                  viewMode !== 'collections' && viewMode !== 'stats'
+                  viewMode === 'shelf' || viewMode === 'grid' || viewMode === 'list'
                     ? 'bg-zinc-800 text-white shadow-sm'
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
                 <Library className="w-3.5 h-3.5" />
                 <span>Bibliotek</span>
+              </button>
+              <button
+                onClick={() => onViewModeChange('discover')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  viewMode === 'discover'
+                    ? 'bg-brand-red text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Utforska</span>
               </button>
               <button
                 onClick={() => onViewModeChange('collections')}
@@ -275,11 +287,11 @@ export function Header({
       </header>
 
       {/* Sleek Native Mobile Bottom Navigation Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0d0e12]/95 backdrop-blur-xl border-t border-zinc-800/80 px-3 py-1.5 flex items-center justify-around shadow-2xl safe-bottom">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0d0e12]/95 backdrop-blur-xl border-t border-zinc-800/80 px-2 py-1.5 flex items-center justify-around shadow-2xl safe-bottom">
         <button
           onClick={() => onViewModeChange('shelf')}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition ${
-            viewMode !== 'collections' && viewMode !== 'stats'
+          className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl transition ${
+            viewMode === 'shelf' || viewMode === 'grid' || viewMode === 'list'
               ? 'text-brand-red font-bold'
               : 'text-zinc-400 hover:text-zinc-200'
           }`}
@@ -289,20 +301,15 @@ export function Header({
         </button>
 
         <button
-          onClick={() => onViewModeChange('collections')}
-          className={`relative flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition ${
-            viewMode === 'collections'
+          onClick={() => onViewModeChange('discover')}
+          className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl transition ${
+            viewMode === 'discover'
               ? 'text-brand-red font-bold'
               : 'text-zinc-400 hover:text-zinc-200'
           }`}
         >
-          <FolderKanban className="w-5 h-5" />
-          <span className="text-[10px]">Samlingar</span>
-          {collections.length > 0 && (
-            <span className="absolute top-0 right-2 w-4 h-4 rounded-full bg-brand-red text-white text-[9px] flex items-center justify-center font-bold">
-              {collections.length}
-            </span>
-          )}
+          <Sparkles className="w-5 h-5" />
+          <span className="text-[10px]">Utforska</span>
         </button>
 
         <button
@@ -314,8 +321,25 @@ export function Header({
         </button>
 
         <button
+          onClick={() => onViewModeChange('collections')}
+          className={`relative flex flex-col items-center gap-1 py-1 px-2 rounded-xl transition ${
+            viewMode === 'collections'
+              ? 'text-brand-red font-bold'
+              : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          <FolderKanban className="w-5 h-5" />
+          <span className="text-[10px]">Samlingar</span>
+          {collections.length > 0 && (
+            <span className="absolute top-0 right-1 w-3.5 h-3.5 rounded-full bg-brand-red text-white text-[8px] flex items-center justify-center font-bold">
+              {collections.length}
+            </span>
+          )}
+        </button>
+
+        <button
           onClick={() => onViewModeChange('stats')}
-          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition ${
+          className={`flex flex-col items-center gap-1 py-1 px-2 rounded-xl transition ${
             viewMode === 'stats'
               ? 'text-amber-400 font-bold'
               : 'text-zinc-400 hover:text-zinc-200'
@@ -323,14 +347,6 @@ export function Header({
         >
           <BarChart3 className="w-5 h-5" />
           <span className="text-[10px]">Statistik</span>
-        </button>
-
-        <button
-          onClick={onOpenRouletteModal}
-          className="flex flex-col items-center gap-1 py-1 px-3 rounded-xl text-amber-400 hover:text-amber-300 transition"
-        >
-          <Dices className="w-5 h-5" />
-          <span className="text-[10px]">Roulette</span>
         </button>
       </nav>
     </>

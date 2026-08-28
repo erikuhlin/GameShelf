@@ -65,28 +65,42 @@ export default function HomePage() {
 
     gamesNeedingDates.forEach(async (g) => {
       try {
-        const endpoint = g.igdb_id
-          ? `/api/igdb/games/${g.igdb_id}`
-          : `/api/igdb/search?q=${encodeURIComponent(g.title)}`;
-        const res = await fetch(endpoint);
-        const data = await res.json();
-        const results = data?.results || data?.games || [];
-        const bestMatch =
-          results.find(
-            (r: any) => r.name?.toLowerCase() === g.title.toLowerCase()
-          ) ||
-          results.find(
-            (r: any) =>
-              r.name?.toLowerCase().startsWith(g.title.toLowerCase())
-          ) ||
-          results[0];
+        let date: number | null = null;
+        let igdbId: number | null = g.igdb_id ? Number(g.igdb_id) : null;
 
-        const date =
-          data?.game?.first_release_date ||
-          bestMatch?.first_release_date;
+        if (igdbId) {
+          const res = await fetch(`/api/igdb/games/${igdbId}`);
+          if (res.ok) {
+            const data = await res.json();
+            date = data?.game?.first_release_date || null;
+          }
+        }
+
+        if (!date && g.title) {
+          const res = await fetch(`/api/igdb/search?q=${encodeURIComponent(g.title)}`);
+          if (res.ok) {
+            const data = await res.json();
+            const results = data?.results || data?.games || [];
+            const bestMatch =
+              results.find(
+                (r: any) => r.name?.toLowerCase() === g.title.toLowerCase()
+              ) ||
+              results.find(
+                (r: any) =>
+                  r.name?.toLowerCase().startsWith(g.title.toLowerCase())
+              ) ||
+              results[0];
+
+            if (bestMatch?.first_release_date) {
+              date = bestMatch.first_release_date;
+              if (!igdbId && bestMatch.id) {
+                igdbId = bestMatch.id;
+              }
+            }
+          }
+        }
 
         if (date) {
-          const igdbId = g.igdb_id || data?.game?.id || bestMatch?.id || null;
 
           if (currentUserId) {
             supabase

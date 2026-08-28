@@ -70,65 +70,79 @@ export function GameDetailModal({
 
   // Hämta exakt releasedatum från IGDB om det saknas på det lokala spelet
   useEffect(() => {
+    if (!game) return;
     if (game.first_release_date) {
       setLiveReleaseDate(game.first_release_date);
       return;
     }
 
-    if (game.igdb_id) {
-      fetch(`/api/igdb/games/${game.igdb_id}`)
-        .then((res) => res.json())
-        .then((data) => {
-          const fetchedDate = data?.game?.first_release_date;
-          if (fetchedDate) {
-            setLiveReleaseDate(fetchedDate);
-            onUpdateGame({
-              ...game,
-              first_release_date: fetchedDate,
-            });
-            supabase
-              .from('user_games')
-              .update({ first_release_date: fetchedDate })
-              .eq('id', game.id)
-              .then(() => {});
-          }
-        })
-        .catch(() => {});
-    } else if (game.title) {
-      fetch(`/api/igdb/search?q=${encodeURIComponent(game.title)}`)
-        .then((res) => res.json())
-        .then((data) => {
-          const results = data?.results || data?.games || [];
-          const bestMatch =
-            results.find(
-              (r: any) => r.name?.toLowerCase() === game.title.toLowerCase()
-            ) ||
-            results.find(
-              (r: any) =>
-                r.name?.toLowerCase().startsWith(game.title.toLowerCase())
-            ) ||
-            results[0];
+    const currentGame = game;
+    let isMounted = true;
 
-          if (bestMatch?.first_release_date) {
-            const date = bestMatch.first_release_date;
-            setLiveReleaseDate(date);
-            onUpdateGame({
-              ...game,
-              first_release_date: date,
-              igdb_id: game.igdb_id || bestMatch.id || null,
-            });
-            supabase
-              .from('user_games')
-              .update({
-                first_release_date: date,
-                igdb_id: game.igdb_id || bestMatch.id || null,
-              })
-              .eq('id', game.id)
-              .then(() => {});
+    async function fetchReleaseDate() {
+      try {
+        let date: number | null = null;
+        let igdbId: number | null = currentGame.igdb_id ? Number(currentGame.igdb_id) : null;
+
+        if (igdbId) {
+          const res = await fetch(`/api/igdb/games/${igdbId}`);
+          if (res.ok) {
+            const data = await res.json();
+            date = data?.game?.first_release_date || null;
           }
-        })
-        .catch(() => {});
+        }
+
+        if (!date && currentGame.title) {
+          const res = await fetch(`/api/igdb/search?q=${encodeURIComponent(currentGame.title)}`);
+          if (res.ok) {
+            const data = await res.json();
+            const results = data?.results || data?.games || [];
+            const bestMatch =
+              results.find(
+                (r: any) => r.name?.toLowerCase() === currentGame.title.toLowerCase()
+              ) ||
+              results.find(
+                (r: any) =>
+                  r.name?.toLowerCase().startsWith(currentGame.title.toLowerCase())
+              ) ||
+              results[0];
+
+            if (bestMatch?.first_release_date) {
+              date = bestMatch.first_release_date;
+              if (!igdbId && bestMatch.id) {
+                igdbId = bestMatch.id;
+              }
+            }
+          }
+        }
+
+        if (date && isMounted) {
+          setLiveReleaseDate(date);
+          onUpdateGame({
+            ...currentGame,
+            first_release_date: date,
+            ...(igdbId ? { igdb_id: igdbId } : {}),
+          });
+
+          supabase
+            .from('user_games')
+            .update({
+              first_release_date: date,
+              ...(igdbId ? { igdb_id: igdbId } : {}),
+            })
+            .eq('id', currentGame.id)
+            .then(() => {});
+        }
+      } catch (err) {
+        console.error('Error fetching release date:', err);
+      }
     }
+
+    fetchReleaseDate();
+
+    return () => {
+      isMounted = false;
+    };
   }, [game.id, game.igdb_id, game.first_release_date, game.title]);
 
   const handleAddTodo = (e: React.FormEvent) => {

@@ -210,8 +210,18 @@ export async function GET(request: NextRequest) {
       return true;
     });
 
+    // Garantera att ALLA recensioner finns tillgängliga och inte trycks ut av dagsnyheter
+    const reviews = uniqueNews.filter((item) => item.category === 'Recension');
+    const generalNews = uniqueNews.filter((item) => item.category !== 'Recension');
+
+    // Slå ihop alla färska recensioner med de 150 nyaste allmänna nyheterna
+    const combinedNews = [...reviews.slice(0, 100), ...generalNews.slice(0, 150)];
+    combinedNews.sort((a, b) => b.publishedTimestamp - a.publishedTimestamp);
+
     return NextResponse.json({
-      news: uniqueNews.slice(0, 100),
+      news: combinedNews,
+      reviewCount: reviews.length,
+      totalCount: combinedNews.length,
     });
   } catch (error: any) {
     console.error('Error fetching news feeds:', error);

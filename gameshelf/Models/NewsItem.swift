@@ -97,21 +97,22 @@ final class NewsFetcher: ObservableObject {
     private var allItems: [NewsItem] = []
 
     private let feedStrings: [String] = [
-        "https://www.ign.com/rss",
-        "https://www.eurogamer.net/api/frontpage.rss",
+        // 1. Dedikerade Recensioner & Tester
+        "https://www.gamespot.com/feeds/reviews/",
+        "https://www.pushsquare.com/feeds/reviews",
+        "https://www.nintendolife.com/feeds/reviews",
+        "https://www.purexbox.com/feeds/reviews",
+
+        // 2. Ledande Spelmedier
         "https://www.pcgamer.com/rss/",
         "https://www.polygon.com/rss/index.xml",
-        "https://www.theverge.com/games/rss/index.xml",
         "https://kotaku.com/rss",
         "https://www.gamespot.com/feeds/mashup/",
         "https://www.videogameschronicle.com/feed/",
-        "https://www.gamesradar.com/rss/",
         "https://www.rockpapershotgun.com/feed",
-        "https://www.pcgamesn.com/feed",
         "https://www.destructoid.com/feed/",
         "https://www.gematsu.com/feed",
         "https://blog.playstation.com/feed/",
-        "https://news.xbox.com/en-us/feed/",
         "https://www.nintendolife.com/feeds/latest",
         "https://www.pushsquare.com/feeds/latest",
         "https://www.purexbox.com/feeds/latest"
@@ -147,9 +148,18 @@ final class NewsFetcher: ObservableObject {
                 return allResults
             }
 
+            // Filtrera bort dubbletter baserat på titel
+            var seenTitles = Set<String>()
+            let uniqueCollected = collected.filter { item in
+                let simp = item.title.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
+                if seenTitles.contains(simp) { return false }
+                seenTitles.insert(simp)
+                return true
+            }
+
             // Filtrera bort gamla artiklar (> 60 dagar)
             let cutoff = Calendar.current.date(byAdding: .day, value: -60, to: Date()) ?? Date()
-            let recent = collected.filter { item in
+            let recent = uniqueCollected.filter { item in
                 if let d = item.published { return d >= cutoff }
                 return true
             }
@@ -173,28 +183,7 @@ final class NewsFetcher: ObservableObject {
                 return modItem
             }
 
-            // Blanda källor för variation
-            var buckets: [String: [NewsItem]] = [:]
-            for it in enriched { buckets[it.source, default: []].append(it) }
-            var order = Array(buckets.keys)
-            order.sort { (buckets[$0]?.first?.published ?? .distantPast) > (buckets[$1]?.first?.published ?? .distantPast) }
-
-            var mixed: [NewsItem] = []
-            var idx: [String: Int] = [:]
-            while mixed.count < 300 {
-                var progressed = false
-                for k in order {
-                    let i = idx[k] ?? 0
-                    if let arr = buckets[k], i < arr.count {
-                        mixed.append(arr[i])
-                        idx[k] = i + 1
-                        progressed = true
-                    }
-                }
-                if !progressed { break }
-            }
-
-            self.allItems = mixed
+            self.allItems = enriched
             self.currentPage = 1
             self.recompute()
             self.isLoading = false

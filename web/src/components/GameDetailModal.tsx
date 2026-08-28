@@ -55,6 +55,19 @@ export function GameDetailModal({
     game.first_release_date || null
   );
 
+  // Återställ formulärstate när ett nytt spel öppnas
+  useEffect(() => {
+    if (game) {
+      setStatus(game.status);
+      setRating(game.rating || null);
+      setIsOwned(game.is_owned);
+      setEstimatedHours(game.estimated_hours ?? '');
+      setNotes(game.notes || '');
+      setTodos(game.todos || []);
+      setLiveReleaseDate(game.first_release_date || null);
+    }
+  }, [game?.id]);
+
   // Hämta exakt releasedatum från IGDB om det saknas på det lokala spelet
   useEffect(() => {
     if (game.first_release_date) {
@@ -66,11 +79,12 @@ export function GameDetailModal({
       fetch(`/api/igdb/games/${game.igdb_id}`)
         .then((res) => res.json())
         .then((data) => {
-          if (data?.game?.first_release_date) {
-            setLiveReleaseDate(data.game.first_release_date);
+          const fetchedDate = data?.game?.first_release_date;
+          if (fetchedDate) {
+            setLiveReleaseDate(fetchedDate);
             supabase
               .from('user_games')
-              .update({ first_release_date: data.game.first_release_date })
+              .update({ first_release_date: fetchedDate })
               .eq('id', game.id);
           }
         })
@@ -79,7 +93,7 @@ export function GameDetailModal({
       fetch(`/api/igdb/search?q=${encodeURIComponent(game.title)}`)
         .then((res) => res.json())
         .then((data) => {
-          const match = data?.games?.[0];
+          const match = data?.results?.[0] || data?.games?.[0];
           if (match?.first_release_date) {
             setLiveReleaseDate(match.first_release_date);
             supabase

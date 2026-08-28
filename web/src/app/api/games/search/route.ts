@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
         id: game.id,
         title: game.name,
         release_year: releaseYear,
+        first_release_date: game.first_release_date || null,
         platforms,
         genres,
         developers,

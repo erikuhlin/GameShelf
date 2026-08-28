@@ -7,10 +7,9 @@
 
 import SwiftUI
 
-struct VisualGenreItem: Identifiable {
-    let id = UUID()
+struct VisualGenreItem: Identifiable, Equatable {
+    let id: String
     let name: String
-    let emoji: String
     let queryName: String
 }
 
@@ -22,23 +21,33 @@ struct LiveDiscoverySection: View {
     @State private var recommendedGames: [IGDBGame] = []
     @State private var popularGames: [IGDBGame] = []
     @State private var upcomingGames: [IGDBGame] = []
+
+    // Genre State
     @State private var selectedGenreGames: [IGDBGame] = []
-    @State private var selectedGenre: VisualGenreItem? = nil
+    @State private var selectedGenre: VisualGenreItem = VisualGenreItem(id: "Action", name: "Action", queryName: "Action")
+    @State private var genreSort: String = "popularity" // "popularity", "rating", "newest"
+    @State private var genreLimit: Int = 12
 
     @State private var isLoadingRecommended = false
     @State private var isLoadingPopular = false
     @State private var isLoadingUpcoming = false
     @State private var isLoadingGenre = false
+    @State private var isLoadingMoreGenre = false
 
     private let genres: [VisualGenreItem] = [
-        VisualGenreItem(name: "RPG", emoji: "⚔️", queryName: "Role-playing (RPG)"),
-        VisualGenreItem(name: "Skjutspel", emoji: "🔫", queryName: "Shooter"),
-        VisualGenreItem(name: "Äventyr", emoji: "🗡️", queryName: "Adventure"),
-        VisualGenreItem(name: "Skräck", emoji: "👻", queryName: "Horror"),
-        VisualGenreItem(name: "Strategi", emoji: "🧠", queryName: "Strategy"),
-        VisualGenreItem(name: "Racing", emoji: "🏎️", queryName: "Racing"),
-        VisualGenreItem(name: "Simulator", emoji: "✈️", queryName: "Simulator"),
-        VisualGenreItem(name: "Plattform", emoji: "🍄", queryName: "Platform")
+        VisualGenreItem(id: "Action", name: "Action", queryName: "Action"),
+        VisualGenreItem(id: "RPG", name: "RPG", queryName: "Role-playing (RPG)"),
+        VisualGenreItem(id: "Adventure", name: "Äventyr", queryName: "Adventure"),
+        VisualGenreItem(id: "Shooter", name: "Skjutspel", queryName: "Shooter"),
+        VisualGenreItem(id: "Horror", name: "Skräck", queryName: "Horror"),
+        VisualGenreItem(id: "Indie", name: "Indie", queryName: "Indie"),
+        VisualGenreItem(id: "Strategy", name: "Strategi", queryName: "Strategy"),
+        VisualGenreItem(id: "Platform", name: "Plattform", queryName: "Platform"),
+        VisualGenreItem(id: "Racing", name: "Racing", queryName: "Racing"),
+        VisualGenreItem(id: "Fighting", name: "Fighting", queryName: "Fighting"),
+        VisualGenreItem(id: "Simulator", name: "Simulator", queryName: "Simulator"),
+        VisualGenreItem(id: "Puzzle", name: "Pussel", queryName: "Puzzle"),
+        VisualGenreItem(id: "Sport", name: "Sport", queryName: "Sport")
     ]
 
     private var userTopGenres: [String] {
@@ -52,11 +61,11 @@ struct LiveDiscoverySection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            // 1. För dig (Baserat på dina genrer)
+        VStack(alignment: .leading, spacing: 28) {
+            // 1. För dig (Personliga rekommendationer)
             if !recommendedGames.isEmpty || isLoadingRecommended {
-                VStack(alignment: .leading, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text("För dig")
                             .font(.title3.bold())
                             .foregroundStyle(.primary)
@@ -81,12 +90,16 @@ struct LiveDiscoverySection: View {
                 }
             }
 
-            // 2. Populärt just nu
+            // 2. Trendar just nu (med rankningsbadge)
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("Populärt just nu")
-                        .font(.title3.bold())
-                        .foregroundStyle(.primary)
+                    HStack(spacing: 6) {
+                        Image(systemName: "flame.fill")
+                            .foregroundStyle(.red)
+                        Text("Trendar just nu")
+                            .font(.title3.bold())
+                            .foregroundStyle(.primary)
+                    }
 
                     Spacer()
 
@@ -101,67 +114,20 @@ struct LiveDiscoverySection: View {
                     ProgressView()
                         .padding(.vertical, 20)
                 } else {
-                    horizontalIGDBList(games: popularGames)
+                    horizontalIGDBList(games: popularGames, showRank: true)
                 }
             }
 
-            // 3. Upptäck genrer (Visuella kategorier)
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Upptäck genrer")
-                    .font(.title3.bold())
-                    .foregroundStyle(.primary)
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(genres) { item in
-                            let isSelected = selectedGenre?.name == item.name
-                            Button {
-                                withAnimation {
-                                    if isSelected {
-                                        selectedGenre = nil
-                                        selectedGenreGames = []
-                                    } else {
-                                        selectedGenre = item
-                                        loadGenreGames(item)
-                                    }
-                                }
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Text(item.emoji)
-                                        .font(.subheadline)
-                                    Text(item.name)
-                                        .font(.subheadline.weight(.semibold))
-                                }
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(isSelected ? Color.red : Color(.secondarySystemGroupedBackground))
-                                .foregroundStyle(isSelected ? Color.white : Color.primary)
-                                .clipShape(Capsule())
-                                .shadow(color: .black.opacity(0.04), radius: 3, x: 0, y: 1)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.vertical, 2)
-                }
-
-                if let currentGenre = selectedGenre {
-                    if isLoadingGenre {
-                        ProgressView("Laddar \(currentGenre.name)...")
-                            .padding(.vertical, 10)
-                    } else if !selectedGenreGames.isEmpty {
-                        horizontalIGDBList(games: selectedGenreGames)
-                            .transition(.opacity)
-                    }
-                }
-            }
-
-            // 4. Kommande spel
+            // 3. Kommande releaser
             if !upcomingGames.isEmpty || isLoadingUpcoming {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Kommande releaser")
-                        .font(.title3.bold())
-                        .foregroundStyle(.primary)
+                    HStack(spacing: 6) {
+                        Image(systemName: "calendar")
+                            .foregroundStyle(.red)
+                        Text("Kommande releaser")
+                            .font(.title3.bold())
+                            .foregroundStyle(.primary)
+                    }
 
                     if isLoadingUpcoming {
                         ProgressView()
@@ -171,39 +137,223 @@ struct LiveDiscoverySection: View {
                     }
                 }
             }
+
+            // 4. Utforska per genre (Ren & Modern Design)
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.stack.3d.up.fill")
+                            .foregroundStyle(.red)
+                        Text("Utforska per genre")
+                            .font(.title3.bold())
+                            .foregroundStyle(.primary)
+                    }
+
+                    Spacer()
+
+                    // Sortering
+                    Menu {
+                        Button("Mest populära") {
+                            genreSort = "popularity"
+                            loadGenreGames(selectedGenre, limit: 12)
+                        }
+                        Button("Högst betyg") {
+                            genreSort = "rating"
+                            loadGenreGames(selectedGenre, limit: 12)
+                        }
+                        Button("Nyast först") {
+                            genreSort = "newest"
+                            loadGenreGames(selectedGenre, limit: 12)
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(genreSortTitle)
+                                .font(.caption.bold())
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption2)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .clipShape(Capsule())
+                        .foregroundStyle(.primary)
+                    }
+                }
+
+                // Horisontell Genre-rad
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(genres) { item in
+                            let isSelected = selectedGenre.id == item.id
+                            Button {
+                                if !isSelected {
+                                    selectedGenre = item
+                                    genreLimit = 12
+                                    loadGenreGames(item, limit: 12)
+                                }
+                            } label: {
+                                Text(item.name)
+                                    .font(.subheadline.weight(.semibold))
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 7)
+                                    .background(isSelected ? Color.red : Color(.secondarySystemGroupedBackground))
+                                    .foregroundStyle(isSelected ? Color.white : Color.primary)
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+
+                // Genre Grid
+                if isLoadingGenre && selectedGenreGames.isEmpty {
+                    HStack {
+                        Spacer()
+                        ProgressView("Laddar \(selectedGenre.name)...")
+                            .padding(.vertical, 24)
+                        Spacer()
+                    }
+                } else if selectedGenreGames.isEmpty {
+                    Text("Inga spel hittades inom \(selectedGenre.name).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 16)
+                } else {
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)], spacing: 16) {
+                        ForEach(selectedGenreGames, id: \.id) { game in
+                            NavigationLink(destination: GameDetailView(igdbID: game.id)) {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    ZStack(alignment: .topTrailing) {
+                                        CoverView(title: game.name, url: game.coverURL, corner: 14, height: 190)
+                                            .frame(maxWidth: .infinity)
+                                            .frame(height: 190)
+                                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                                            .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
+
+                                        if let rating = game.totalRating, rating > 0 {
+                                            HStack(spacing: 2) {
+                                                Image(systemName: "star.fill")
+                                                    .font(.system(size: 8))
+                                                    .foregroundStyle(.yellow)
+                                                Text(String(format: "%.0f", rating))
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundStyle(.white)
+                                            }
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 3)
+                                            .background(.black.opacity(0.75), in: Capsule())
+                                            .padding(6)
+                                        }
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(game.name)
+                                            .font(.subheadline.bold())
+                                            .foregroundStyle(.primary)
+                                            .lineLimit(1)
+
+                                        if let year = game.releaseYear {
+                                            Text("\(String(year)) • \(selectedGenre.name)")
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(1)
+                                        } else if let platform = game.platforms?.first?.name {
+                                            Text(platform)
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(1)
+                                        }
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    // Sömlös "Visa fler"-knapp
+                    if genreLimit < 48 {
+                        Button {
+                            loadMoreGenreGames()
+                        } label: {
+                            HStack(spacing: 6) {
+                                if isLoadingMoreGenre {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Text("Visa fler \(selectedGenre.name)-spel")
+                                        .font(.caption.bold())
+                                    Image(systemName: "chevron.down")
+                                        .font(.caption2)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(Color(.secondarySystemGroupedBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .foregroundStyle(.primary)
+                        }
+                        .disabled(isLoadingMoreGenre)
+                        .padding(.top, 6)
+                    }
+                }
+            }
         }
         .task(id: refreshTrigger) {
             await loadAllDiscovery()
-            if let sel = selectedGenre {
-                loadGenreGames(sel)
-            }
+            loadGenreGames(selectedGenre, limit: 12)
         }
     }
 
-    private func horizontalIGDBList(games: [IGDBGame], showReleaseDate: Bool = false) -> some View {
+    private var genreSortTitle: String {
+        switch genreSort {
+        case "rating": return "Högst betyg"
+        case "newest": return "Nyast först"
+        default: return "Mest populära"
+        }
+    }
+
+    private func horizontalIGDBList(games: [IGDBGame], showReleaseDate: Bool = false, showRank: Bool = false) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 14) {
-                ForEach(games, id: \.id) { game in
+                ForEach(Array(games.enumerated()), id: \.element.id) { idx, game in
                     NavigationLink(destination: GameDetailView(igdbID: game.id)) {
                         VStack(alignment: .leading, spacing: 8) {
-                            ZStack(alignment: .bottomTrailing) {
+                            ZStack(alignment: .topLeading) {
                                 CoverView(title: game.name, url: game.coverURL, corner: 12, height: 140)
                                     .frame(width: 105, height: 140)
                                     .shadow(color: .black.opacity(0.18), radius: 5, x: 0, y: 3)
 
+                                if showRank {
+                                    Text("#\(idx + 1)")
+                                        .font(.system(size: 9, weight: .black))
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(idx == 0 ? Color.yellow : (idx == 1 ? Color.white : (idx == 2 ? Color.orange : Color.black.opacity(0.8))))
+                                        .foregroundStyle(idx < 2 ? Color.black : Color.white)
+                                        .clipShape(Capsule())
+                                        .padding(4)
+                                }
+
                                 if let rating = game.totalRating, rating > 0 {
-                                    HStack(spacing: 2) {
-                                        Image(systemName: "star.fill")
-                                            .font(.system(size: 8))
-                                            .foregroundStyle(.yellow)
-                                        Text(String(format: "%.0f", rating))
-                                            .font(.system(size: 10, weight: .bold))
-                                            .foregroundStyle(.white)
+                                    VStack {
+                                        Spacer()
+                                        HStack {
+                                            Spacer()
+                                            HStack(spacing: 2) {
+                                                Image(systemName: "star.fill")
+                                                    .font(.system(size: 7))
+                                                    .foregroundStyle(.yellow)
+                                                Text(String(format: "%.0f", rating))
+                                                    .font(.system(size: 9, weight: .bold))
+                                                    .foregroundStyle(.white)
+                                            }
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 2)
+                                            .background(.black.opacity(0.75), in: Capsule())
+                                            .padding(4)
+                                        }
                                     }
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 2)
-                                    .background(.ultraThinMaterial, in: Capsule())
-                                    .padding(5)
                                 }
                             }
 
@@ -283,18 +433,34 @@ struct LiveDiscoverySection: View {
         }
     }
 
-    private func loadGenreGames(_ genre: VisualGenreItem) {
+    private func loadGenreGames(_ genre: VisualGenreItem, limit: Int = 12) {
         isLoadingGenre = true
-        selectedGenreGames = []
         Task {
             do {
-                let results = try await IGDBService.shared.fetchPopularGames(genre: genre.queryName, limit: 15)
+                let results = try await IGDBService.shared.fetchPopularGames(genre: genre.queryName, sort: genreSort, limit: limit)
                 await MainActor.run {
                     self.selectedGenreGames = results
                     self.isLoadingGenre = false
                 }
             } catch {
                 await MainActor.run { self.isLoadingGenre = false }
+            }
+        }
+    }
+
+    private func loadMoreGenreGames() {
+        let nextLimit = genreLimit + 12
+        isLoadingMoreGenre = true
+        Task {
+            do {
+                let results = try await IGDBService.shared.fetchPopularGames(genre: selectedGenre.queryName, sort: genreSort, limit: nextLimit)
+                await MainActor.run {
+                    self.selectedGenreGames = results
+                    self.genreLimit = nextLimit
+                    self.isLoadingMoreGenre = false
+                }
+            } catch {
+                await MainActor.run { self.isLoadingMoreGenre = false }
             }
         }
     }

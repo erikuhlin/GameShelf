@@ -248,24 +248,60 @@ struct IGDBPopularityPrimitive: Decodable, Sendable {
         return try await requestGames(body: bodyString, url: url, token: token)
     }
 
-    /// Hämtar aktuella och dynamiskt populära spel från IGDB PopScore eller per specifik genre
-    func fetchPopularGames(genre: String? = nil, limit: Int = 15) async throws -> [IGDBGame] {
+    /// Hämtar aktuella och dynamiskt populära spel från IGDB per specifik genre eller globalt
+    func fetchPopularGames(genre: String? = nil, sort: String = "popularity", limit: Int = 15) async throws -> [IGDBGame] {
         let token = try await IGDBAuthManager.shared.getValidToken()
         guard let url = URL(string: "https://api.igdb.com/v4/games") else {
             throw URLError(.badURL)
         }
 
-        // Om en specifik genre är vald: Gör en direkt och träffsäker sökning i IGDB för den genren
+        // Om en specifik genre är vald: Använd exakta IGDB ID-klausuler för maximal träffsäkerhet
         if let g = genre, !g.isEmpty {
-            let isHorror = g.lowercased() == "horror"
-            let filterClause = isHorror
-                ? "(themes.name = \"Horror\" | themes.id = 19)"
-                : "genres.name = \"\(g.replacingOccurrences(of: "\"", with: "\\\""))\""
+            let filterClause: String
+            let lower = g.lowercased()
+            if lower == "action" {
+                filterClause = "genres = (25, 5, 4)"
+            } else if lower.contains("rpg") || lower.contains("rollspel") {
+                filterClause = "genres = (12)"
+            } else if lower == "adventure" || lower == "äventyr" {
+                filterClause = "genres = (31)"
+            } else if lower == "shooter" || lower == "skjutspel" {
+                filterClause = "genres = (5)"
+            } else if lower == "horror" || lower == "skräck" {
+                filterClause = "themes = (19)"
+            } else if lower == "strategy" || lower == "strategi" {
+                filterClause = "genres = (15, 11, 16, 24)"
+            } else if lower == "platform" || lower == "plattform" {
+                filterClause = "genres = (8)"
+            } else if lower == "racing" {
+                filterClause = "genres = (10)"
+            } else if lower == "fighting" {
+                filterClause = "genres = (4)"
+            } else if lower == "indie" {
+                filterClause = "genres = (32)"
+            } else if lower == "simulator" {
+                filterClause = "genres = (13)"
+            } else if lower == "puzzle" || lower == "pussel" {
+                filterClause = "genres = (9)"
+            } else if lower == "sport" {
+                filterClause = "genres = (14)"
+            } else {
+                filterClause = "genres.name = \"\(g.replacingOccurrences(of: "\"", with: "\\\""))\""
+            }
 
+            var sortClause = "sort total_rating_count desc;"
+            if sort == "rating" {
+                sortClause = "sort total_rating desc;"
+            } else if sort == "newest" {
+                sortClause = "sort first_release_date desc;"
+            }
+
+            // Filtrera på moderna releaser (2021+) för hög aktualitet
+            let minTimestamp = 1609459200 // 2021-01-01
             let genreBody = """
             fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, themes.id, themes.name, total_rating, total_rating_count, hypes;
-            where \(filterClause) & cover != null & (total_rating > 65 | total_rating_count > 10 | hypes > 0);
-            sort total_rating_count desc;
+            where \(filterClause) & first_release_date >= \(minTimestamp) & cover != null & (total_rating >= 68 | total_rating_count >= 5 | hypes >= 3);
+            \(sortClause)
             limit \(limit);
             """
 
@@ -278,11 +314,11 @@ struct IGDBPopularityPrimitive: Decodable, Sendable {
                 print("[IGDBService] fetchPopularGames for genre \(g) fallback: \(error)")
             }
 
-            // Bredare fallback för mindre genrer
+            // Bredare fallback om tidsfiltret var för snävt
             let fallbackBody = """
             fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, themes.id, themes.name, total_rating, total_rating_count, hypes;
             where \(filterClause) & cover != null;
-            sort total_rating desc;
+            \(sortClause)
             limit \(limit);
             """
             return try await requestGames(body: fallbackBody, url: url, token: token)

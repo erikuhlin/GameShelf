@@ -23,6 +23,7 @@ interface HeaderProps {
   onOpenCollectionsModal: () => void;
   onOpenPairingModal: () => void;
   onOpenRouletteModal: () => void;
+  onOpenSearchModal: () => void;
   onLogout: () => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
@@ -39,6 +40,7 @@ export function Header({
   onViewModeChange,
   onOpenAddModal,
   onOpenPairingModal,
+  onOpenSearchModal,
   onLogout,
   searchQuery,
   onSearchChange,
@@ -146,19 +148,18 @@ export function Header({
 
           {/* 3. Right Zone: Global Actions */}
           <div className="flex items-center gap-2.5">
-            {/* Search Input in Library View */}
-            {isLibraryActive && (
-              <div className="relative hidden sm:block w-44 lg:w-56">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => onSearchChange(e.target.value)}
-                  placeholder="Sök i bibliotek..."
-                  className="w-full pl-8 pr-3 py-1.5 text-xs bg-zinc-900/80 border border-zinc-800 rounded-xl text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-brand-red transition"
-                />
-              </div>
-            )}
+            {/* Global Spotlight Search Trigger (⌘K) */}
+            <button
+              onClick={onOpenSearchModal}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-zinc-200 transition shadow-inner"
+              title="Öppna snabbsök (⌘K)"
+            >
+              <Search className="w-3.5 h-3.5 text-zinc-400" />
+              <span className="text-xs hidden sm:inline">Sök spel...</span>
+              <kbd className="hidden lg:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] font-mono text-zinc-400 border border-zinc-700/60">
+                ⌘K
+              </kbd>
+            </button>
 
             {/* Profile Dropdown / Login */}
             <ProfileMenu
@@ -180,20 +181,6 @@ export function Header({
             </button>
           </div>
         </div>
-
-        {/* Mobile Search row if in Library */}
-        {isLibraryActive && (
-          <div className="sm:hidden mt-2.5 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Sök i bibliotek..."
-              className="w-full pl-8 pr-3 py-2 text-xs bg-zinc-900/80 border border-zinc-800 rounded-xl text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-brand-red transition"
-            />
-          </div>
-        )}
       </header>
 
       {/* Sleek Native Mobile Bottom Navigation Bar */}

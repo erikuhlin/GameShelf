@@ -15,6 +15,7 @@ import { CollectionsModal } from '@/components/CollectionsModal';
 import { PairingModal } from '@/components/PairingModal';
 import { GameRouletteModal } from '@/components/GameRouletteModal';
 import { DiscoverView } from '@/components/DiscoverView';
+import { UniversalSearchModal } from '@/components/UniversalSearchModal';
 import { StatusBadge } from '@/components/StatusBadge';
 import {
   Layers,
@@ -45,11 +46,24 @@ export default function HomePage() {
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isCollectionsModalOpen, setIsCollectionsModalOpen] = useState(false);
   const [isPairingModalOpen, setIsPairingModalOpen] = useState(false);
   const [isRouletteModalOpen, setIsRouletteModalOpen] = useState(false);
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // Global snabbtangent: ⌘K / Ctrl+K för Spotlight
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsSearchModalOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // 1. Initialisera sessionsdata vid första rendering
   useEffect(() => {
@@ -632,7 +646,8 @@ export default function HomePage() {
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         onOpenAddModal={() => setIsAddModalOpen(true)}
-        onOpenCollectionsModal={() => setIsCollectionsModalOpen(true)}
+        onOpenSearchModal={() => setIsSearchModalOpen(true)}
+        onOpenCollectionsModal={() => setIsCollectionsModalOpen(false)}
         onOpenPairingModal={() => setIsPairingModalOpen(true)}
         onOpenRouletteModal={() => setIsRouletteModalOpen(true)}
         onLogout={handleLogout}
@@ -911,6 +926,14 @@ export default function HomePage() {
         onSelectGame={setSelectedGame}
         onUpdateGameStatus={handleUpdateGameStatus}
         onAddGameToLibrary={handleAddDiscoveryGameToLibrary}
+      />
+
+      <UniversalSearchModal
+        isOpen={isSearchModalOpen}
+        onClose={() => setIsSearchModalOpen(false)}
+        games={games}
+        onSelectGame={setSelectedGame}
+        onAddGame={handleAddFromDiscover}
       />
     </div>
   );

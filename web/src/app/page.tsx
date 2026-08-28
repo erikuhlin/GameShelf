@@ -25,6 +25,8 @@ import {
   X,
   Smartphone,
   Trash2,
+  Gamepad2,
+  Plus,
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -592,48 +594,46 @@ export default function HomePage() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6 pb-28 md:pb-12">
-        {/* Guest Mode Banner */}
-        {!profileName && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-emerald-900/30 to-zinc-900/80 border border-emerald-500/40 shadow-lg animate-in fade-in duration-200">
+        {/* Guest Mode Banner (Visas enbart om man har spel lokalt men inte är inloggad) */}
+        {!profileName && games.length > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800 shadow-md animate-in fade-in duration-200">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
-                <Smartphone className="w-5 h-5" />
+              <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-400 shrink-0">
+                <Smartphone className="w-4 h-4 text-brand-red" />
               </div>
               <div>
                 <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
                   <span>Gästläge aktivt</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
-                    Lokal webbläsare
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 font-semibold border border-zinc-700">
+                    {games.length} {games.length === 1 ? 'spel sparat' : 'spel sparade'} lokalt
                   </span>
                 </h4>
-                <p className="text-[11px] text-zinc-300 mt-0.5">
-                  Spel du lägger till sparas lokalt. När du loggar in med iPhone synkas de automatiskt över till ditt konto!
+                <p className="text-[11px] text-zinc-400 mt-0.5">
+                  Spelen sparas i din webbläsare. Logga in med iPhone för att synka dem till ditt konto.
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2 self-start sm:self-auto">
-              {games.length > 0 && (
-                <button
-                  onClick={() => {
-                    if (confirm('Vill du rensa dina lokala gästspel?')) {
-                      handleLogout();
-                    }
-                  }}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 text-zinc-400 hover:text-rose-400 text-xs font-medium border border-zinc-700/80 transition"
-                  title="Rensa lokalt gästbibliotek"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Rensa lokal data</span>
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  if (confirm('Vill du rensa dina lokala gästspel?')) {
+                    handleLogout();
+                  }
+                }}
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-zinc-400 hover:text-rose-400 text-xs font-medium border border-zinc-800 transition"
+                title="Rensa lokalt gästbibliotek"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Rensa</span>
+              </button>
 
               <button
                 onClick={() => setIsPairingModalOpen(true)}
-                className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition whitespace-nowrap"
+                className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-red hover:bg-brand-redPressed text-white text-xs font-semibold shadow-md transition whitespace-nowrap"
               >
                 <Smartphone className="w-3.5 h-3.5" />
-                <span>Logga in med iPhone</span>
+                <span>Logga in</span>
               </button>
             </div>
           </div>
@@ -719,26 +719,30 @@ export default function HomePage() {
         ) : viewMode === 'stats' ? (
           <StatsDashboardView games={games} onSelectGame={setSelectedGame} />
         ) : games.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center px-4 rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/40">
-            <div className="w-16 h-16 rounded-2xl bg-zinc-900 flex items-center justify-center text-zinc-500 mb-4 border border-zinc-800 shadow-inner">
-              <Layers className="w-8 h-8 text-brand-red" />
+          <div className="flex flex-col items-center justify-center py-20 sm:py-28 text-center px-4 rounded-3xl border border-zinc-800/80 bg-gradient-to-b from-zinc-900/40 via-zinc-950/60 to-zinc-950/80 shadow-2xl max-w-2xl mx-auto my-6">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-brand-red to-rose-500 flex items-center justify-center text-white mb-5 shadow-xl shadow-brand-red/20">
+              <Gamepad2 className="w-8 h-8 sm:w-10 sm:h-10" />
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">Spelhyllan är tom</h2>
-            <p className="text-sm text-zinc-400 max-w-md mb-6">
-              Parkoppla med din iPhone för att synka över dina spel och samlingar, eller sök och lägg till nya spel direkt via IGDB.
+            <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2 tracking-tight">
+              Välkommen till Gameshelf
+            </h2>
+            <p className="text-sm text-zinc-400 max-w-md mb-8 leading-relaxed">
+              Ditt personliga spelbibliotek i webben och på mobilen. Synka direkt med din iPhone eller börja utforska och lägga till spel med ett klick.
             </p>
-            <div className="flex flex-wrap items-center justify-center gap-3">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full max-w-sm">
               <button
                 onClick={() => setIsPairingModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition shadow-lg shadow-emerald-950/50"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-brand-red hover:bg-brand-redPressed text-white text-sm font-semibold transition shadow-lg shadow-brand-red/25 active:scale-95"
               >
-                📱 Parkoppla iPhone
+                <Smartphone className="w-4 h-4" />
+                <span>Logga in med iPhone</span>
               </button>
               <button
                 onClick={() => setIsAddModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm font-medium border border-zinc-700 transition"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-sm font-semibold border border-zinc-700/80 transition active:scale-95"
               >
-                + Lägg till spel manuellt
+                <Plus className="w-4 h-4" />
+                <span>Lägg till spel</span>
               </button>
             </div>
           </div>

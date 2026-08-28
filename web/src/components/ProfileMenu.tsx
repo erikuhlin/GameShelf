@@ -52,11 +52,11 @@ export function ProfileMenu({
     return (
       <button
         onClick={onOpenPairingModal}
-        className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-md shadow-emerald-950/40 transition transform active:scale-95"
+        className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 hover:border-zinc-600 rounded-xl transition shadow-sm active:scale-95"
         title="Logga in med iPhone"
       >
-        <Smartphone className="w-4 h-4" />
-        <span>Logga in med iPhone</span>
+        <Smartphone className="w-3.5 h-3.5 text-brand-red" />
+        <span>Logga in</span>
       </button>
     );
   }

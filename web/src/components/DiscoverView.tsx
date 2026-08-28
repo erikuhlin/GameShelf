@@ -81,6 +81,7 @@ export function DiscoverView({
   const [genreSort, setGenreSort] = useState<'popularity' | 'rating' | 'newest'>('popularity');
   const [genreLimit, setGenreLimit] = useState<number>(12);
   const [isLoadingGenre, setIsLoadingGenre] = useState(false);
+  const [isLoadingMoreGenre, setIsLoadingMoreGenre] = useState(false);
 
   const [isLoadingDiscover, setIsLoadingDiscover] = useState(false);
 
@@ -154,13 +155,14 @@ export function DiscoverView({
     loadDiscoverFeed();
   }, [trendingSort]);
 
-  // Hämta genrespel vid byte av genre, sortering eller gräns
+  // Hämta genrespel vid byte av genre eller sortering
   useEffect(() => {
     async function loadGenreGames() {
       setIsLoadingGenre(true);
+      setGenreLimit(12);
       try {
         const res = await fetch(
-          `/api/games/discover?genre=${encodeURIComponent(selectedGenre)}&sort=${genreSort}&era=recent&limit=${genreLimit}`
+          `/api/games/discover?genre=${encodeURIComponent(selectedGenre)}&sort=${genreSort}&era=recent&limit=12`
         );
         const data = await res.json();
         if (data.results) {
@@ -172,7 +174,27 @@ export function DiscoverView({
       }
     }
     loadGenreGames();
-  }, [selectedGenre, genreSort, genreLimit]);
+  }, [selectedGenre, genreSort]);
+
+  // Hämta fler spel sömlöst utan att hoppa till toppen
+  const handleLoadMoreGenre = async () => {
+    const nextLimit = genreLimit + 12;
+    setIsLoadingMoreGenre(true);
+    try {
+      const res = await fetch(
+        `/api/games/discover?genre=${encodeURIComponent(selectedGenre)}&sort=${genreSort}&era=recent&limit=${nextLimit}`
+      );
+      const data = await res.json();
+      if (data.results) {
+        setGenreGames(data.results);
+        setGenreLimit(nextLimit);
+      }
+    } catch (e) {
+      console.error('Failed to load more genre games:', e);
+    } finally {
+      setIsLoadingMoreGenre(false);
+    }
+  };
 
   // Hämta nyheter vid flikbyte
   useEffect(() => {
@@ -499,7 +521,7 @@ export function DiscoverView({
             </div>
           )}
 
-          {/* 4. 🔥 Trendar just nu (Ren, snygg sektion) */}
+          {/* 4. 🔥 Trendar just nu */}
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
@@ -603,7 +625,7 @@ export function DiscoverView({
             </div>
           </div>
 
-          {/* 5. 🎮 Utforska per genre (REN, LUGN & INTUITIV DESIGN) */}
+          {/* 5. 🎮 Utforska per genre */}
           <div className="space-y-3.5 pt-2">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
@@ -611,7 +633,6 @@ export function DiscoverView({
                 <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">Utforska per genre</h3>
               </div>
 
-              {/* Enkel sortering till höger */}
               <select
                 value={genreSort}
                 onChange={(e) => setGenreSort(e.target.value as any)}
@@ -623,15 +644,12 @@ export function DiscoverView({
               </select>
             </div>
 
-            {/* Enkel, mjuk horisontell rad med Genrer */}
+            {/* Enkel horisontell rad med Genrer */}
             <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-none">
               {GENRE_LIST.map((g) => (
                 <button
                   key={g.id}
-                  onClick={() => {
-                    setSelectedGenre(g.id);
-                    setGenreLimit(12);
-                  }}
+                  onClick={() => setSelectedGenre(g.id)}
                   className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
                     selectedGenre === g.id
                       ? 'bg-brand-red text-white shadow-sm'
@@ -644,7 +662,7 @@ export function DiscoverView({
             </div>
 
             {/* Spelrutnät för vald genre */}
-            {isLoadingGenre ? (
+            {isLoadingGenre && genreGames.length === 0 ? (
               <div className="flex items-center justify-center py-16 text-zinc-500 gap-2">
                 <RefreshCw className="w-4 h-4 animate-spin text-brand-red" />
                 <span className="text-xs">Laddar {currentGenreLabel}-spel...</span>
@@ -724,15 +742,25 @@ export function DiscoverView({
                   })}
                 </div>
 
-                {/* Ren "Visa fler"-knapp i botten */}
+                {/* Sömlös "Visa fler"-knapp med egen laddningsindikator */}
                 {genreLimit < 48 && (
                   <div className="flex justify-center pt-2">
                     <button
-                      onClick={() => setGenreLimit((prev) => prev + 18)}
-                      className="px-5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white transition shadow-sm flex items-center gap-1.5"
+                      onClick={handleLoadMoreGenre}
+                      disabled={isLoadingMoreGenre}
+                      className="px-5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white transition shadow-sm flex items-center gap-1.5 disabled:opacity-50"
                     >
-                      <span>Visa fler {currentGenreLabel}-spel</span>
-                      <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
+                      {isLoadingMoreGenre ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-brand-red" />
+                          <span>Laddar fler {currentGenreLabel}-spel...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Visa fler {currentGenreLabel}-spel</span>
+                          <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
+                        </>
+                      )}
                     </button>
                   </div>
                 )}

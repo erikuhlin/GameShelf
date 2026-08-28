@@ -325,23 +325,8 @@ struct AddGameView: View {
                     ForEach(matchingLocalGames) { localGame in
                         NavigationLink(destination: GameDetailView(game: localGame)) {
                             HStack(spacing: 12) {
-                                if let url = localGame.coverURL {
-                                    CachedAsyncImage(url: url) { img in
-                                        img.resizable().aspectRatio(contentMode: .fill)
-                                    } placeholder: {
-                                        Color.gray.opacity(0.2)
-                                    }
-                                    .frame(width: 44, height: 60)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                                } else {
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .fill(Color.gray.opacity(0.2))
-                                        .frame(width: 44, height: 60)
-                                        .overlay {
-                                            Image(systemName: "gamecontroller")
-                                                .foregroundStyle(.secondary)
-                                        }
-                                }
+                                CoverView(title: localGame.title, url: localGame.coverURL, corner: 8, height: 60)
+                                    .frame(width: 45, height: 60)
 
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(localGame.title)

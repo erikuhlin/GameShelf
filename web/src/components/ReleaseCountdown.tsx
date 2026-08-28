@@ -4,11 +4,58 @@ import React, { useState, useEffect } from 'react';
 import { Hourglass, Sparkles, Calendar } from 'lucide-react';
 
 interface ReleaseCountdownProps {
-  firstReleaseDate?: number | null; // Unix timestamp in seconds
+  firstReleaseDate?: number | string | null; // Unix timestamp i sekunder eller millisekunder
   releaseYear?: number | null;
 }
 
+function parseTargetTime(val?: number | string | null): number | null {
+  if (!val) return null;
+  const num = typeof val === 'number' ? val : Number(val);
+  if (isNaN(num) || num <= 0) return null;
+  // Om värdet är i sekunder (< 10000000000), konvertera till millisekunder
+  return num < 10000000000 ? num * 1000 : num;
+}
+
+function computeTimeLeft(targetTime: number) {
+  const now = Date.now();
+  const diff = targetTime - now;
+
+  if (diff <= 0) {
+    const targetDate = new Date(targetTime);
+    const today = new Date();
+    const isSameDay =
+      targetDate.getFullYear() === today.getFullYear() &&
+      targetDate.getMonth() === today.getMonth() &&
+      targetDate.getDate() === today.getDate();
+
+    return {
+      days: 0,
+      hours: 0,
+      minutes: 0,
+      seconds: 0,
+      isPast: true,
+      isToday: isSameDay,
+    };
+  }
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+  const minutes = Math.floor((diff / 1000 / 60) % 60);
+  const seconds = Math.floor((diff / 1000) % 60);
+
+  return {
+    days,
+    hours,
+    minutes,
+    seconds,
+    isPast: false,
+    isToday: false,
+  };
+}
+
 export function ReleaseCountdown({ firstReleaseDate, releaseYear }: ReleaseCountdownProps) {
+  const targetTime = parseTargetTime(firstReleaseDate);
+
   const [timeLeft, setTimeLeft] = useState<{
     days: number;
     hours: number;
@@ -16,60 +63,26 @@ export function ReleaseCountdown({ firstReleaseDate, releaseYear }: ReleaseCount
     seconds: number;
     isPast: boolean;
     isToday: boolean;
-  } | null>(null);
+  } | null>(() => (targetTime ? computeTimeLeft(targetTime) : null));
 
   useEffect(() => {
-    if (!firstReleaseDate) return;
+    if (!targetTime) {
+      setTimeLeft(null);
+      return;
+    }
 
-    const targetTime = firstReleaseDate * 1000;
-
-    const updateCountdown = () => {
-      const now = Date.now();
-      const diff = targetTime - now;
-
-      if (diff <= 0) {
-        // Kontrollera om det är idag
-        const targetDate = new Date(targetTime);
-        const today = new Date();
-        const isSameDay =
-          targetDate.getFullYear() === today.getFullYear() &&
-          targetDate.getMonth() === today.getMonth() &&
-          targetDate.getDate() === today.getDate();
-
-        setTimeLeft({
-          days: 0,
-          hours: 0,
-          minutes: 0,
-          seconds: 0,
-          isPast: true,
-          isToday: isSameDay,
-        });
-        return;
-      }
-
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-      const minutes = Math.floor((diff / 1000 / 60) % 60);
-      const seconds = Math.floor((diff / 1000) % 60);
-
-      setTimeLeft({
-        days,
-        hours,
-        minutes,
-        seconds,
-        isPast: false,
-        isToday: false,
-      });
+    const update = () => {
+      setTimeLeft(computeTimeLeft(targetTime));
     };
 
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
+    update();
+    const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
-  }, [firstReleaseDate]);
+  }, [targetTime]);
 
   const currentYear = new Date().getFullYear();
   const isFutureYearOnly =
-    !firstReleaseDate && releaseYear && releaseYear > currentYear;
+    !targetTime && releaseYear && releaseYear >= currentYear;
 
   // Om spelet redan har släppts och inte är idag, visa ingen nedräkning
   if (timeLeft?.isPast && !timeLeft.isToday) {
@@ -81,8 +94,8 @@ export function ReleaseCountdown({ firstReleaseDate, releaseYear }: ReleaseCount
     return null;
   }
 
-  const formattedDate = firstReleaseDate
-    ? new Date(firstReleaseDate * 1000).toLocaleDateString('sv-SE', {
+  const formattedDate = targetTime
+    ? new Date(targetTime).toLocaleDateString('sv-SE', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',

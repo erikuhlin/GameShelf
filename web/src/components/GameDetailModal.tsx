@@ -82,10 +82,15 @@ export function GameDetailModal({
           const fetchedDate = data?.game?.first_release_date;
           if (fetchedDate) {
             setLiveReleaseDate(fetchedDate);
+            onUpdateGame({
+              ...game,
+              first_release_date: fetchedDate,
+            });
             supabase
               .from('user_games')
               .update({ first_release_date: fetchedDate })
-              .eq('id', game.id);
+              .eq('id', game.id)
+              .then(() => {});
           }
         })
         .catch(() => {});
@@ -95,14 +100,21 @@ export function GameDetailModal({
         .then((data) => {
           const match = data?.results?.[0] || data?.games?.[0];
           if (match?.first_release_date) {
-            setLiveReleaseDate(match.first_release_date);
+            const date = match.first_release_date;
+            setLiveReleaseDate(date);
+            onUpdateGame({
+              ...game,
+              first_release_date: date,
+              igdb_id: game.igdb_id || match.id || null,
+            });
             supabase
               .from('user_games')
               .update({
-                first_release_date: match.first_release_date,
+                first_release_date: date,
                 igdb_id: match.id || null,
               })
-              .eq('id', game.id);
+              .eq('id', game.id)
+              .then(() => {});
           }
         })
         .catch(() => {});

@@ -55,6 +55,69 @@ export default function HomePage() {
     }
   }, []);
 
+  // Hjälpfunktion för att berika spel med IGDB releasedatum i bakgrunden
+  const enrichGamesWithReleaseDates = (
+    gameList: Game[],
+    currentUserId?: string | null
+  ) => {
+    const gamesNeedingDates = gameList.filter((g) => !g.first_release_date);
+    if (gamesNeedingDates.length === 0) return;
+
+    gamesNeedingDates.forEach(async (g) => {
+      try {
+        const endpoint = g.igdb_id
+          ? `/api/igdb/games/${g.igdb_id}`
+          : `/api/igdb/search?q=${encodeURIComponent(g.title)}`;
+        const res = await fetch(endpoint);
+        const data = await res.json();
+        const date =
+          data?.game?.first_release_date ||
+          data?.results?.[0]?.first_release_date;
+
+        if (date) {
+          const igdbId = g.igdb_id || data?.game?.id || data?.results?.[0]?.id || null;
+
+          if (currentUserId) {
+            supabase
+              .from('user_games')
+              .update({
+                first_release_date: date,
+                ...(igdbId ? { igdb_id: igdbId } : {}),
+              })
+              .eq('id', g.id)
+              .then(() => {});
+          }
+
+          setGames((prev) => {
+            const next = prev.map((item) =>
+              item.id === g.id
+                ? {
+                    ...item,
+                    first_release_date: date,
+                    ...(igdbId ? { igdb_id: igdbId } : {}),
+                  }
+                : item
+            );
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('gameshelf_local_games', JSON.stringify(next));
+            }
+            return next;
+          });
+
+          setSelectedGame((curr) =>
+            curr?.id === g.id
+              ? {
+                  ...curr,
+                  first_release_date: date,
+                  ...(igdbId ? { igdb_id: igdbId } : {}),
+                }
+              : curr
+          );
+        }
+      } catch (e) {}
+    });
+  };
+
   // 2. Hämta bibliotek & prenumerera på Supabase Realtime för den parkopplade användaren
   useEffect(() => {
     // Om ej inloggad / gästläge: Ladda från webbläsarens lokala minne
@@ -65,7 +128,10 @@ export default function HomePage() {
         if (cachedGames) {
           try {
             const parsed = JSON.parse(cachedGames);
-            if (Array.isArray(parsed)) setGames(parsed);
+            if (Array.isArray(parsed)) {
+              setGames(parsed);
+              enrichGamesWithReleaseDates(parsed, null);
+            }
           } catch (e) {}
         }
         if (cachedCols) {
@@ -103,39 +169,8 @@ export default function HomePage() {
             localStorage.setItem('gameshelf_local_games', JSON.stringify(mapped));
           }
 
-          // Berika befintliga spel i biblioteket som saknar first_release_date i bakgrunden
-          const gamesNeedingDates = mapped.filter((g) => !g.first_release_date);
-          if (gamesNeedingDates.length > 0) {
-            Promise.all(
-              gamesNeedingDates.map(async (g) => {
-                try {
-                  const endpoint = g.igdb_id
-                    ? `/api/igdb/games/${g.igdb_id}`
-                    : `/api/igdb/search?q=${encodeURIComponent(g.title)}`;
-                  const res = await fetch(endpoint);
-                  const data = await res.json();
-                  const date =
-                    data?.game?.first_release_date ||
-                    data?.results?.[0]?.first_release_date;
-                  if (date) {
-                    supabase
-                      .from('user_games')
-                      .update({ first_release_date: date })
-                      .eq('id', g.id)
-                      .then(() => {});
-
-                    setGames((prev) =>
-                      prev.map((item) =>
-                        item.id === g.id
-                          ? { ...item, first_release_date: date }
-                          : item
-                      )
-                    );
-                  }
-                } catch (e) {}
-              })
-            );
-          }
+          // Berika befintliga spel i bakgrunden
+          enrichGamesWithReleaseDates(mapped, pairedUserId);
         }
 
         if (colRes.data) {

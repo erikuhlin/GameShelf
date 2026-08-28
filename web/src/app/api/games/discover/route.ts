@@ -32,13 +32,23 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const category = searchParams.get('category') || 'trending';
   const genreParam = searchParams.get('genre')?.trim();
-  const sortParam = searchParams.get('sort') || 'rating';
+  const sortParam = searchParams.get('sort') || 'popularity';
+  const eraParam = searchParams.get('era') || 'recent'; // 'recent' (2022-2026), 'prev_gen' (2017-2021), 'classics', 'all'
   const limitParam = Math.min(Number(searchParams.get('limit')) || 25, 60);
   const excludeIdsParam = searchParams.get('exclude_ids') || '';
   const excludeIds = new Set(excludeIdsParam.split(',').map((id) => Number(id.trim())).filter(Boolean));
 
   const nowSeconds = Math.floor(Date.now() / 1000);
-  const minReleaseTimestamp = 1546300800; // 2019-01-01
+
+  // Tidsfilter (Aktuella spel som standard)
+  let dateClause = '';
+  if (eraParam === 'recent') {
+    dateClause = `& first_release_date >= 1640995200 & first_release_date <= ${nowSeconds + 31536000}`; // 2022-01-01 och framåt
+  } else if (eraParam === 'prev_gen') {
+    dateClause = `& first_release_date >= 1483228800 & first_release_date < 1640995200`; // 2017-2021
+  } else if (eraParam === 'classics') {
+    dateClause = `& first_release_date < 1483228800`; // Innan 2017
+  }
 
   try {
     let igdbQuery = '';
@@ -53,7 +63,7 @@ export async function GET(request: NextRequest) {
     } else if (category === 'top_rated') {
       igdbQuery = `
         fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary, total_rating_count;
-        where (rating >= 85 | total_rating >= 85) & total_rating_count >= 10 & cover != null;
+        where (rating >= 85 | total_rating >= 85) & total_rating_count >= 10 ${dateClause} & cover != null;
         sort rating desc;
         limit ${limitParam};
       `;
@@ -67,19 +77,20 @@ export async function GET(request: NextRequest) {
 
       igdbQuery = `
         fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary, total_rating_count, hypes;
-        where ${genreClause} & (total_rating >= 70 | rating >= 70 | hypes >= 5 | total_rating_count >= 10) & cover != null;
+        where ${genreClause} & (total_rating >= 70 | rating >= 70 | hypes >= 5 | total_rating_count >= 5) ${dateClause} & cover != null;
         ${sortClause}
         limit ${limitParam};
       `;
     } else {
-      // Trending default (Heta spel just nu)
-      let sortClause = 'sort hypes desc;';
-      if (sortParam === 'rating') sortClause = 'sort total_rating desc;';
+      // Trending default (Heta aktuella spel)
+      let sortClause = 'sort total_rating_count desc;';
+      if (sortParam === 'popularity') sortClause = 'sort total_rating_count desc;';
+      else if (sortParam === 'rating') sortClause = 'sort total_rating desc;';
       else if (sortParam === 'newest') sortClause = 'sort first_release_date desc;';
 
       igdbQuery = `
         fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary, hypes, total_rating_count;
-        where first_release_date >= ${minReleaseTimestamp} & (rating >= 75 | total_rating >= 75 | hypes >= 10 | total_rating_count >= 20) & cover != null;
+        where (rating >= 72 | total_rating >= 72 | hypes >= 5 | total_rating_count >= 10) ${dateClause} & cover != null;
         ${sortClause}
         limit ${limitParam};
       `;

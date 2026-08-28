@@ -83,6 +83,7 @@ export function DiscoverView({
   const [trendingGames, setTrendingGames] = useState<Game[]>([]);
   const [isTrendingExpanded, setIsTrendingExpanded] = useState(false);
   const [trendingSort, setTrendingSort] = useState<'popularity' | 'rating' | 'newest'>('popularity');
+  const [trendingEra, setTrendingEra] = useState<'recent' | 'prev_gen' | 'classics' | 'all'>('recent');
 
   const [upcomingGames, setUpcomingGames] = useState<Game[]>([]);
   const [topRatedGames, setTopRatedGames] = useState<Game[]>([]);
@@ -91,7 +92,8 @@ export function DiscoverView({
   const [selectedGenre, setSelectedGenre] = useState<string>('Role-playing (RPG)');
   const [genreGames, setGenreGames] = useState<Game[]>([]);
   const [isGenreExpanded, setIsGenreExpanded] = useState(false);
-  const [genreSort, setGenreSort] = useState<'rating' | 'popularity' | 'newest'>('rating');
+  const [genreSort, setGenreSort] = useState<'popularity' | 'rating' | 'newest'>('popularity');
+  const [genreEra, setGenreEra] = useState<'recent' | 'prev_gen' | 'classics' | 'all'>('recent');
   const [genreSearch, setGenreSearch] = useState('');
   const [isLoadingGenre, setIsLoadingGenre] = useState(false);
 
@@ -147,7 +149,7 @@ export function DiscoverView({
       setIsLoadingDiscover(true);
       try {
         const [trendRes, upRes, topRes] = await Promise.allSettled([
-          fetch(`/api/games/discover?category=trending&sort=${trendingSort}&limit=40`).then((r) => r.json()),
+          fetch(`/api/games/discover?category=trending&sort=${trendingSort}&era=${trendingEra}&limit=40`).then((r) => r.json()),
           fetch('/api/games/discover?category=upcoming&limit=25').then((r) => r.json()),
           fetch('/api/games/discover?category=top_rated&limit=25').then((r) => r.json()),
         ]);
@@ -169,7 +171,7 @@ export function DiscoverView({
     }
 
     loadDiscoverFeed();
-  }, [trendingSort]);
+  }, [trendingSort, trendingEra]);
 
   // Hämta genrespel vid val eller sortering
   useEffect(() => {
@@ -178,7 +180,7 @@ export function DiscoverView({
       try {
         const limit = isGenreExpanded ? 50 : 18;
         const res = await fetch(
-          `/api/games/discover?genre=${encodeURIComponent(selectedGenre)}&sort=${genreSort}&limit=${limit}`
+          `/api/games/discover?genre=${encodeURIComponent(selectedGenre)}&sort=${genreSort}&era=${genreEra}&limit=${limit}`
         );
         const data = await res.json();
         if (data.results) {
@@ -190,7 +192,7 @@ export function DiscoverView({
       }
     }
     loadGenreGames();
-  }, [selectedGenre, genreSort, isGenreExpanded]);
+  }, [selectedGenre, genreSort, genreEra, isGenreExpanded]);
 
   // Filtrera genrespel lokalt vid fritextsökning
   const filteredGenreGames = useMemo(() => {
@@ -570,7 +572,7 @@ export function DiscoverView({
             </div>
           )}
 
-          {/* 3. 🔥 Trendar just nu (Trending on IGDB) med Se Mer och Sortering */}
+          {/* 3. 🔥 Trendar just nu med Era-filter (Aktuella som standard) */}
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800/60 pb-3">
               <div className="flex items-center gap-2.5">
@@ -579,12 +581,32 @@ export function DiscoverView({
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white tracking-tight">Trendar just nu</h3>
-                  <p className="text-[11px] text-zinc-400">De mest omtalade och spelade titlarna i spelvärlden</p>
+                  <p className="text-[11px] text-zinc-400">Aktuella och mest omtalade spelen</p>
                 </div>
               </div>
 
-              {/* Sortering & Expandera / Se mer */}
-              <div className="flex items-center gap-2">
+              {/* Tidsperiod, Sortering & Expandera */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Era selector */}
+                <div className="flex items-center bg-zinc-900 border border-zinc-800 p-0.5 rounded-xl text-xs">
+                  <button
+                    onClick={() => setTrendingEra('recent')}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                      trendingEra === 'recent' ? 'bg-zinc-800 text-white font-semibold shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    🔥 Aktuella (2022–2026)
+                  </button>
+                  <button
+                    onClick={() => setTrendingEra('all')}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                      trendingEra === 'all' ? 'bg-zinc-800 text-white font-semibold shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    Klassiker
+                  </button>
+                </div>
+
                 <select
                   value={trendingSort}
                   onChange={(e) => setTrendingSort(e.target.value as any)}
@@ -592,7 +614,7 @@ export function DiscoverView({
                 >
                   <option value="popularity">Mest omtalade</option>
                   <option value="rating">Högst betyg</option>
-                  <option value="newest">Senast släppta</option>
+                  <option value="newest">Nyast först</option>
                 </select>
 
                 <button
@@ -604,7 +626,7 @@ export function DiscoverView({
                   }`}
                 >
                   {isTrendingExpanded ? <Rows className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
-                  <span>{isTrendingExpanded ? 'Kompakt vy' : `Se alla (${trendingGames.length})`}</span>
+                  <span>{isTrendingExpanded ? 'Kompakt' : `Se alla (${trendingGames.length})`}</span>
                 </button>
               </div>
             </div>
@@ -749,7 +771,8 @@ export function DiscoverView({
                       </h4>
 
                       <span className="text-[11px] text-zinc-400 mt-0.5 truncate">
-                        {game.release_year || 'IGDB'}
+                        {game.release_year ? `${game.release_year} • ` : ''}
+                        {game.genres?.[0] || 'Spel'}
                       </span>
 
                       <button
@@ -859,7 +882,7 @@ export function DiscoverView({
             </div>
           </div>
 
-          {/* 5. 🎮 Utforska efter Genre med Avancerad "Se Mer"-sökning och filtrering */}
+          {/* 5. 🎮 Utforska efter Genre med Aktuella spel & Era-filter */}
           <div className="space-y-4 pt-4 border-t border-zinc-800/60">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
@@ -868,19 +891,39 @@ export function DiscoverView({
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white tracking-tight">Utforska per genre</h3>
-                  <p className="text-[11px] text-zinc-400">Bläddra bland tusentals spel och upptäck dolda guldkorn</p>
+                  <p className="text-[11px] text-zinc-400">Aktuella och topprankade spel efter genre</p>
                 </div>
               </div>
 
-              {/* Action Toolbar: Sortering & Se mer */}
-              <div className="flex items-center gap-2">
+              {/* Action Toolbar: Era-väljare, Sortering & Se mer */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Era selector */}
+                <div className="flex items-center bg-zinc-900 border border-zinc-800 p-0.5 rounded-xl text-xs">
+                  <button
+                    onClick={() => setGenreEra('recent')}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                      genreEra === 'recent' ? 'bg-purple-600 text-white font-semibold shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    🔥 2022–2026
+                  </button>
+                  <button
+                    onClick={() => setGenreEra('all')}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                      genreEra === 'all' ? 'bg-purple-600 text-white font-semibold shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    Klassiker
+                  </button>
+                </div>
+
                 <select
                   value={genreSort}
                   onChange={(e) => setGenreSort(e.target.value as any)}
-                  className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-brand-red cursor-pointer"
+                  className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-purple-500 cursor-pointer"
                 >
-                  <option value="rating">Högst betyg</option>
                   <option value="popularity">Mest populära</option>
+                  <option value="rating">Högst betyg</option>
                   <option value="newest">Nyast först</option>
                 </select>
 
@@ -939,7 +982,7 @@ export function DiscoverView({
             {isLoadingGenre ? (
               <div className="flex items-center justify-center py-16 text-zinc-500 gap-2">
                 <RefreshCw className="w-5 h-5 animate-spin text-purple-400" />
-                <span className="text-xs">Hämtar spel inom {selectedGenre}...</span>
+                <span className="text-xs">Hämtar aktuella spel inom {selectedGenre}...</span>
               </div>
             ) : filteredGenreGames.length === 0 ? (
               <div className="text-center py-12 text-zinc-500 border border-dashed border-zinc-800 rounded-2xl">

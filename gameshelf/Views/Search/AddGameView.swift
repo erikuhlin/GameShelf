@@ -343,8 +343,8 @@ struct AddGameView: View {
                                                 .foregroundStyle(.yellow)
                                         }
 
-                                        if let year = localGame.releaseYear {
-                                            Text(String(year))
+                                        if localGame.releaseYear > 0 {
+                                            Text(String(localGame.releaseYear))
                                                 .font(.caption2)
                                                 .foregroundStyle(.secondary)
                                         }

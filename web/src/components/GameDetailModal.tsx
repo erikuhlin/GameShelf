@@ -17,6 +17,15 @@ import {
   Sparkles,
   Calendar,
   Save,
+  Image as ImageIcon,
+  BookOpen,
+  Timer,
+  Building2,
+  Layers,
+  Video,
+  ExternalLink,
+  ChevronRight,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface GameDetailModalProps {
@@ -27,6 +36,30 @@ interface GameDetailModalProps {
   onDeleteGame: (id: string) => void;
   collections: GameCollection[];
   onToggleCollection: (gameId: string, collectionId: string) => void;
+}
+
+interface RemoteDetails {
+  summary?: string;
+  storyline?: string;
+  screenshots?: Array<{ id: number; url: string; fullUrl: string }>;
+  artworks?: Array<{ id: number; url: string; fullUrl: string }>;
+  developers?: string[];
+  publishers?: string[];
+  gameModes?: string[];
+  themes?: string[];
+  videos?: Array<{ name: string; videoId: string }>;
+  similarGames?: Array<{
+    id: number;
+    title: string;
+    coverUrl?: string | null;
+    releaseYear?: number | null;
+    rating?: number | null;
+  }>;
+  timeToBeat?: {
+    mainStory: number | null;
+    mainExtra: number | null;
+    completionist: number | null;
+  } | null;
 }
 
 export function GameDetailModal({
@@ -54,6 +87,9 @@ export function GameDetailModal({
   const [liveReleaseDate, setLiveReleaseDate] = useState<number | null>(
     game.first_release_date || null
   );
+  const [remoteDetails, setRemoteDetails] = useState<RemoteDetails | null>(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [activeLightboxImg, setActiveLightboxImg] = useState<string | null>(null);
 
   // Återställ formulärstate när ett nytt spel öppnas
   useEffect(() => {
@@ -65,36 +101,36 @@ export function GameDetailModal({
       setNotes(game.notes || '');
       setTodos(game.todos || []);
       setLiveReleaseDate(game.first_release_date || null);
+      setRemoteDetails(null);
     }
   }, [game?.id]);
 
-  // Hämta exakt releasedatum från IGDB om det saknas på det lokala spelet
+  // Hämta utökad IGDB-information och exakt releasedatum
   useEffect(() => {
     if (!game) return;
-    if (game.first_release_date) {
-      setLiveReleaseDate(game.first_release_date);
-      return;
-    }
 
     const currentGame = game;
     let isMounted = true;
     const currentYear = new Date().getFullYear();
 
-    async function fetchReleaseDate() {
+    async function loadDetails() {
+      setIsLoadingDetails(true);
       try {
-        let date: number | null = null;
+        let date: number | null = currentGame.first_release_date || null;
         let igdbId: number | null = currentGame.igdb_id ? Number(currentGame.igdb_id) : null;
+        let detailsData: any = null;
 
         if (igdbId) {
           const res = await fetch(`/api/igdb/games/${igdbId}`);
           if (res.ok) {
             const data = await res.json();
-            const fetchedDate = data?.game?.first_release_date || null;
+            const fetchedGame = data?.game;
+            const fetchedDate = fetchedGame?.first_release_date || null;
             const fetchedYear = fetchedDate
               ? new Date(fetchedDate * 1000).getFullYear()
-              : data?.game?.release_year;
+              : fetchedGame?.release_year;
 
-            // Om spelet är tänkt som kommande (>= currentYear) men ID:t pekar på ett gammalt spel (t.ex. Fable 2004)
+            // Om spelet är tänkt som kommande men ID:t pekar på ett gammalt spel (t.ex. Fable 2004)
             if (
               currentGame.release_year &&
               currentGame.release_year >= currentYear &&
@@ -104,12 +140,13 @@ export function GameDetailModal({
               date = null;
               igdbId = null;
             } else {
-              date = fetchedDate;
+              date = fetchedDate || date;
+              detailsData = fetchedGame;
             }
           }
         }
 
-        if (!date && currentGame.title) {
+        if ((!detailsData || !date) && currentGame.title) {
           const res = await fetch(`/api/igdb/search?q=${encodeURIComponent(currentGame.title)}`);
           if (res.ok) {
             const data = await res.json();
@@ -150,38 +187,69 @@ export function GameDetailModal({
               bestMatch = results[0];
             }
 
-            if (bestMatch?.first_release_date) {
-              date = bestMatch.first_release_date;
-              if (bestMatch.id) {
-                igdbId = bestMatch.id;
+            if (bestMatch?.id) {
+              igdbId = bestMatch.id;
+              if (bestMatch.first_release_date) {
+                date = bestMatch.first_release_date;
+              }
+              // Hämta fullständiga detaljer för den hittade matchen
+              const fullRes = await fetch(`/api/igdb/games/${bestMatch.id}`);
+              if (fullRes.ok) {
+                const fullData = await fullRes.json();
+                if (fullData?.game) {
+                  detailsData = fullData.game;
+                  if (fullData.game.first_release_date) {
+                    date = fullData.game.first_release_date;
+                  }
+                }
               }
             }
           }
         }
 
-        if (date && isMounted) {
-          setLiveReleaseDate(date);
-          onUpdateGame({
-            ...currentGame,
-            first_release_date: date,
-            ...(igdbId ? { igdb_id: igdbId } : {}),
-          });
+        if (isMounted) {
+          if (detailsData) {
+            setRemoteDetails({
+              summary: detailsData.summary || detailsData.storyline || '',
+              storyline: detailsData.storyline || '',
+              screenshots: detailsData.screenshots || [],
+              artworks: detailsData.artworks || [],
+              developers: detailsData.developers || [],
+              publishers: detailsData.publishers || [],
+              gameModes: detailsData.gameModes || [],
+              themes: detailsData.themes || [],
+              videos: detailsData.videos || [],
+              similarGames: detailsData.similarGames || [],
+              timeToBeat: detailsData.timeToBeat || null,
+            });
+          }
 
-          supabase
-            .from('user_games')
-            .update({
+          if (date) {
+            setLiveReleaseDate(date);
+            onUpdateGame({
+              ...currentGame,
               first_release_date: date,
               ...(igdbId ? { igdb_id: igdbId } : {}),
-            })
-            .eq('id', currentGame.id)
-            .then(() => {});
+            });
+
+            supabase
+              .from('user_games')
+              .update({
+                first_release_date: date,
+                ...(igdbId ? { igdb_id: igdbId } : {}),
+              })
+              .eq('id', currentGame.id)
+              .then(() => {});
+          }
         }
       } catch (err) {
-        console.error('Error fetching release date:', err);
+        console.error('Error fetching extended IGDB details:', err);
+      } finally {
+        if (isMounted) setIsLoadingDetails(false);
       }
     }
 
-    fetchReleaseDate();
+    loadDetails();
 
     return () => {
       isMounted = false;
@@ -259,12 +327,24 @@ export function GameDetailModal({
     }
   };
 
+  const displayDevelopers =
+    remoteDetails?.developers && remoteDetails.developers.length > 0
+      ? remoteDetails.developers
+      : game.developers || [];
+
+  const displayPublishers = remoteDetails?.publishers || [];
+  const displaySummary = remoteDetails?.summary || game.summary || '';
+  const displayScreenshots = remoteDetails?.screenshots || [];
+  const displayVideos = remoteDetails?.videos || [];
+  const displaySimilar = remoteDetails?.similarGames || [];
+  const displayTTB = remoteDetails?.timeToBeat;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-[#16181f] border border-zinc-800 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="bg-[#121318] border border-zinc-800/90 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Header / Backdrop Banner */}
-        <div className="relative p-6 border-b border-zinc-800 bg-gradient-to-r from-zinc-900 to-zinc-950 flex items-start justify-between">
-          <div className="flex gap-5 items-start">
+        <div className="relative p-5 sm:p-6 border-b border-zinc-800/80 bg-gradient-to-r from-zinc-900 via-zinc-900/90 to-zinc-950 flex items-start justify-between">
+          <div className="flex gap-4 sm:gap-6 items-start">
             {/* Cover art */}
             <div className="w-24 sm:w-28 aspect-[3/4] rounded-xl overflow-hidden bg-zinc-800 border border-zinc-700/80 shadow-xl flex-shrink-0">
               {game.cover_url ? (
@@ -281,18 +361,18 @@ export function GameDetailModal({
             </div>
 
             {/* Title & basic meta */}
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 mb-1.5">
                 <StatusBadge status={status} size="sm" />
                 {game.igdb_rating && (
-                  <span className="text-xs px-2 py-0.5 rounded bg-zinc-800 text-amber-300 border border-zinc-700 flex items-center gap-1 font-semibold">
+                  <span className="text-xs px-2 py-0.5 rounded-md bg-zinc-800/90 text-amber-300 border border-zinc-700/80 flex items-center gap-1 font-semibold">
                     <Sparkles className="w-3 h-3 text-amber-400" />
                     IGDB {(Math.round(Number(game.igdb_rating) * 10) / 10).toFixed(1)}/10
                   </span>
                 )}
               </div>
 
-              <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+              <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight leading-snug">
                 {game.title}
               </h2>
 
@@ -312,20 +392,21 @@ export function GameDetailModal({
                     {game.release_year}
                   </span>
                 ) : null}
-                {game.developers && game.developers.length > 0 && (
+
+                {displayDevelopers.length > 0 && (
                   <>
                     <span>•</span>
-                    <span className="text-zinc-300">{game.developers.join(', ')}</span>
+                    <span className="text-zinc-300 font-medium">{displayDevelopers.join(', ')}</span>
                   </>
                 )}
               </div>
 
               {game.platforms && game.platforms.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2.5">
+                <div className="flex flex-wrap gap-1.5 mt-3">
                   {game.platforms.map((p) => (
                     <span
                       key={p}
-                      className="px-2 py-0.5 rounded text-[11px] bg-zinc-800 text-zinc-300 border border-zinc-700/60"
+                      className="px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-800/80 text-zinc-300 border border-zinc-700/60"
                     >
                       {p}
                     </span>
@@ -337,31 +418,32 @@ export function GameDetailModal({
 
           <button
             onClick={onClose}
-            className="p-2 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition"
+            className="p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition flex-shrink-0 ml-3"
+            aria-label="Stäng"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Release Countdown for upcoming games */}
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
+          {/* 1. Release Countdown for upcoming games */}
           <ReleaseCountdown
             firstReleaseDate={liveReleaseDate}
             releaseYear={game.release_year}
           />
 
-          {/* Controls: Status & Rating */}
+          {/* 2. Controls: Status & Rating */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Status Picker */}
-            <div className="bg-zinc-900/60 border border-zinc-800 p-4 rounded-xl">
-              <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+            <div className="bg-zinc-900/70 border border-zinc-800 p-4 rounded-xl">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
                 Spelstatus
               </label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as PlayStatus)}
-                className="w-full bg-zinc-950 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-red"
+                className="w-full bg-zinc-950 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-500 font-medium"
               >
                 {PLAY_STATUSES.map((s) => (
                   <option key={s} value={s}>
@@ -372,30 +454,29 @@ export function GameDetailModal({
             </div>
 
             {/* Rating Selector (1-10) */}
-            <div className="bg-zinc-900/60 border border-zinc-800 p-4 rounded-xl">
+            <div className="bg-zinc-900/70 border border-zinc-800 p-4 rounded-xl">
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">
                   Mitt betyg
                 </label>
                 {rating && (
                   <button
                     onClick={() => setRating(null)}
-                    className="text-[11px] text-zinc-500 hover:text-zinc-300"
+                    className="text-xs text-zinc-500 hover:text-red-400 transition"
                   >
                     Rensa
                   </button>
                 )}
               </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
                   <button
                     key={num}
-                    type="button"
                     onClick={() => setRating(rating === num ? null : num)}
-                    className={`w-7 h-7 rounded-lg text-xs font-bold transition ${
-                      rating === num
-                        ? 'bg-amber-500 text-black shadow-md shadow-amber-500/20'
-                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition ${
+                      rating && rating >= num
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
                     }`}
                   >
                     {num}
@@ -405,79 +486,318 @@ export function GameDetailModal({
             </div>
           </div>
 
-          {/* Details: Ownership & Playtime */}
+          {/* 3. Extra Local Details: Owned & Estimated Time */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Ownership Toggle */}
-            <div className="bg-zinc-900/60 border border-zinc-800 p-4 rounded-xl flex items-center justify-between">
+            <div className="bg-zinc-900/70 border border-zinc-800 p-4 rounded-xl flex items-center justify-between">
               <div>
                 <span className="block text-sm font-semibold text-zinc-200">
-                  I ägo / aktiv samling
+                  Äger spelet
                 </span>
                 <span className="text-xs text-zinc-500">
-                  Slå av om detta är ett spelminne / tidigare ägt spel
+                  Finns i din fysiska eller digitala samling
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsOwned(!isOwned)}
-                className={`w-12 h-6 flex items-center rounded-full p-1 transition duration-300 ${
-                  isOwned ? 'bg-brand-red' : 'bg-zinc-700'
-                }`}
-              >
-                <div
-                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition duration-300 ${
-                    isOwned ? 'translate-x-6' : 'translate-x-0'
-                  }`}
-                />
-              </button>
+              <input
+                type="checkbox"
+                checked={isOwned}
+                onChange={(e) => setIsOwned(e.target.checked)}
+                className="w-5 h-5 rounded accent-red-600 bg-zinc-950 border-zinc-700 cursor-pointer"
+              />
             </div>
 
-            {/* Estimated Hours */}
-            <div className="bg-zinc-900/60 border border-zinc-800 p-4 rounded-xl flex items-center justify-between">
-              <div>
-                <span className="block text-sm font-semibold text-zinc-200">
-                  Uppskattad speltid
-                </span>
-                <span className="text-xs text-zinc-500">Antal timmar att klara</span>
-              </div>
-              <div className="flex items-center gap-1.5">
+            <div className="bg-zinc-900/70 border border-zinc-800 p-4 rounded-xl">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
+                Uppskattad speltid (timmar)
+              </label>
+              <div className="relative">
                 <input
                   type="number"
-                  min="0"
                   value={estimatedHours}
                   onChange={(e) => setEstimatedHours(e.target.value)}
-                  placeholder="—"
-                  className="w-16 bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-sm text-center text-zinc-100 focus:outline-none focus:border-brand-red"
+                  placeholder="t.ex. 25"
+                  className="w-full bg-zinc-950 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 pl-8 text-sm focus:outline-none focus:border-red-500"
                 />
-                <span className="text-xs text-zinc-400">timmar</span>
+                <Clock className="w-4 h-4 text-zinc-500 absolute left-2.5 top-2.5" />
               </div>
             </div>
           </div>
 
-          {/* Collections Membership */}
+          {/* 4. Skärmdumpar & Bildgalleri */}
+          {displayScreenshots.length > 0 && (
+            <div className="bg-zinc-900/60 border border-zinc-800 p-5 rounded-2xl space-y-3">
+              <div className="flex items-center gap-2 text-sm font-bold text-zinc-200 uppercase tracking-wider">
+                <ImageIcon className="w-4 h-4 text-red-500" />
+                <span>Skärmdumpar</span>
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-zinc-700">
+                {displayScreenshots.map((img, idx) => (
+                  <div
+                    key={img.id || idx}
+                    onClick={() => setActiveLightboxImg(img.fullUrl || img.url)}
+                    className="relative flex-shrink-0 w-60 sm:w-72 aspect-video rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 hover:border-zinc-600 cursor-pointer group shadow-md"
+                  >
+                    <img
+                      src={img.url}
+                      alt={`Skärmdump ${idx + 1}`}
+                      className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs font-semibold">
+                      Klicka för fullskärm
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 5. Om spelet (Handling / Synopsis) */}
+          {displaySummary && (
+            <div className="bg-zinc-900/60 border border-zinc-800 p-5 rounded-2xl space-y-2.5">
+              <div className="flex items-center gap-2 text-sm font-bold text-zinc-200 uppercase tracking-wider">
+                <BookOpen className="w-4 h-4 text-red-500" />
+                <span>Om spelet</span>
+              </div>
+              <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-line">
+                {displaySummary}
+              </p>
+              {remoteDetails?.storyline && remoteDetails.storyline !== displaySummary && (
+                <div className="mt-3 pt-3 border-t border-zinc-800/80">
+                  <span className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                    Berättelse
+                  </span>
+                  <p className="text-sm text-zinc-300 leading-relaxed">
+                    {remoteDetails.storyline}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 6. Speltid (HowLongToBeat) */}
+          {displayTTB && (displayTTB.mainStory || displayTTB.mainExtra || displayTTB.completionist) && (
+            <div className="bg-zinc-900/60 border border-zinc-800 p-5 rounded-2xl space-y-3">
+              <div className="flex items-center gap-2 text-sm font-bold text-zinc-200 uppercase tracking-wider">
+                <Timer className="w-4 h-4 text-red-500" />
+                <span>Speltid (HowLongToBeat)</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {displayTTB.mainStory && (
+                  <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-3 text-center">
+                    <span className="text-xs text-zinc-400 font-semibold block mb-1">
+                      🎯 Huvudstory
+                    </span>
+                    <span className="text-xl font-bold text-white font-mono">
+                      {displayTTB.mainStory} h
+                    </span>
+                  </div>
+                )}
+                {displayTTB.mainExtra && (
+                  <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-3 text-center">
+                    <span className="text-xs text-zinc-400 font-semibold block mb-1">
+                      ⚔️ Story + Extra
+                    </span>
+                    <span className="text-xl font-bold text-white font-mono">
+                      {displayTTB.mainExtra} h
+                    </span>
+                  </div>
+                )}
+                {displayTTB.completionist && (
+                  <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-3 text-center">
+                    <span className="text-xs text-zinc-400 font-semibold block mb-1">
+                      🏆 100% / Allt
+                    </span>
+                    <span className="text-xl font-bold text-white font-mono">
+                      {displayTTB.completionist} h
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 7. Studio & Utgivare */}
+          {(displayDevelopers.length > 0 || displayPublishers.length > 0) && (
+            <div className="bg-zinc-900/60 border border-zinc-800 p-5 rounded-2xl space-y-3">
+              <div className="flex items-center gap-2 text-sm font-bold text-zinc-200 uppercase tracking-wider">
+                <Building2 className="w-4 h-4 text-red-500" />
+                <span>Studio & Utgivare</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {displayDevelopers.length > 0 && (
+                  <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-3.5">
+                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                      Utvecklare
+                    </span>
+                    <span className="text-sm font-semibold text-zinc-200">
+                      {displayDevelopers.join(', ')}
+                    </span>
+                  </div>
+                )}
+                {displayPublishers.length > 0 && (
+                  <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-3.5">
+                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                      Utgivare
+                    </span>
+                    <span className="text-sm font-semibold text-zinc-200">
+                      {displayPublishers.join(', ')}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 8. Spelfakta & Spellägen */}
+          {((game.genres && game.genres.length > 0) || (remoteDetails?.gameModes && remoteDetails.gameModes.length > 0) || (remoteDetails?.themes && remoteDetails.themes.length > 0)) && (
+            <div className="bg-zinc-900/60 border border-zinc-800 p-5 rounded-2xl space-y-3">
+              <div className="flex items-center gap-2 text-sm font-bold text-zinc-200 uppercase tracking-wider">
+                <Layers className="w-4 h-4 text-red-500" />
+                <span>Fakta & Spellägen</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {game.genres && game.genres.length > 0 && (
+                  <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-3">
+                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
+                      Genrer
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {game.genres.map((g) => (
+                        <span key={g} className="text-xs px-2 py-0.5 rounded bg-zinc-900 text-zinc-300 border border-zinc-800">
+                          {g}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {remoteDetails?.gameModes && remoteDetails.gameModes.length > 0 && (
+                  <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-3">
+                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
+                      Spellägen
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {remoteDetails.gameModes.map((m) => (
+                        <span key={m} className="text-xs px-2 py-0.5 rounded bg-zinc-900 text-zinc-300 border border-zinc-800">
+                          {m}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {remoteDetails?.themes && remoteDetails.themes.length > 0 && (
+                  <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-3">
+                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
+                      Teman
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {remoteDetails.themes.map((t) => (
+                        <span key={t} className="text-xs px-2 py-0.5 rounded bg-zinc-900 text-zinc-300 border border-zinc-800">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 9. Trailers & Videor */}
+          {displayVideos.length > 0 && (
+            <div className="bg-zinc-900/60 border border-zinc-800 p-5 rounded-2xl space-y-3">
+              <div className="flex items-center gap-2 text-sm font-bold text-zinc-200 uppercase tracking-wider">
+                <Video className="w-4 h-4 text-red-500" />
+                <span>Trailers & Klipp</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {displayVideos.slice(0, 2).map((vid) => (
+                  <div key={vid.videoId} className="space-y-1.5">
+                    <div className="aspect-video w-full rounded-xl overflow-hidden bg-black border border-zinc-800 shadow-md">
+                      <iframe
+                        src={`https://www.youtube.com/embed/${vid.videoId}`}
+                        title={vid.name}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        className="w-full h-full"
+                      />
+                    </div>
+                    <span className="text-xs font-medium text-zinc-400 truncate block">
+                      {vid.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 10. Liknande spel */}
+          {displaySimilar.length > 0 && (
+            <div className="bg-zinc-900/60 border border-zinc-800 p-5 rounded-2xl space-y-3">
+              <div className="flex items-center gap-2 text-sm font-bold text-zinc-200 uppercase tracking-wider">
+                <Sparkles className="w-4 h-4 text-red-500" />
+                <span>Liknande spel</span>
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-zinc-700">
+                {displaySimilar.map((sim) => (
+                  <div
+                    key={sim.id}
+                    className="flex-shrink-0 w-28 sm:w-32 flex flex-col group bg-zinc-950/80 border border-zinc-800 rounded-xl overflow-hidden p-2"
+                  >
+                    <div className="w-full aspect-[3/4] rounded-lg overflow-hidden bg-zinc-900 mb-2 relative">
+                      {sim.coverUrl ? (
+                        <img
+                          src={sim.coverUrl}
+                          alt={sim.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Gamepad className="w-6 h-6 text-zinc-600" />
+                        </div>
+                      )}
+                      {sim.rating && (
+                        <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/80 text-[10px] font-bold text-amber-400 border border-amber-500/30">
+                          {sim.rating}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-xs font-semibold text-zinc-200 line-clamp-1 group-hover:text-red-400 transition">
+                      {sim.title}
+                    </span>
+                    {sim.releaseYear && (
+                      <span className="text-[11px] text-zinc-500 font-medium">
+                        {sim.releaseYear}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 11. Collections Toggle Section */}
           {collections.length > 0 && (
-            <div className="bg-zinc-900/60 border border-zinc-800 p-4 rounded-xl">
-              <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2.5">
-                Mina samlingar
+            <div className="bg-zinc-900/60 border border-zinc-800 p-5 rounded-2xl">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                <Bookmark className="w-4 h-4 text-red-500" />
+                Samlingar
               </label>
               <div className="flex flex-wrap gap-2">
-                {collections.map((c) => {
-                  const isInCollection = c.game_ids?.includes(game.id);
+                {collections.map((col) => {
+                  const isInCollection = col.game_ids?.includes(game.id);
                   return (
                     <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => onToggleCollection(game.id, c.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
+                      key={col.id}
+                      onClick={() => onToggleCollection(game.id, col.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition flex items-center gap-1.5 ${
                         isInCollection
-                          ? 'bg-brand-red/20 border-brand-red text-rose-300'
-                          : 'bg-zinc-800/80 border-zinc-700 text-zinc-400 hover:text-zinc-200'
+                          ? 'bg-red-500/20 border-red-500/60 text-red-300'
+                          : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
                       }`}
                     >
-                      <Bookmark
-                        className={`w-3.5 h-3.5 ${isInCollection ? 'fill-current' : ''}`}
-                      />
-                      <span>{c.name}</span>
+                      {isInCollection && <Check className="w-3.5 h-3.5 text-red-400" />}
+                      {col.name}
                     </button>
                   );
                 })}
@@ -485,135 +805,170 @@ export function GameDetailModal({
             </div>
           )}
 
-          {/* Notes */}
-          <div className="bg-zinc-900/60 border border-zinc-800 p-4 rounded-xl">
-            <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
-              Personliga anteckningar & tankar
-            </label>
-            <textarea
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Skriv dina tankar, minnen eller recension här..."
-              className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-brand-red"
-            />
-          </div>
-
-          {/* To-Do List */}
-          <div className="bg-zinc-900/60 border border-zinc-800 p-4 rounded-xl">
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-                Mål & Att-göra-lista ({todos.filter((t) => t.isDone).length}/{todos.length})
+          {/* 12. Notes & Checklist */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* Notes */}
+            <div className="bg-zinc-900/60 border border-zinc-800 p-5 rounded-2xl flex flex-col">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
+                Egna Anteckningar
               </label>
-            </div>
-
-            {/* Existing Todos */}
-            <div className="space-y-2 mb-3">
-              {todos.map((todo) => (
-                <div
-                  key={todo.id}
-                  className="flex items-center justify-between p-2.5 rounded-lg bg-zinc-950/80 border border-zinc-800/80"
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleToggleTodo(todo.id)}
-                    className="flex items-center gap-2.5 text-left flex-1"
-                  >
-                    <div
-                      className={`w-4 h-4 rounded border flex items-center justify-center transition ${
-                        todo.isDone
-                          ? 'bg-emerald-600 border-emerald-500 text-white'
-                          : 'border-zinc-600 bg-zinc-900'
-                      }`}
-                    >
-                      {todo.isDone && <Check className="w-3 h-3 stroke-[3]" />}
-                    </div>
-                    <span
-                      className={`text-sm ${
-                        todo.isDone ? 'line-through text-zinc-500' : 'text-zinc-200'
-                      }`}
-                    >
-                      {todo.title}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteTodo(todo.id)}
-                    className="text-zinc-500 hover:text-red-400 p-1 transition"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {/* Add Todo Input */}
-            <form onSubmit={handleAddTodo} className="flex gap-2">
-              <input
-                type="text"
-                value={newTodoTitle}
-                onChange={(e) => setNewTodoTitle(e.target.value)}
-                placeholder="Nytt delmål (t.ex. klara alla sidequests)..."
-                className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-brand-red"
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Skriv dina tankar, minnen eller recension här..."
+                rows={4}
+                className="w-full flex-1 bg-zinc-950 border border-zinc-800 text-zinc-100 rounded-xl p-3 text-sm focus:outline-none focus:border-red-500 resize-none"
               />
-              <button
-                type="submit"
-                className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Lägg till
-              </button>
-            </form>
+            </div>
+
+            {/* Todo checklist */}
+            <div className="bg-zinc-900/60 border border-zinc-800 p-5 rounded-2xl flex flex-col">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
+                Checklista / Mål ({todos.filter((t) => t.isDone).length}/{todos.length})
+              </label>
+
+              {/* Todo List */}
+              <div className="flex-1 space-y-1.5 max-h-48 overflow-y-auto mb-3 pr-1">
+                {todos.length === 0 ? (
+                  <p className="text-xs text-zinc-600 italic py-2">
+                    Inga mål tillagda än. Lägg till t.ex. "Klara DLC", "Hitta alla collectibles".
+                  </p>
+                ) : (
+                  todos.map((todo) => (
+                    <div
+                      key={todo.id}
+                      className="flex items-center justify-between group p-2 rounded-lg bg-zinc-950/80 border border-zinc-800/80 hover:border-zinc-700"
+                    >
+                      <button
+                        onClick={() => handleToggleTodo(todo.id)}
+                        className="flex items-center gap-2.5 text-left flex-1 min-w-0"
+                      >
+                        <div
+                          className={`w-4 h-4 rounded border flex items-center justify-center transition ${
+                            todo.isDone
+                              ? 'bg-red-600 border-red-600 text-white'
+                              : 'border-zinc-600 hover:border-zinc-400'
+                          }`}
+                        >
+                          {todo.isDone && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                        <span
+                          className={`text-xs truncate ${
+                            todo.isDone
+                              ? 'line-through text-zinc-500'
+                              : 'text-zinc-200 font-medium'
+                          }`}
+                        >
+                          {todo.title}
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTodo(todo.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-red-400 transition"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Add Todo input */}
+              <form onSubmit={handleAddTodo} className="flex gap-2">
+                <input
+                  type="text"
+                  value={newTodoTitle}
+                  onChange={(e) => setNewTodoTitle(e.target.value)}
+                  placeholder="Nytt delmål..."
+                  className="flex-1 bg-zinc-950 border border-zinc-800 text-zinc-100 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-red-500"
+                />
+                <button
+                  type="submit"
+                  disabled={!newTodoTitle.trim()}
+                  className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Lägg till
+                </button>
+              </form>
+            </div>
           </div>
         </div>
 
-        {/* Footer: Delete and Save buttons */}
-        <div className="p-4 sm:px-6 border-t border-zinc-800 bg-zinc-950 flex items-center justify-between">
-          {showDeleteConfirm ? (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-red-400">Är du säker?</span>
+        {/* Modal Footer */}
+        <div className="p-4 sm:p-5 border-t border-zinc-800/80 bg-zinc-950 flex items-center justify-between">
+          <div>
+            {!showDeleteConfirm ? (
               <button
-                onClick={handleDelete}
-                className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="px-3 py-2 text-xs font-semibold text-zinc-500 hover:text-red-400 transition flex items-center gap-1.5"
               >
-                Ja, ta bort
+                <Trash2 className="w-4 h-4" />
+                Ta bort från bibliotek
               </button>
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 text-xs transition"
-              >
-                Avbryt
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-zinc-500 hover:text-red-400 hover:bg-red-950/30 transition"
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>Ta bort från bibliotek</span>
-            </button>
-          )}
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-red-400 font-semibold">Är du säker?</span>
+                <button
+                  onClick={handleDelete}
+                  className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg transition"
+                >
+                  Ja, ta bort
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold rounded-lg transition"
+                >
+                  Avbryt
+                </button>
+              </div>
+            )}
+          </div>
 
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-xs font-medium text-zinc-400 hover:text-zinc-200 transition"
+              className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-sm font-semibold rounded-xl transition"
             >
               Avbryt
             </button>
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-brand-red hover:bg-brand-redPressed text-white text-xs font-semibold shadow-lg shadow-brand-red/20 transition transform active:scale-95"
+              className="px-5 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-600/20 transition flex items-center gap-1.5"
             >
-              <Save className="w-4 h-4" />
-              <span>{isSaving ? 'Sparar...' : 'Spara ändringar'}</span>
+              {isSaving ? (
+                <>Sparar...</>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Spara ändringar
+                </>
+              )}
             </button>
           </div>
         </div>
       </div>
+
+      {/* Lightbox / Fullscreen Image Modal */}
+      {activeLightboxImg && (
+        <div
+          onClick={() => setActiveLightboxImg(null)}
+          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4 cursor-zoom-out animate-in fade-in"
+        >
+          <button
+            onClick={() => setActiveLightboxImg(null)}
+            className="absolute top-4 right-4 p-2.5 rounded-full bg-zinc-900/80 text-white hover:bg-zinc-800 transition"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <img
+            src={activeLightboxImg}
+            alt="Förstorad skärmdump"
+            className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl border border-zinc-800"
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -222,7 +222,7 @@ export default function SearchPage() {
                       {game.igdb_rating && (
                         <span className="text-[11px] px-1.5 py-0.5 rounded bg-zinc-800 text-amber-300 border border-zinc-700 flex items-center gap-1 font-semibold flex-shrink-0">
                           <Star className="w-2.5 h-2.5 fill-current" />
-                          {game.igdb_rating}
+                          {(Math.round(Number(game.igdb_rating) * 10) / 10).toFixed(1)}
                         </span>
                       )}
                     </div>

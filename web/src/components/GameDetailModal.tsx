@@ -287,7 +287,7 @@ export function GameDetailModal({
                 {game.igdb_rating && (
                   <span className="text-xs px-2 py-0.5 rounded bg-zinc-800 text-amber-300 border border-zinc-700 flex items-center gap-1 font-semibold">
                     <Sparkles className="w-3 h-3 text-amber-400" />
-                    IGDB {game.igdb_rating}/10
+                    IGDB {(Math.round(Number(game.igdb_rating) * 10) / 10).toFixed(1)}/10
                   </span>
                 )}
               </div>

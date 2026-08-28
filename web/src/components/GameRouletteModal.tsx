@@ -303,7 +303,11 @@ export function GameRouletteModal({
                 {(displayedGame?.igdb_rating || displayedGame?.rating) && (
                   <div className="absolute top-2.5 right-2.5 flex items-center gap-1 px-2 py-0.5 rounded-lg bg-black/80 backdrop-blur-md text-amber-400 text-xs font-bold border border-amber-500/30">
                     <Star className="w-3 h-3 fill-current" />
-                    <span>{displayedGame.igdb_rating || displayedGame.rating}</span>
+                    <span>
+                      {displayedGame.igdb_rating
+                        ? (Math.round(Number(displayedGame.igdb_rating) * 10) / 10).toFixed(1)
+                        : Math.round(Number(displayedGame.rating))}
+                    </span>
                   </div>
                 )}
 

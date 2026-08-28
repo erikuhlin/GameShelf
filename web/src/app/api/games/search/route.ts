@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryIGDB } from '@/lib/igdb-server';
+import { resolveGameAlias } from '@/lib/aliasResolver';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const q = searchParams.get('q')?.trim();
+  const rawQ = searchParams.get('q')?.trim();
   const limit = Math.min(Number(searchParams.get('limit')) || 25, 50);
 
-  if (!q) {
+  if (!rawQ) {
     return NextResponse.json({ results: [] });
   }
 
+  const resolvedQ = resolveGameAlias(rawQ);
+
   try {
     // Sanera söksträngen
-    const sanitizedQ = q.replace(/"/g, '\\"');
+    const sanitizedQ = resolvedQ.replace(/"/g, '\\"');
     const query = `
       search "${sanitizedQ}";
       fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary;

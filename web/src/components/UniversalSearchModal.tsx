@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Game, IGDBSearchResult, PlayStatus } from '@/types/game';
+import { resolveGameAlias } from '@/lib/aliasResolver';
 import { StatusBadge } from './StatusBadge';
 import {
   Search,
@@ -109,15 +110,17 @@ export function UniversalSearchModal({
     }
   };
 
-  // 1. Lokala biblioteksresultat (realtid)
+  // 1. Lokala biblioteksresultat (realtid med alias-stöd)
   const libraryResults = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.toLowerCase();
+    const resolvedQ = resolveGameAlias(query).toLowerCase();
     return games.filter(
       (g) =>
         g.title.toLowerCase().includes(q) ||
-        g.genres.some((genre) => genre.toLowerCase().includes(q)) ||
-        g.developers.some((dev) => dev.toLowerCase().includes(q)) ||
+        g.title.toLowerCase().includes(resolvedQ) ||
+        g.genres.some((genre) => genre.toLowerCase().includes(q) || genre.toLowerCase().includes(resolvedQ)) ||
+        g.developers.some((dev) => dev.toLowerCase().includes(q) || dev.toLowerCase().includes(resolvedQ)) ||
         g.platforms.some((p) => p.toLowerCase().includes(q))
     );
   }, [games, query]);

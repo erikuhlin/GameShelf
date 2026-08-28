@@ -36,8 +36,11 @@ actor IGDBService {
         // Hämta en giltig Bearer-token via vår AuthManager
         let token = try await IGDBAuthManager.shared.getValidToken()
         
+        // Lös upp förkortningar/alias (t.ex. GTA V -> Grand Theft Auto V)
+        let resolvedQuery = GameAliasResolver.resolve(query: trimmedQuery)
+        
         // Sanera söksträngen från citationstecken så att inte query-syntaxen kraschar
-        let safeQuery = trimmedQuery
+        let safeQuery = resolvedQuery
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
         
@@ -460,7 +463,8 @@ struct IGDBPopularityPrimitive: Decodable, Sendable {
         var bodyString = ""
 
         if !trimmedQuery.isEmpty {
-            let safeQuery = trimmedQuery.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+            let resolvedQuery = GameAliasResolver.resolve(query: trimmedQuery)
+            let safeQuery = resolvedQuery.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
             bodyString = """
             search "\(safeQuery)";
             fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, total_rating, total_rating_count, involved_companies.company.name, involved_companies.developer;

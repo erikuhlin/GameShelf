@@ -66,6 +66,7 @@ struct LibraryView: View {
 
     private var filteredAndSortedGames: [Game] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let resolvedQuery = GameAliasResolver.resolve(query: searchText.trimmingCharacters(in: .whitespacesAndNewlines)).lowercased()
         return store.games.filter { game in
             let matchesOwnership: Bool = {
                 switch ownershipFilter {
@@ -77,8 +78,9 @@ struct LibraryView: View {
             let matchesStatus = (selectedFilter.status == nil) || (game.status == selectedFilter.status)
             let matchesSearch = query.isEmpty ||
                 game.title.lowercased().contains(query) ||
-                game.developers.contains(where: { $0.lowercased().contains(query) }) ||
-                game.genres.contains(where: { $0.lowercased().contains(query) }) ||
+                game.title.lowercased().contains(resolvedQuery) ||
+                game.developers.contains(where: { $0.lowercased().contains(query) || $0.lowercased().contains(resolvedQuery) }) ||
+                game.genres.contains(where: { $0.lowercased().contains(query) || $0.lowercased().contains(resolvedQuery) }) ||
                 game.platforms.contains(where: { $0.lowercased().contains(query) })
             return matchesOwnership && matchesStatus && matchesSearch
         }

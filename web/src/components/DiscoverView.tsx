@@ -26,7 +26,10 @@ import {
   BookmarkCheck,
   Film,
   Monitor,
-  Share2,
+  LayoutGrid,
+  Rows,
+  ChevronRight,
+  Sparkle,
 } from 'lucide-react';
 
 interface DiscoverViewProps {
@@ -34,6 +37,7 @@ interface DiscoverViewProps {
   onSelectGame: (game: Game) => void;
   onAddGame: (game: Game) => void;
   onOpenRouletteModal?: () => void;
+  onOpenSearchWithQuery?: (query: string) => void;
 }
 
 interface NewsItem {
@@ -50,7 +54,6 @@ interface NewsItem {
 }
 
 const GENRES = [
-  'Alla genrer',
   'Role-playing (RPG)',
   'Action',
   'Adventure',
@@ -60,6 +63,10 @@ const GENRES = [
   'Platform',
   'Racing',
   'Fighting',
+  'Horror',
+  'Simulator',
+  'Puzzle',
+  'Sport',
 ];
 
 const PLATFORMS = ['Alla plattformar', 'PlayStation', 'Xbox', 'Nintendo', 'PC'];
@@ -68,15 +75,26 @@ export function DiscoverView({
   games,
   onSelectGame,
   onAddGame,
+  onOpenSearchWithQuery,
 }: DiscoverViewProps) {
   const [activeTab, setActiveTab] = useState<'discover' | 'news'>('discover');
 
   // --- Discover Data State ---
   const [trendingGames, setTrendingGames] = useState<Game[]>([]);
+  const [isTrendingExpanded, setIsTrendingExpanded] = useState(false);
+  const [trendingSort, setTrendingSort] = useState<'popularity' | 'rating' | 'newest'>('popularity');
+
   const [upcomingGames, setUpcomingGames] = useState<Game[]>([]);
   const [topRatedGames, setTopRatedGames] = useState<Game[]>([]);
-  const [genreGames, setGenreGames] = useState<Game[]>([]);
+
+  // Genre State
   const [selectedGenre, setSelectedGenre] = useState<string>('Role-playing (RPG)');
+  const [genreGames, setGenreGames] = useState<Game[]>([]);
+  const [isGenreExpanded, setIsGenreExpanded] = useState(false);
+  const [genreSort, setGenreSort] = useState<'rating' | 'popularity' | 'newest'>('rating');
+  const [genreSearch, setGenreSearch] = useState('');
+  const [isLoadingGenre, setIsLoadingGenre] = useState(false);
+
   const [isLoadingDiscover, setIsLoadingDiscover] = useState(false);
 
   // --- In-view Roulette State ---
@@ -123,15 +141,15 @@ export function DiscoverView({
     return games.filter((g) => g.status === 'Spelar nu');
   }, [games]);
 
-  // Hämta data för Utforska
+  // Hämta data för Utforska (Trending, Upcoming, Top Rated)
   useEffect(() => {
     async function loadDiscoverFeed() {
       setIsLoadingDiscover(true);
       try {
         const [trendRes, upRes, topRes] = await Promise.allSettled([
-          fetch('/api/games/discover?category=trending').then((r) => r.json()),
-          fetch('/api/games/discover?category=upcoming').then((r) => r.json()),
-          fetch('/api/games/discover?category=top_rated').then((r) => r.json()),
+          fetch(`/api/games/discover?category=trending&sort=${trendingSort}&limit=40`).then((r) => r.json()),
+          fetch('/api/games/discover?category=upcoming&limit=25').then((r) => r.json()),
+          fetch('/api/games/discover?category=top_rated&limit=25').then((r) => r.json()),
         ]);
 
         if (trendRes.status === 'fulfilled' && trendRes.value.results) {
@@ -151,22 +169,40 @@ export function DiscoverView({
     }
 
     loadDiscoverFeed();
-  }, []);
+  }, [trendingSort]);
 
-  // Hämta genrespel vid val
+  // Hämta genrespel vid val eller sortering
   useEffect(() => {
-    if (selectedGenre === 'Alla genrer') return;
     async function loadGenreGames() {
+      setIsLoadingGenre(true);
       try {
-        const res = await fetch(`/api/games/discover?genre=${encodeURIComponent(selectedGenre)}`);
+        const limit = isGenreExpanded ? 50 : 18;
+        const res = await fetch(
+          `/api/games/discover?genre=${encodeURIComponent(selectedGenre)}&sort=${genreSort}&limit=${limit}`
+        );
         const data = await res.json();
         if (data.results) {
           setGenreGames(data.results);
         }
-      } catch (e) {}
+      } catch (e) {
+      } finally {
+        setIsLoadingGenre(false);
+      }
     }
     loadGenreGames();
-  }, [selectedGenre]);
+  }, [selectedGenre, genreSort, isGenreExpanded]);
+
+  // Filtrera genrespel lokalt vid fritextsökning
+  const filteredGenreGames = useMemo(() => {
+    if (!genreSearch.trim()) return genreGames;
+    const q = genreSearch.toLowerCase();
+    return genreGames.filter(
+      (g) =>
+        g.title.toLowerCase().includes(q) ||
+        g.developers.some((d) => d.toLowerCase().includes(q)) ||
+        g.platforms.some((p) => p.toLowerCase().includes(q))
+    );
+  }, [genreGames, genreSearch]);
 
   // Hämta nyheter
   useEffect(() => {
@@ -359,7 +395,7 @@ export function DiscoverView({
       </div>
 
       {activeTab === 'discover' ? (
-        <div className="space-y-8">
+        <div className="space-y-10">
           {/* 1. Hero: Smart Spelsnurra / Roulette Card */}
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-900/90 via-zinc-950/95 to-black border border-zinc-800/90 p-6 sm:p-8 shadow-2xl">
             <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
@@ -534,82 +570,214 @@ export function DiscoverView({
             </div>
           )}
 
-          {/* 3. Trendar just nu (Trending on IGDB) */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-bold text-white uppercase tracking-wider">
-                <Flame className="w-4 h-4 text-brand-red" />
-                <span>Trendar just nu</span>
+          {/* 3. 🔥 Trendar just nu (Trending on IGDB) med Se Mer och Sortering */}
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800/60 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-xl bg-brand-red/10 border border-brand-red/30">
+                  <Flame className="w-4 h-4 text-brand-red" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white tracking-tight">Trendar just nu</h3>
+                  <p className="text-[11px] text-zinc-400">De mest omtalade och spelade titlarna i spelvärlden</p>
+                </div>
+              </div>
+
+              {/* Sortering & Expandera / Se mer */}
+              <div className="flex items-center gap-2">
+                <select
+                  value={trendingSort}
+                  onChange={(e) => setTrendingSort(e.target.value as any)}
+                  className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-brand-red cursor-pointer"
+                >
+                  <option value="popularity">Mest omtalade</option>
+                  <option value="rating">Högst betyg</option>
+                  <option value="newest">Senast släppta</option>
+                </select>
+
+                <button
+                  onClick={() => setIsTrendingExpanded(!isTrendingExpanded)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
+                    isTrendingExpanded
+                      ? 'bg-zinc-800 text-white border-zinc-700'
+                      : 'bg-zinc-900 text-zinc-400 hover:text-white border-zinc-800'
+                  }`}
+                >
+                  {isTrendingExpanded ? <Rows className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
+                  <span>{isTrendingExpanded ? 'Kompakt vy' : `Se alla (${trendingGames.length})`}</span>
+                </button>
               </div>
             </div>
 
-            <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-zinc-800">
-              {trendingGames.map((game) => {
-                const inLibrary = isGameInLibrary(game.igdb_id, game.title);
-                return (
-                  <div
-                    key={game.id}
-                    className="flex-shrink-0 w-36 sm:w-44 flex flex-col group bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden p-2.5 transition hover:border-zinc-700"
-                  >
+            {/* Listvisning: Rutnät vid Se mer, eller horisontell scroll */}
+            {isTrendingExpanded ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4 animate-in fade-in duration-200">
+                {trendingGames.map((game, idx) => {
+                  const inLibrary = isGameInLibrary(game.igdb_id, game.title);
+                  return (
                     <div
-                      onClick={() => onSelectGame(game)}
-                      className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-zinc-950 mb-2.5 relative cursor-pointer"
+                      key={game.id}
+                      className="flex flex-col group bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden p-2.5 transition hover:border-zinc-700 shadow-md relative"
                     >
-                      {game.cover_url ? (
-                        <img
-                          src={game.cover_url}
-                          alt={game.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Gamepad className="w-8 h-8 text-zinc-600" />
-                        </div>
-                      )}
-                      {game.igdb_rating && (
-                        <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-lg bg-black/80 backdrop-blur-md text-[11px] font-bold text-amber-300 border border-amber-500/30">
-                          {game.igdb_rating}
-                        </div>
-                      )}
+                      {/* Rank Badge */}
+                      <div
+                        className={`absolute top-4 left-4 z-10 px-2 py-0.5 rounded-lg text-[10px] font-black shadow-lg backdrop-blur-md border ${
+                          idx === 0
+                            ? 'bg-amber-400/90 text-zinc-950 border-amber-300'
+                            : idx === 1
+                            ? 'bg-zinc-300/90 text-zinc-950 border-white'
+                            : idx === 2
+                            ? 'bg-amber-700/90 text-white border-amber-500'
+                            : 'bg-black/80 text-zinc-300 border-zinc-700'
+                        }`}
+                      >
+                        #{idx + 1}
+                      </div>
+
+                      <div
+                        onClick={() => onSelectGame(game)}
+                        className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-zinc-950 mb-2.5 relative cursor-pointer"
+                      >
+                        {game.cover_url ? (
+                          <img
+                            src={game.cover_url}
+                            alt={game.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Gamepad className="w-8 h-8 text-zinc-600" />
+                          </div>
+                        )}
+                        {game.igdb_rating && (
+                          <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-lg bg-black/80 backdrop-blur-md text-[11px] font-bold text-amber-300 border border-amber-500/30">
+                            ⭐ {game.igdb_rating}
+                          </div>
+                        )}
+                      </div>
+
+                      <h4
+                        onClick={() => onSelectGame(game)}
+                        className="text-xs sm:text-sm font-bold text-zinc-100 truncate cursor-pointer hover:text-red-400 transition"
+                      >
+                        {game.title}
+                      </h4>
+
+                      <span className="text-[11px] text-zinc-400 mt-0.5 truncate">
+                        {game.release_year ? `${game.release_year} • ` : ''}
+                        {game.genres?.[0] || 'Spel'}
+                      </span>
+
+                      <button
+                        onClick={() => onAddGame(game)}
+                        disabled={inLibrary}
+                        className={`mt-2.5 w-full py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition ${
+                          inLibrary
+                            ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-default'
+                            : 'bg-zinc-800 hover:bg-brand-red text-zinc-200 hover:text-white border border-zinc-700 hover:border-brand-red'
+                        }`}
+                      >
+                        {inLibrary ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-400" />
+                            <span>I biblioteket</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3 h-3" />
+                            <span>Lägg till</span>
+                          </>
+                        )}
+                      </button>
                     </div>
-
-                    <h4
-                      onClick={() => onSelectGame(game)}
-                      className="text-xs sm:text-sm font-bold text-zinc-100 truncate cursor-pointer hover:text-red-400 transition"
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-zinc-800">
+                {trendingGames.map((game, idx) => {
+                  const inLibrary = isGameInLibrary(game.igdb_id, game.title);
+                  return (
+                    <div
+                      key={game.id}
+                      className="flex-shrink-0 w-36 sm:w-44 flex flex-col group bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden p-2.5 transition hover:border-zinc-700 relative"
                     >
-                      {game.title}
-                    </h4>
+                      {/* Rank Badge */}
+                      <div
+                        className={`absolute top-4 left-4 z-10 px-2 py-0.5 rounded-lg text-[10px] font-black shadow-lg backdrop-blur-md border ${
+                          idx === 0
+                            ? 'bg-amber-400/90 text-zinc-950 border-amber-300'
+                            : idx === 1
+                            ? 'bg-zinc-300/90 text-zinc-950 border-white'
+                            : idx === 2
+                            ? 'bg-amber-700/90 text-white border-amber-500'
+                            : 'bg-black/80 text-zinc-300 border-zinc-700'
+                        }`}
+                      >
+                        #{idx + 1}
+                      </div>
 
-                    <span className="text-[11px] text-zinc-400 mt-0.5 truncate">
-                      {game.release_year || 'IGDB'}
-                    </span>
+                      <div
+                        onClick={() => onSelectGame(game)}
+                        className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-zinc-950 mb-2.5 relative cursor-pointer"
+                      >
+                        {game.cover_url ? (
+                          <img
+                            src={game.cover_url}
+                            alt={game.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Gamepad className="w-8 h-8 text-zinc-600" />
+                          </div>
+                        )}
+                        {game.igdb_rating && (
+                          <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-lg bg-black/80 backdrop-blur-md text-[11px] font-bold text-amber-300 border border-amber-500/30">
+                            ⭐ {game.igdb_rating}
+                          </div>
+                        )}
+                      </div>
 
-                    <button
-                      onClick={() => onAddGame(game)}
-                      disabled={inLibrary}
-                      className={`mt-2.5 w-full py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition ${
-                        inLibrary
-                          ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-default'
-                          : 'bg-zinc-800 hover:bg-brand-red text-zinc-200 hover:text-white border border-zinc-700 hover:border-brand-red'
-                      }`}
-                    >
-                      {inLibrary ? (
-                        <>
-                          <Check className="w-3 h-3 text-emerald-400" />
-                          <span>I biblioteket</span>
-                        </>
-                      ) : (
-                        <>
-                          <Plus className="w-3 h-3" />
-                          <span>Lägg till</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+                      <h4
+                        onClick={() => onSelectGame(game)}
+                        className="text-xs sm:text-sm font-bold text-zinc-100 truncate cursor-pointer hover:text-red-400 transition"
+                      >
+                        {game.title}
+                      </h4>
+
+                      <span className="text-[11px] text-zinc-400 mt-0.5 truncate">
+                        {game.release_year || 'IGDB'}
+                      </span>
+
+                      <button
+                        onClick={() => onAddGame(game)}
+                        disabled={inLibrary}
+                        className={`mt-2.5 w-full py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition ${
+                          inLibrary
+                            ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-default'
+                            : 'bg-zinc-800 hover:bg-brand-red text-zinc-200 hover:text-white border border-zinc-700 hover:border-brand-red'
+                        }`}
+                      >
+                        {inLibrary ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-400" />
+                            <span>I biblioteket</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3 h-3" />
+                            <span>Lägg till</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* 4. Kommande storspel (Upcoming Releases) */}
@@ -691,91 +859,162 @@ export function DiscoverView({
             </div>
           </div>
 
-          {/* 5. Utforska efter Genre */}
-          <div className="space-y-4 pt-2">
+          {/* 5. 🎮 Utforska efter Genre med Avancerad "Se Mer"-sökning och filtrering */}
+          <div className="space-y-4 pt-4 border-t border-zinc-800/60">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-sm font-bold text-white uppercase tracking-wider">
-                <Layers className="w-4 h-4 text-brand-red" />
-                <span>Utforska efter genre</span>
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-xl bg-purple-500/10 border border-purple-500/30">
+                  <Layers className="w-4 h-4 text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white tracking-tight">Utforska per genre</h3>
+                  <p className="text-[11px] text-zinc-400">Bläddra bland tusentals spel och upptäck dolda guldkorn</p>
+                </div>
               </div>
 
-              {/* Genre Chips */}
-              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                {GENRES.map((g) => (
-                  <button
-                    key={g}
-                    onClick={() => setSelectedGenre(g)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
-                      selectedGenre === g
-                        ? 'bg-zinc-100 text-zinc-950 shadow-sm'
-                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
-                    }`}
-                  >
-                    {g}
-                  </button>
-                ))}
+              {/* Action Toolbar: Sortering & Se mer */}
+              <div className="flex items-center gap-2">
+                <select
+                  value={genreSort}
+                  onChange={(e) => setGenreSort(e.target.value as any)}
+                  className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-brand-red cursor-pointer"
+                >
+                  <option value="rating">Högst betyg</option>
+                  <option value="popularity">Mest populära</option>
+                  <option value="newest">Nyast först</option>
+                </select>
+
+                <button
+                  onClick={() => setIsGenreExpanded(!isGenreExpanded)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
+                    isGenreExpanded
+                      ? 'bg-purple-600 text-white border-purple-500'
+                      : 'bg-zinc-900 text-zinc-400 hover:text-white border-zinc-800'
+                  }`}
+                >
+                  {isGenreExpanded ? <Rows className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
+                  <span>{isGenreExpanded ? 'Mindre' : `Se mer (${genreGames.length}+ spel)`}</span>
+                </button>
               </div>
             </div>
+
+            {/* Genre Chips */}
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+              {GENRES.map((g) => (
+                <button
+                  key={g}
+                  onClick={() => setSelectedGenre(g)}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
+                    selectedGenre === g
+                      ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 border border-purple-500'
+                      : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                  }`}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
+
+            {/* Expanderat läge: Fritextsökning inom genren */}
+            {isGenreExpanded && (
+              <div className="flex items-center justify-between gap-3 bg-zinc-900/80 border border-zinc-800 p-3 rounded-2xl">
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                  <input
+                    type="text"
+                    value={genreSearch}
+                    onChange={(e) => setGenreSearch(e.target.value)}
+                    placeholder={`Filtrera bland ${selectedGenre}-spel...`}
+                    className="w-full bg-zinc-950 border border-zinc-800 text-zinc-100 rounded-xl pl-9 pr-3 py-1.5 text-xs focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+
+                <span className="text-xs text-zinc-500 font-medium">
+                  Visar {filteredGenreGames.length} spel inom {selectedGenre}
+                </span>
+              </div>
+            )}
 
             {/* Genre Game Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
-              {genreGames.slice(0, 12).map((game) => {
-                const inLibrary = isGameInLibrary(game.igdb_id, game.title);
-                return (
-                  <div
-                    key={game.id}
-                    className="flex flex-col group bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden p-2.5 transition hover:border-zinc-700"
-                  >
+            {isLoadingGenre ? (
+              <div className="flex items-center justify-center py-16 text-zinc-500 gap-2">
+                <RefreshCw className="w-5 h-5 animate-spin text-purple-400" />
+                <span className="text-xs">Hämtar spel inom {selectedGenre}...</span>
+              </div>
+            ) : filteredGenreGames.length === 0 ? (
+              <div className="text-center py-12 text-zinc-500 border border-dashed border-zinc-800 rounded-2xl">
+                <p className="text-xs">Inga spel matchar sökningen inom {selectedGenre}.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+                {filteredGenreGames.map((game) => {
+                  const inLibrary = isGameInLibrary(game.igdb_id, game.title);
+                  return (
                     <div
-                      onClick={() => onSelectGame(game)}
-                      className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-zinc-950 mb-2 relative cursor-pointer"
+                      key={game.id}
+                      className="flex flex-col group bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden p-2.5 transition hover:border-zinc-700 shadow-md"
                     >
-                      {game.cover_url ? (
-                        <img
-                          src={game.cover_url}
-                          alt={game.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Gamepad className="w-6 h-6 text-zinc-600" />
-                        </div>
-                      )}
-                      {game.igdb_rating && (
-                        <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/80 text-[10px] font-bold text-amber-300 border border-amber-500/30">
-                          {game.igdb_rating}
-                        </div>
-                      )}
+                      <div
+                        onClick={() => onSelectGame(game)}
+                        className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-zinc-950 mb-2 relative cursor-pointer"
+                      >
+                        {game.cover_url ? (
+                          <img
+                            src={game.cover_url}
+                            alt={game.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Gamepad className="w-6 h-6 text-zinc-600" />
+                          </div>
+                        )}
+                        {game.igdb_rating && (
+                          <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/80 text-[10px] font-bold text-amber-300 border border-amber-500/30">
+                            ⭐ {game.igdb_rating}
+                          </div>
+                        )}
+                      </div>
+
+                      <h4
+                        onClick={() => onSelectGame(game)}
+                        className="text-xs font-bold text-zinc-100 truncate cursor-pointer hover:text-purple-400 transition"
+                      >
+                        {game.title}
+                      </h4>
+
+                      <span className="text-[10px] text-zinc-400 mt-0.5 truncate">
+                        {game.release_year ? `${game.release_year} • ` : ''}
+                        {game.developers?.[0] || 'IGDB'}
+                      </span>
+
+                      <button
+                        onClick={() => onAddGame(game)}
+                        disabled={inLibrary}
+                        className={`mt-2 w-full py-1.5 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 transition ${
+                          inLibrary
+                            ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-default'
+                            : 'bg-zinc-800 hover:bg-purple-600 text-zinc-200 hover:text-white border border-zinc-700 hover:border-purple-600'
+                        }`}
+                      >
+                        {inLibrary ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-400" />
+                            <span>Sparat</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3 h-3" />
+                            <span>Lägg till</span>
+                          </>
+                        )}
+                      </button>
                     </div>
-
-                    <h4
-                      onClick={() => onSelectGame(game)}
-                      className="text-xs font-bold text-zinc-100 truncate cursor-pointer hover:text-red-400 transition"
-                    >
-                      {game.title}
-                    </h4>
-
-                    <span className="text-[10px] text-zinc-400 mt-0.5 truncate">
-                      {game.release_year || 'IGDB'}
-                    </span>
-
-                    <button
-                      onClick={() => onAddGame(game)}
-                      disabled={inLibrary}
-                      className={`mt-2 w-full py-1 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition ${
-                        inLibrary
-                          ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-default'
-                          : 'bg-zinc-800 hover:bg-brand-red text-zinc-200 hover:text-white border border-zinc-700 hover:border-brand-red'
-                      }`}
-                    >
-                      {inLibrary ? <Check className="w-3 h-3 text-emerald-400" /> : <Plus className="w-3 h-3" />}
-                      <span>{inLibrary ? 'Sparat' : 'Lägg till'}</span>
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       ) : (

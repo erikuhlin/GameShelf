@@ -1,15 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryIGDB } from '@/lib/igdb-server';
 
+export const revalidate = 300; // 5 minuters edge cache
+
+const GENRE_MAP: Record<string, string> = {
+  'RPG': 'Role-playing (RPG)',
+  'Rollspel': 'Role-playing (RPG)',
+  'Role-playing (RPG)': 'Role-playing (RPG)',
+  'Action': 'Shooter, Hack and slash/Beat \'em up',
+  'Äventyr': 'Adventure',
+  'Adventure': 'Adventure',
+  'Skjutspel': 'Shooter',
+  'Shooter': 'Shooter',
+  'Indie': 'Indie',
+  'Strategi': 'Strategy, Real Time Strategy (RTS), Turn-based strategy (TBS)',
+  'Strategy': 'Strategy',
+  'Plattform': 'Platform',
+  'Platform': 'Platform',
+  'Racing': 'Racing',
+  'Fighting': 'Fighting',
+  'Skräck': 'Adventure', // Often tagged as Horror themes in IGDB
+  'Horror': 'Adventure',
+  'Simulator': 'Simulator',
+  'Pussel': 'Puzzle',
+  'Puzzle': 'Puzzle',
+  'Sport': 'Sport',
+  'Open World': 'Adventure',
+};
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const category = searchParams.get('category') || 'trending';
-  const genre = searchParams.get('genre')?.trim();
+  const genreParam = searchParams.get('genre')?.trim();
+  const sortParam = searchParams.get('sort') || 'popularity';
+  const limitParam = Math.min(Number(searchParams.get('limit')) || 25, 60);
   const excludeIdsParam = searchParams.get('exclude_ids') || '';
   const excludeIds = new Set(excludeIdsParam.split(',').map((id) => Number(id.trim())).filter(Boolean));
 
   const nowSeconds = Math.floor(Date.now() / 1000);
-  const minReleaseTimestamp = 1609459200; // 2021-01-01
+  const minReleaseTimestamp = 1546300800; // 2019-01-01 för rikare genrekatalog
 
   try {
     let igdbQuery = '';
@@ -19,30 +48,41 @@ export async function GET(request: NextRequest) {
         fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary, hypes;
         where first_release_date > ${nowSeconds} & cover != null;
         sort hypes desc;
-        limit 25;
+        limit ${limitParam};
       `;
     } else if (category === 'top_rated') {
       igdbQuery = `
         fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary, total_rating_count;
-        where (rating >= 88 | total_rating >= 88) & total_rating_count >= 15 & cover != null;
+        where (rating >= 85 | total_rating >= 85) & total_rating_count >= 10 & cover != null;
         sort rating desc;
-        limit 25;
+        limit ${limitParam};
       `;
-    } else if (genre) {
-      const sanitizedGenre = genre.replace(/"/g, '\\"');
+    } else if (genreParam && genreParam !== 'Alla genrer') {
+      const mappedGenre = GENRE_MAP[genreParam] || genreParam;
+      const sanitizedGenre = mappedGenre.replace(/"/g, '\\"');
+
+      let sortClause = 'sort rating desc;';
+      if (sortParam === 'newest') sortClause = 'sort first_release_date desc;';
+      else if (sortParam === 'popularity') sortClause = 'sort total_rating_count desc;';
+      else if (sortParam === 'rating') sortClause = 'sort total_rating desc;';
+
       igdbQuery = `
-        fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary;
-        where genres.name = "${sanitizedGenre}" & first_release_date >= ${minReleaseTimestamp} & (rating >= 70 | total_rating >= 70 | hypes >= 5) & cover != null;
-        sort rating desc;
-        limit 25;
+        fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary, total_rating_count, hypes;
+        where genres.name = "${sanitizedGenre}" & (total_rating >= 70 | rating >= 70 | hypes >= 5) & cover != null;
+        ${sortClause}
+        limit ${limitParam};
       `;
     } else {
-      // Trending / For you default
+      // Trending default (Heta spel just nu)
+      let sortClause = 'sort hypes desc;';
+      if (sortParam === 'rating') sortClause = 'sort total_rating desc;';
+      else if (sortParam === 'newest') sortClause = 'sort first_release_date desc;';
+
       igdbQuery = `
-        fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary, hypes;
-        where first_release_date >= ${minReleaseTimestamp} & (rating >= 75 | total_rating >= 75 | hypes >= 10) & cover != null;
-        sort hypes desc;
-        limit 30;
+        fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary, hypes, total_rating_count;
+        where first_release_date >= ${minReleaseTimestamp} & (rating >= 75 | total_rating >= 75 | hypes >= 10 | total_rating_count >= 20) & cover != null;
+        ${sortClause}
+        limit ${limitParam};
       `;
     }
 
@@ -54,7 +94,7 @@ export async function GET(request: NextRequest) {
         fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary;
         where cover != null;
         sort first_release_date desc;
-        limit 25;
+        limit ${limitParam};
       `;
       data = await queryIGDB('games', fallbackQuery);
     }
@@ -98,9 +138,8 @@ export async function GET(request: NextRequest) {
           developers,
           cover_url: coverUrl,
           igdb_rating: igdbRating,
-          summary: game.summary || '',
-          is_owned: false,
-          status: 'Önskelista',
+          summary: game.summary || null,
+          hypes: game.hypes || 0,
         };
       });
 
@@ -108,7 +147,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('Error in /api/games/discover:', error);
     return NextResponse.json(
-      { error: error.message || 'Kunde inte hämta spelförslag' },
+      { error: 'Kunde inte hämta upptäcktsdata från IGDB' },
       { status: 500 }
     );
   }

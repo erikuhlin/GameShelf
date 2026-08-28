@@ -86,6 +86,7 @@ export function AddGameModal({
         igdb_rating: igdbRating,
         cover_url: igdbGame.cover?.url || null,
         igdb_id: igdbGame.id,
+        first_release_date: igdbGame.first_release_date || null,
         estimated_hours: null,
         is_owned: selectedStatus !== 'Önskelista',
         notes: '',

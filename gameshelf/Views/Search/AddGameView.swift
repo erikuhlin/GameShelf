@@ -469,6 +469,7 @@ struct AddGameView: View {
             igdbRating: normalizedRating,
             coverURL: game.coverURL,
             igdbID: game.id,
+            firstReleaseDate: game.firstReleaseDate,
             estimatedHours: est
         )
 

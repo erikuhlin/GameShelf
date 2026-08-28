@@ -31,6 +31,7 @@ export function mapSupabaseGame(row: any): Game {
     igdb_rating: row.igdb_rating,
     cover_url: row.cover_url,
     igdb_id: row.igdb_id ? Number(row.igdb_id) : undefined,
+    first_release_date: row.first_release_date ? Number(row.first_release_date) : undefined,
     estimated_hours: row.estimated_hours,
     is_owned: row.is_owned ?? true,
     notes: row.notes || '',

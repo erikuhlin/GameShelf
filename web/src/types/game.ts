@@ -34,6 +34,7 @@ export interface Game {
   igdb_rating?: number | null; // 0-10
   cover_url?: string | null;
   igdb_id?: number | null;
+  first_release_date?: number | null;
   estimated_hours?: number | null;
   is_owned: boolean;
   notes: string;

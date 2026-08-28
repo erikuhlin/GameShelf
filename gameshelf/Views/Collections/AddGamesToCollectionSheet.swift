@@ -267,6 +267,7 @@ struct AddGamesToCollectionSheet: View {
                 igdbRating: normalizedRating,
                 coverURL: igdbGame.coverURL,
                 igdbID: igdbGame.id,
+                firstReleaseDate: igdbGame.firstReleaseDate,
                 estimatedHours: est
             )
 

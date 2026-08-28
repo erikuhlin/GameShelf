@@ -88,11 +88,31 @@ struct GameDetailView: View {
         }
     }
 
+    private var effectiveReleaseDate: Date? {
+        if let ts = remote?.firstReleaseDate {
+            return Date(timeIntervalSince1970: TimeInterval(ts))
+        }
+        if let ts = currentGame?.firstReleaseDate {
+            return Date(timeIntervalSince1970: TimeInterval(ts))
+        }
+        return nil
+    }
+
+    private var effectiveReleaseYear: Int? {
+        return currentGame?.releaseYear ?? remote?.releaseYear
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
                 // --- 1. HERO HEADER ---
                 heroHeader
+
+                // --- NEDRÄKNING FÖR KOMMANDE SPEL ---
+                ReleaseCountdownBanner(
+                    releaseDate: effectiveReleaseDate,
+                    releaseYear: effectiveReleaseYear
+                )
 
                 // --- 2. LÄGG TILL KNAPP (Om spelet inte finns i biblioteket) ---
                 libraryStatusSection
@@ -1557,6 +1577,7 @@ struct GameDetailView: View {
             igdbRating: normalizedRating,
             coverURL: d.coverURL,
             igdbID: d.id,
+            firstReleaseDate: d.firstReleaseDate,
             estimatedHours: est
         )
         store.add(new)

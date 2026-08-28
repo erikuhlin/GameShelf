@@ -15,6 +15,7 @@ private struct SupabaseGameDTO: Codable {
     var platform: String?
     var platforms: [String]?
     var release_year: Int?
+    var first_release_date: Int?
     var genres: [String]?
     var developers: [String]?
     var status: String?
@@ -34,6 +35,7 @@ private struct SupabaseGameDTO: Codable {
         self.platform = game.platforms.first
         self.platforms = game.platforms
         self.release_year = game.releaseYear
+        self.first_release_date = game.firstReleaseDate
         self.genres = game.genres
         self.developers = game.developers
         self.status = game.status.rawValue
@@ -86,6 +88,7 @@ private struct SupabaseGameDTO: Codable {
             igdbRating: igdb_rating,
             coverURL: cover_url.flatMap { URL(string: $0) },
             igdbID: igdb_id,
+            firstReleaseDate: first_release_date,
             estimatedHours: estimated_hours,
             isOwned: is_owned ?? true,
             notes: notes ?? "",

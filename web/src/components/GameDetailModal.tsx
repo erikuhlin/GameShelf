@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Game, GameCollection, PlayStatus, PLAY_STATUSES, GameTodoItem } from '@/types/game';
 import { supabase } from '@/lib/supabase';
 import { StatusBadge } from './StatusBadge';
+import { ReleaseCountdown } from './ReleaseCountdown';
 import {
   X,
   Star,
@@ -199,6 +200,12 @@ export function GameDetailModal({
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Release Countdown for upcoming games */}
+          <ReleaseCountdown
+            firstReleaseDate={game.first_release_date}
+            releaseYear={game.release_year}
+          />
+
           {/* Controls: Status & Rating */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Status Picker */}

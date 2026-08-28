@@ -28,11 +28,42 @@ struct AddGameView: View {
     @State private var selectedGenreFilter: String? = nil
     @State private var discoveryDebounceTask: Task<Void, Never>? = nil
 
+    // Senaste sökningar
+    @AppStorage("gameshelf_ios_recent_searches") private var recentSearchesRaw: String = ""
+
     let prefillTitle: String?
 
     init(prefillTitle: String? = nil) {
         self.prefillTitle = prefillTitle
         self._searchText = State(initialValue: prefillTitle ?? "")
+    }
+
+    private var recentSearches: [String] {
+        recentSearchesRaw.split(separator: "|||").map(String.init)
+    }
+
+    private func saveSearchTerm(_ term: String) {
+        let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        var current = recentSearches.filter { $0.lowercased() != trimmed.lowercased() }
+        current.insert(trimmed, at: 0)
+        recentSearchesRaw = current.prefix(6).joined(separator: "|||")
+    }
+
+    private func removeSearchTerm(_ term: String) {
+        let current = recentSearches.filter { $0 != term }
+        recentSearchesRaw = current.joined(separator: "|||")
+    }
+
+    private var matchingLocalGames: [Game] {
+        guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return store.games.filter {
+            $0.title.lowercased().contains(q) ||
+            $0.genres.contains(where: { $0.lowercased().contains(q) }) ||
+            $0.platforms.contains(where: { $0.lowercased().contains(q) }) ||
+            $0.developers.contains(where: { $0.lowercased().contains(q) })
+        }
     }
 
     private var isSearchingOrFiltering: Bool {
@@ -285,9 +316,79 @@ struct AddGameView: View {
         .padding(24)
     }
 
-    // MARK: - Sökresultat-lista med 1-Klicks Tillägg
+    // MARK: - Sökresultat-lista med Universal Multi-Source
     private var searchResultsList: some View {
         List {
+            // 1. I ditt bibliotek
+            if !matchingLocalGames.isEmpty {
+                Section {
+                    ForEach(matchingLocalGames) { localGame in
+                        NavigationLink(destination: GameDetailView(game: localGame)) {
+                            HStack(spacing: 12) {
+                                if let url = localGame.coverURL {
+                                    CachedAsyncImage(url: url) { img in
+                                        img.resizable().aspectRatio(contentMode: .fill)
+                                    } placeholder: {
+                                        Color.gray.opacity(0.2)
+                                    }
+                                    .frame(width: 44, height: 60)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                } else {
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .fill(Color.gray.opacity(0.2))
+                                        .frame(width: 44, height: 60)
+                                        .overlay {
+                                            Image(systemName: "gamecontroller")
+                                                .foregroundStyle(.secondary)
+                                        }
+                                }
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(localGame.title)
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+
+                                    HStack(spacing: 6) {
+                                        StatusBadge(status: localGame.status)
+
+                                        if let rating = localGame.rating {
+                                            Text("⭐ \(rating)/10")
+                                                .font(.caption2.bold())
+                                                .foregroundStyle(.yellow)
+                                        }
+
+                                        if let year = localGame.releaseYear {
+                                            Text(String(year))
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowBackground(Color(.secondarySystemGroupedBackground))
+                    }
+                } header: {
+                    HStack {
+                        Image(systemName: "books.vertical.fill")
+                            .foregroundStyle(.green)
+                        Text("I ditt bibliotek (\(matchingLocalGames.count))")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            // 2. IGDB Resultat
             Section {
                 ForEach(searchResults, id: \.id) { game in
                     let localGame = store.games.first(where: {
@@ -310,7 +411,9 @@ struct AddGameView: View {
                 }
             } header: {
                 HStack {
-                    Text("Resultat (\(searchResults.count))")
+                    Image(systemName: "globe")
+                        .foregroundStyle(.red)
+                    Text("Hitta på IGDB (\(searchResults.count))")
                         .font(.caption.bold())
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -329,6 +432,52 @@ struct AddGameView: View {
     private var discoveryView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
+
+                // 0. Senaste sökningar
+                if !recentSearches.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Label("Senaste sökningar", systemImage: "clock.arrow.circlepath")
+                                .font(.headline)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Rensa") {
+                                recentSearchesRaw = ""
+                            }
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                        }
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(recentSearches, id: \.self) { term in
+                                    Button {
+                                        searchText = term
+                                        saveSearchTerm(term)
+                                        Task { await performSearchAsync() }
+                                    } label: {
+                                        HStack(spacing: 6) {
+                                            Text(term)
+                                                .font(.subheadline)
+                                            Button {
+                                                removeSearchTerm(term)
+                                            } label: {
+                                                Image(systemName: "xmark")
+                                                    .font(.system(size: 9, weight: .bold))
+                                            }
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 7)
+                                        .background(Color(.secondarySystemGroupedBackground))
+                                        .foregroundStyle(.primary)
+                                        .clipShape(Capsule())
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+                }
 
                 // 1. Genre-chips
                 VStack(alignment: .leading, spacing: 10) {
@@ -494,6 +643,10 @@ struct AddGameView: View {
                 errorMessage = nil
             }
             return
+        }
+
+        if !trimmed.isEmpty {
+            saveSearchTerm(trimmed)
         }
 
         await MainActor.run {

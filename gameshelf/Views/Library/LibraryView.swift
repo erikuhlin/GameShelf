@@ -295,13 +295,40 @@ struct LibraryView: View {
                     }
                     .padding(.vertical, 12)
 
-                    if filteredAndSortedGames.isEmpty && store.collections.isEmpty {
-                        ContentUnavailableView(
-                            "Inga spel i biblioteket",
-                            systemImage: "gamecontroller",
-                            description: Text("Tryck på +-knappen för att lägga till spel.")
-                        )
-                        .padding(.top, 40)
+                    if filteredAndSortedGames.isEmpty {
+                        if !searchText.isEmpty {
+                            VStack(spacing: 16) {
+                                ContentUnavailableView(
+                                    "Inga spel i biblioteket",
+                                    systemImage: "magnifyingglass",
+                                    description: Text("Inga spel i din samling matchar \"\(searchText)\".")
+                                )
+
+                                Button {
+                                    showingAddGameSheet = true
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "globe")
+                                        Text("Sök i IGDB efter \"\(searchText)\"")
+                                    }
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 12)
+                                    .background(Color.red)
+                                    .clipShape(Capsule())
+                                    .shadow(color: .red.opacity(0.3), radius: 6, y: 3)
+                                }
+                            }
+                            .padding(.top, 30)
+                        } else if store.collections.isEmpty && store.games.isEmpty {
+                            ContentUnavailableView(
+                                "Inga spel i biblioteket",
+                                systemImage: "gamecontroller",
+                                description: Text("Tryck på +-knappen för att lägga till spel.")
+                            )
+                            .padding(.top, 40)
+                        }
                     }
                 }
                 .refreshable {

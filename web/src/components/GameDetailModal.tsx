@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Game, GameCollection, PlayStatus, PLAY_STATUSES, GameTodoItem } from '@/types/game';
 import { supabase } from '@/lib/supabase';
 import { StatusBadge } from './StatusBadge';
@@ -51,6 +51,49 @@ export function GameDetailModal({
   const [newTodoTitle, setNewTodoTitle] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [liveReleaseDate, setLiveReleaseDate] = useState<number | null>(
+    game.first_release_date || null
+  );
+
+  // Hämta exakt releasedatum från IGDB om det saknas på det lokala spelet
+  useEffect(() => {
+    if (game.first_release_date) {
+      setLiveReleaseDate(game.first_release_date);
+      return;
+    }
+
+    if (game.igdb_id) {
+      fetch(`/api/igdb/games/${game.igdb_id}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.game?.first_release_date) {
+            setLiveReleaseDate(data.game.first_release_date);
+            supabase
+              .from('user_games')
+              .update({ first_release_date: data.game.first_release_date })
+              .eq('id', game.id);
+          }
+        })
+        .catch(() => {});
+    } else if (game.title) {
+      fetch(`/api/igdb/search?q=${encodeURIComponent(game.title)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          const match = data?.games?.[0];
+          if (match?.first_release_date) {
+            setLiveReleaseDate(match.first_release_date);
+            supabase
+              .from('user_games')
+              .update({
+                first_release_date: match.first_release_date,
+                igdb_id: match.id || null,
+              })
+              .eq('id', game.id);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [game.id, game.igdb_id, game.first_release_date, game.title]);
 
   const handleAddTodo = (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,12 +204,21 @@ export function GameDetailModal({
               </h2>
 
               <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-zinc-400">
-                {game.release_year && (
+                {liveReleaseDate ? (
+                  <span className="flex items-center gap-1 font-semibold text-zinc-200">
+                    <Calendar className="w-3.5 h-3.5 text-red-400" />
+                    {new Date(liveReleaseDate * 1000).toLocaleDateString('sv-SE', {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </span>
+                ) : game.release_year ? (
                   <span className="flex items-center gap-1">
-                    <Calendar className="w-3 h-3 text-zinc-500" />
+                    <Calendar className="w-3.5 h-3.5 text-zinc-500" />
                     {game.release_year}
                   </span>
-                )}
+                ) : null}
                 {game.developers && game.developers.length > 0 && (
                   <>
                     <span>•</span>
@@ -202,7 +254,7 @@ export function GameDetailModal({
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Release Countdown for upcoming games */}
           <ReleaseCountdown
-            firstReleaseDate={game.first_release_date}
+            firstReleaseDate={liveReleaseDate}
             releaseYear={game.release_year}
           />
 

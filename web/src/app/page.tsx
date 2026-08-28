@@ -28,6 +28,9 @@ import {
   Trash2,
   Gamepad2,
   Plus,
+  Library,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -710,51 +713,94 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Status Filter Tabs (Only shown in Library views) */}
+        {/* Library Sub-bar: Status Filter Tabs & View Mode Switcher */}
         {viewMode !== 'collections' && viewMode !== 'stats' && viewMode !== 'discover' && games.length > 0 && (
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-            <button
-              onClick={() => setSelectedStatus('Alla')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
-                selectedStatus === 'Alla'
-                  ? 'bg-zinc-100 text-zinc-900 shadow-md'
-                  : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
-              }`}
-            >
-              <span>Alla</span>
-              <span
-                className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                  selectedStatus === 'Alla' ? 'bg-zinc-300 text-zinc-900' : 'bg-zinc-800 text-zinc-400'
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
+            {/* Left: Status Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+              <button
+                onClick={() => setSelectedStatus('Alla')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
+                  selectedStatus === 'Alla'
+                    ? 'bg-zinc-100 text-zinc-900 shadow-md'
+                    : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
                 }`}
               >
-                {statusCounts['Alla']}
-              </span>
-            </button>
-
-            {PLAY_STATUSES.map((status) => {
-              const isSelected = selectedStatus === status;
-              const count = statusCounts[status] || 0;
-              return (
-                <button
-                  key={status}
-                  onClick={() => setSelectedStatus(status)}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
-                    isSelected
-                      ? 'bg-zinc-100 text-zinc-900 shadow-md'
-                      : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                <span>Alla</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                    selectedStatus === 'Alla' ? 'bg-zinc-300 text-zinc-900' : 'bg-zinc-800 text-zinc-400'
                   }`}
                 >
-                  <span>{status}</span>
-                  <span
-                    className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                      isSelected ? 'bg-zinc-300 text-zinc-900' : 'bg-zinc-800 text-zinc-400'
+                  {statusCounts['Alla']}
+                </span>
+              </button>
+
+              {PLAY_STATUSES.map((status) => {
+                const isSelected = selectedStatus === status;
+                const count = statusCounts[status] || 0;
+                return (
+                  <button
+                    key={status}
+                    onClick={() => setSelectedStatus(status)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
+                      isSelected
+                        ? 'bg-zinc-100 text-zinc-900 shadow-md'
+                        : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
                     }`}
                   >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
+                    <span>{status}</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                        isSelected ? 'bg-zinc-300 text-zinc-900' : 'bg-zinc-800 text-zinc-400'
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Right: View Mode Switcher (Hylla | Grid | Lista) */}
+            <div className="flex items-center self-end sm:self-auto bg-zinc-900/90 border border-zinc-800/90 rounded-xl p-1 shrink-0">
+              <button
+                onClick={() => setViewMode('shelf')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                  viewMode === 'shelf'
+                    ? 'bg-zinc-800 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+                title="Hyllvy"
+              >
+                <Library className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Hylla</span>
+              </button>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                  viewMode === 'grid'
+                    ? 'bg-zinc-800 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+                title="Rutnätsvy"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Rutnät</span>
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                  viewMode === 'list'
+                    ? 'bg-zinc-800 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+                title="Listvy"
+              >
+                <List className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Lista</span>
+              </button>
+            </div>
           </div>
         )}
 

@@ -81,8 +81,9 @@ export function ReleaseCountdown({ firstReleaseDate, releaseYear }: ReleaseCount
   }, [targetTime]);
 
   const currentYear = new Date().getFullYear();
+  // Endast år strikt i framtiden (t.ex. 2027+) visas som framtida lanseringsår när exakt datum saknas
   const isFutureYearOnly =
-    !targetTime && releaseYear && releaseYear >= currentYear;
+    !targetTime && releaseYear && releaseYear > currentYear;
 
   // Om spelet redan har släppts och inte är idag, visa ingen nedräkning
   if (timeLeft?.isPast && !timeLeft.isToday) {

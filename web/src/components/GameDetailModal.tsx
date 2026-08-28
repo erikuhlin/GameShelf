@@ -98,20 +98,30 @@ export function GameDetailModal({
       fetch(`/api/igdb/search?q=${encodeURIComponent(game.title)}`)
         .then((res) => res.json())
         .then((data) => {
-          const match = data?.results?.[0] || data?.games?.[0];
-          if (match?.first_release_date) {
-            const date = match.first_release_date;
+          const results = data?.results || data?.games || [];
+          const bestMatch =
+            results.find(
+              (r: any) => r.name?.toLowerCase() === game.title.toLowerCase()
+            ) ||
+            results.find(
+              (r: any) =>
+                r.name?.toLowerCase().startsWith(game.title.toLowerCase())
+            ) ||
+            results[0];
+
+          if (bestMatch?.first_release_date) {
+            const date = bestMatch.first_release_date;
             setLiveReleaseDate(date);
             onUpdateGame({
               ...game,
               first_release_date: date,
-              igdb_id: game.igdb_id || match.id || null,
+              igdb_id: game.igdb_id || bestMatch.id || null,
             });
             supabase
               .from('user_games')
               .update({
                 first_release_date: date,
-                igdb_id: match.id || null,
+                igdb_id: game.igdb_id || bestMatch.id || null,
               })
               .eq('id', game.id)
               .then(() => {});

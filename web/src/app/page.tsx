@@ -70,12 +70,23 @@ export default function HomePage() {
           : `/api/igdb/search?q=${encodeURIComponent(g.title)}`;
         const res = await fetch(endpoint);
         const data = await res.json();
+        const results = data?.results || data?.games || [];
+        const bestMatch =
+          results.find(
+            (r: any) => r.name?.toLowerCase() === g.title.toLowerCase()
+          ) ||
+          results.find(
+            (r: any) =>
+              r.name?.toLowerCase().startsWith(g.title.toLowerCase())
+          ) ||
+          results[0];
+
         const date =
           data?.game?.first_release_date ||
-          data?.results?.[0]?.first_release_date;
+          bestMatch?.first_release_date;
 
         if (date) {
-          const igdbId = g.igdb_id || data?.game?.id || data?.results?.[0]?.id || null;
+          const igdbId = g.igdb_id || data?.game?.id || bestMatch?.id || null;
 
           if (currentUserId) {
             supabase

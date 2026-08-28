@@ -97,7 +97,13 @@ final class LibraryStore: ObservableObject {
         // 1. Synka spel från servern (speglar direkt tillägg och raderingar)
         do {
             let remoteGames = try await SupabaseSyncService.shared.fetchRemoteGames()
-            self.games = remoteGames
+            if !remoteGames.isEmpty || self.games.isEmpty {
+                self.games = remoteGames
+            } else {
+                for game in self.games {
+                    try? await SupabaseSyncService.shared.upsertGame(game)
+                }
+            }
             UserDefaults.standard.set(true, forKey: initialMigrationKey)
         } catch {
             // Ignorera offline / nätverksfel så lokal data fortsätter fungera

@@ -199,7 +199,7 @@ actor SupabaseSyncService {
     func upsertGame(_ game: Game) async throws {
         guard SupabaseConfig.isSyncEnabled else { return }
         let currentUserId = await MainActor.run { SupabaseAuthManager.shared.persistentUserId }
-        let dto = SupabaseGameDTO(from: game, userId: currentUserId)
+        var dto = SupabaseGameDTO(from: game, userId: currentUserId)
         let data = try JSONEncoder().encode(dto)
 
         guard let request = await makeRequest(
@@ -216,6 +216,25 @@ actor SupabaseSyncService {
         guard (200...299).contains(statusCode) else {
             let err = String(data: respData, encoding: .utf8) ?? "Kunde inte spara spel"
             print("❌ upsertGame error (\(statusCode)): \(err)")
+
+            // Om Supabase tabellen saknar 'first_release_date' i schema cache, prova igen utan det fältet
+            if err.contains("first_release_date") {
+                print("⚠️ Retrying upsert without 'first_release_date' column...")
+                dto.first_release_date = nil
+                if let fallbackData = try? JSONEncoder().encode(dto),
+                   let fallbackReq = await makeRequest(
+                       endpoint: "user_games",
+                       method: "POST",
+                       body: fallbackData,
+                       prefer: "resolution=merge-duplicates,return=representation"
+                   ),
+                   let (_, fbResp) = try? await session.data(for: fallbackReq),
+                   (200...299).contains((fbResp as? HTTPURLResponse)?.statusCode ?? 500) {
+                    print("✅ Fallback upsert without first_release_date succeeded!")
+                    return
+                }
+            }
+
             throw NSError(domain: "SyncError", code: statusCode, userInfo: [NSLocalizedDescriptionKey: err])
         }
     }

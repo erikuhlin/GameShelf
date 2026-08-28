@@ -102,6 +102,40 @@ export default function HomePage() {
           if (typeof window !== 'undefined') {
             localStorage.setItem('gameshelf_local_games', JSON.stringify(mapped));
           }
+
+          // Berika befintliga spel i biblioteket som saknar first_release_date i bakgrunden
+          const gamesNeedingDates = mapped.filter((g) => !g.first_release_date);
+          if (gamesNeedingDates.length > 0) {
+            Promise.all(
+              gamesNeedingDates.map(async (g) => {
+                try {
+                  const endpoint = g.igdb_id
+                    ? `/api/igdb/games/${g.igdb_id}`
+                    : `/api/igdb/search?q=${encodeURIComponent(g.title)}`;
+                  const res = await fetch(endpoint);
+                  const data = await res.json();
+                  const date =
+                    data?.game?.first_release_date ||
+                    data?.results?.[0]?.first_release_date;
+                  if (date) {
+                    supabase
+                      .from('user_games')
+                      .update({ first_release_date: date })
+                      .eq('id', g.id)
+                      .then(() => {});
+
+                    setGames((prev) =>
+                      prev.map((item) =>
+                        item.id === g.id
+                          ? { ...item, first_release_date: date }
+                          : item
+                      )
+                    );
+                  }
+                } catch (e) {}
+              })
+            );
+          }
         }
 
         if (colRes.data) {

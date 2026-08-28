@@ -110,6 +110,56 @@ final class LibraryStore: ObservableObject {
         } catch {
             // Ignorera nätverksfel
         }
+
+        // 3. Berika befintliga spel som saknar releasedatum i bakgrunden
+        await enrichMissingReleaseDates()
+    }
+
+    // MARK: - Release Date Background Enrichment
+    private func enrichMissingReleaseDates() async {
+        let gamesNeedingDates = self.games.filter { $0.firstReleaseDate == nil }
+        guard !gamesNeedingDates.isEmpty else { return }
+
+        for game in gamesNeedingDates {
+            do {
+                if let igdbId = game.igdbID {
+                    let detail = try await IGDBService.shared.fetchGameDetails(id: igdbId)
+                    if let date = detail.firstReleaseDate {
+                        await MainActor.run {
+                            if let idx = self.games.firstIndex(where: { $0.id == game.id }) {
+                                self.games[idx].firstReleaseDate = date
+                                if let year = detail.releaseYear {
+                                    self.games[idx].releaseYear = year
+                                }
+                                let updated = self.games[idx]
+                                Task {
+                                    try? await SupabaseSyncService.shared.upsertGame(updated)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    let results = try await IGDBService.shared.searchGames(query: game.title)
+                    if let first = results.first(where: { $0.firstReleaseDate != nil }) {
+                        await MainActor.run {
+                            if let idx = self.games.firstIndex(where: { $0.id == game.id }) {
+                                self.games[idx].firstReleaseDate = first.firstReleaseDate
+                                self.games[idx].igdbID = first.id
+                                if let year = first.releaseYear {
+                                    self.games[idx].releaseYear = year
+                                }
+                                let updated = self.games[idx]
+                                Task {
+                                    try? await SupabaseSyncService.shared.upsertGame(updated)
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch {
+                // Fortsätt tyst till nästa
+            }
+        }
     }
 
     // MARK: - Game Public API

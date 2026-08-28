@@ -1530,9 +1530,21 @@ struct GameDetailView: View {
             }
 
             if var g = currentGame {
+                var changed = false
                 let est = game.timeToBeat?.mainStoryHours ?? game.timeToBeat?.mainExtraHours
                 if let est = est, g.estimatedHours != est {
                     g.estimatedHours = est
+                    changed = true
+                }
+                if let date = game.firstReleaseDate, g.firstReleaseDate != date {
+                    g.firstReleaseDate = date
+                    changed = true
+                }
+                if let year = game.releaseYear, g.releaseYear != year {
+                    g.releaseYear = year
+                    changed = true
+                }
+                if changed {
                     updateLocal(g)
                 }
             }

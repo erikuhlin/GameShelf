@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS public.user_games (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID,
     igdb_id BIGINT,
+    first_release_date BIGINT,
     title TEXT NOT NULL,
     cover_url TEXT,
     platform TEXT,

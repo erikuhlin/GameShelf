@@ -67,12 +67,28 @@ export default function HomePage() {
       try {
         let date: number | null = null;
         let igdbId: number | null = g.igdb_id ? Number(g.igdb_id) : null;
+        const currentYear = new Date().getFullYear();
 
         if (igdbId) {
           const res = await fetch(`/api/igdb/games/${igdbId}`);
           if (res.ok) {
             const data = await res.json();
-            date = data?.game?.first_release_date || null;
+            const fetchedDate = data?.game?.first_release_date || null;
+            const fetchedYear = fetchedDate
+              ? new Date(fetchedDate * 1000).getFullYear()
+              : data?.game?.release_year;
+
+            if (
+              g.release_year &&
+              g.release_year >= currentYear &&
+              fetchedYear &&
+              fetchedYear < currentYear
+            ) {
+              date = null;
+              igdbId = null;
+            } else {
+              date = fetchedDate;
+            }
           }
         }
 
@@ -81,19 +97,41 @@ export default function HomePage() {
           if (res.ok) {
             const data = await res.json();
             const results = data?.results || data?.games || [];
-            const bestMatch =
-              results.find(
-                (r: any) => r.name?.toLowerCase() === g.title.toLowerCase()
-              ) ||
-              results.find(
-                (r: any) =>
-                  r.name?.toLowerCase().startsWith(g.title.toLowerCase())
-              ) ||
-              results[0];
+            const targetTitle = g.title.toLowerCase().trim();
+
+            let bestMatch = g.release_year
+              ? results.find((r: any) => {
+                  const y = r.first_release_date
+                    ? new Date(r.first_release_date * 1000).getFullYear()
+                    : r.release_year;
+                  return r.name?.toLowerCase().trim() === targetTitle && y === g.release_year;
+                })
+              : null;
+
+            if (!bestMatch && g.release_year && g.release_year >= currentYear) {
+              bestMatch = results.find((r: any) => {
+                const y = r.first_release_date
+                  ? new Date(r.first_release_date * 1000).getFullYear()
+                  : r.release_year;
+                return r.name?.toLowerCase().trim() === targetTitle && y && y >= currentYear;
+              });
+            }
+
+            if (!bestMatch) {
+              bestMatch = results.find((r: any) => r.name?.toLowerCase().trim() === targetTitle);
+            }
+
+            if (!bestMatch) {
+              bestMatch = results.find((r: any) => r.name?.toLowerCase().trim().startsWith(targetTitle));
+            }
+
+            if (!bestMatch && results.length > 0) {
+              bestMatch = results[0];
+            }
 
             if (bestMatch?.first_release_date) {
               date = bestMatch.first_release_date;
-              if (!igdbId && bestMatch.id) {
+              if (bestMatch.id) {
                 igdbId = bestMatch.id;
               }
             }

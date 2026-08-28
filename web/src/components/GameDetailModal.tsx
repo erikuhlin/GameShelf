@@ -78,6 +78,7 @@ export function GameDetailModal({
 
     const currentGame = game;
     let isMounted = true;
+    const currentYear = new Date().getFullYear();
 
     async function fetchReleaseDate() {
       try {
@@ -88,7 +89,23 @@ export function GameDetailModal({
           const res = await fetch(`/api/igdb/games/${igdbId}`);
           if (res.ok) {
             const data = await res.json();
-            date = data?.game?.first_release_date || null;
+            const fetchedDate = data?.game?.first_release_date || null;
+            const fetchedYear = fetchedDate
+              ? new Date(fetchedDate * 1000).getFullYear()
+              : data?.game?.release_year;
+
+            // Om spelet är tänkt som kommande (>= currentYear) men ID:t pekar på ett gammalt spel (t.ex. Fable 2004)
+            if (
+              currentGame.release_year &&
+              currentGame.release_year >= currentYear &&
+              fetchedYear &&
+              fetchedYear < currentYear
+            ) {
+              date = null;
+              igdbId = null;
+            } else {
+              date = fetchedDate;
+            }
           }
         }
 
@@ -97,19 +114,45 @@ export function GameDetailModal({
           if (res.ok) {
             const data = await res.json();
             const results = data?.results || data?.games || [];
-            const bestMatch =
-              results.find(
-                (r: any) => r.name?.toLowerCase() === currentGame.title.toLowerCase()
-              ) ||
-              results.find(
-                (r: any) =>
-                  r.name?.toLowerCase().startsWith(currentGame.title.toLowerCase())
-              ) ||
-              results[0];
+            const targetTitle = currentGame.title.toLowerCase().trim();
+
+            // 1. Exakt titel och samma år
+            let bestMatch = currentGame.release_year
+              ? results.find((r: any) => {
+                  const y = r.first_release_date
+                    ? new Date(r.first_release_date * 1000).getFullYear()
+                    : r.release_year;
+                  return r.name?.toLowerCase().trim() === targetTitle && y === currentGame.release_year;
+                })
+              : null;
+
+            // 2. Om spelet är kommande (>= currentYear), hitta match med framtida år
+            if (!bestMatch && currentGame.release_year && currentGame.release_year >= currentYear) {
+              bestMatch = results.find((r: any) => {
+                const y = r.first_release_date
+                  ? new Date(r.first_release_date * 1000).getFullYear()
+                  : r.release_year;
+                return r.name?.toLowerCase().trim() === targetTitle && y && y >= currentYear;
+              });
+            }
+
+            // 3. Exakt titelmatch
+            if (!bestMatch) {
+              bestMatch = results.find((r: any) => r.name?.toLowerCase().trim() === targetTitle);
+            }
+
+            // 4. Prefix match
+            if (!bestMatch) {
+              bestMatch = results.find((r: any) => r.name?.toLowerCase().trim().startsWith(targetTitle));
+            }
+
+            if (!bestMatch && results.length > 0) {
+              bestMatch = results[0];
+            }
 
             if (bestMatch?.first_release_date) {
               date = bestMatch.first_release_date;
-              if (!igdbId && bestMatch.id) {
+              if (bestMatch.id) {
                 igdbId = bestMatch.id;
               }
             }

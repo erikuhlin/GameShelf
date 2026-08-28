@@ -1483,26 +1483,40 @@ struct GameDetailView: View {
 
     private func bestMatch(for g: Game, in results: [IGDBGame]) -> IGDBGame? {
         let lowerTitle = g.title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let currentYear = Calendar.current.component(.year, from: Date())
 
-        // 1. Exakt titel och år
+        // 1. Exakt titel och samma år
         if g.releaseYear > 0 {
             if let match = results.first(where: { $0.name.lowercased() == lowerTitle && $0.releaseYear == g.releaseYear }) {
                 return match
             }
         }
 
-        // 2. Exakt titel
+        // 2. Om spelet är tänkt som framtida/kommande (>= currentYear), prioritera resultat som också är i framtiden
+        if g.releaseYear >= currentYear {
+            if let futureMatch = results.first(where: { $0.name.lowercased() == lowerTitle && ($0.releaseYear ?? 0) >= currentYear }) {
+                return futureMatch
+            }
+        }
+
+        // 3. Exakt titel
         if let match = results.first(where: { $0.name.lowercased() == lowerTitle }) {
+            // Om vårt spel är tänkt som framtida, men match är ett gammalt spel och det finns alternativ
+            if g.releaseYear >= currentYear, let rYear = match.releaseYear, rYear < currentYear {
+                if let altFuture = results.first(where: { $0.name.lowercased().hasPrefix(lowerTitle) && ($0.releaseYear ?? 0) >= currentYear }) {
+                    return altFuture
+                }
+            }
             return match
         }
 
-        // 3. Spel med mest betyg och flest omdömen som börjar på samma namn (huvudspelet)
+        // 4. Spel med mest betyg och flest omdömen som börjar på samma namn (huvudspelet)
         let startingMatches = results.filter { $0.name.lowercased().hasPrefix(lowerTitle) }
         if let bestPopular = startingMatches.max(by: { ($0.totalRatingCount ?? 0) < ($1.totalRatingCount ?? 0) }) {
             return bestPopular
         }
 
-        // 4. Mest populära sökresultat totalt
+        // 5. Mest populära sökresultat totalt
         return results.max(by: { ($0.totalRatingCount ?? 0) < ($1.totalRatingCount ?? 0) }) ?? results.first
     }
 
@@ -1513,14 +1527,25 @@ struct GameDetailView: View {
             let game = try await IGDBService.shared.fetchGameDetails(id: id)
             print("[GameDetailView] Successfully loaded remote IGDBGame: '\(game.name)' (ID: \(game.id))")
 
-            // Validera att namnet stämmer skapligt med spelet i biblioteket
+            // Validera att namnet stämmer skapligt med spelet i biblioteket samt årtal
             if let g = currentGame {
                 let localLower = g.title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
                 let remoteLower = game.name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+                let currentYear = Calendar.current.component(.year, from: Date())
 
                 // Om det sparade IGDB-ID:t råkade peka på fel spel (t.ex. ett soundtrack, artbook eller gammalt spin-off)
                 if !remoteLower.contains(localLower) && !localLower.contains(remoteLower) {
                     print("[GameDetailView] Mismatched IGDB ID \(id) ('\(game.name)' vs '\(g.title)'), re-searching best match...")
+                    var updated = g
+                    updated.igdbID = nil
+                    updateLocal(updated)
+                    await ensureRemoteForLocal(updated)
+                    return
+                }
+
+                // Om vårt spel är ett kommande spel men ID:t pekar på ett gammalt spel med samma namn (t.ex. Fable 2004)
+                if g.releaseYear >= currentYear, let rYear = game.releaseYear, rYear < currentYear {
+                    print("[GameDetailView] Mismatched year for upcoming game \(id) ('\(game.name)' year \(rYear) vs expected \(g.releaseYear)), re-searching best match...")
                     var updated = g
                     updated.igdbID = nil
                     updateLocal(updated)

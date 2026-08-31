@@ -73,6 +73,18 @@ struct ExploreView: View {
         store.games.filter { $0.status == .playing }
     }
 
+    private func effectiveReleaseDate(for game: Game) -> Date {
+        if let date = game.releaseDate {
+            return date
+        }
+        let year = game.releaseYear > 0 ? game.releaseYear : 2099
+        var components = DateComponents()
+        components.year = year
+        components.month = 12
+        components.day = 31
+        return Calendar.current.date(from: components) ?? Date.distantFuture
+    }
+
     private var nextWishlistRelease: Game? {
         let now = Date()
         let currentYear = Calendar.current.component(.year, from: now)
@@ -83,15 +95,15 @@ struct ExploreView: View {
                 if let releaseDate = game.releaseDate {
                     return releaseDate > now
                 }
-                return game.releaseYear > currentYear
+                return game.releaseYear >= currentYear
             }
             .sorted { g1, g2 in
-                if let d1 = g1.releaseDate, let d2 = g2.releaseDate {
+                let d1 = effectiveReleaseDate(for: g1)
+                let d2 = effectiveReleaseDate(for: g2)
+                if d1 != d2 {
                     return d1 < d2
                 }
-                if g1.releaseDate != nil { return true }
-                if g2.releaseDate != nil { return false }
-                return g1.releaseYear < g2.releaseYear
+                return g1.title.localizedCaseInsensitiveCompare(g2.title) == .orderedAscending
             }
             .first
     }
@@ -104,6 +116,9 @@ struct ExploreView: View {
     }
 
     private func runInitialLoad() async {
+        if store.games.isEmpty {
+            await store.syncWithRemote()
+        }
         news.reload(platforms: prefs.platforms, minAge: prefs.minAge, libraryGames: store.games)
         async let trFetch: Void = trending.fetch(platformFamilies: prefs.platforms, news: news.items)
         async let upFetch: Void = loadUpcomingHighlight()

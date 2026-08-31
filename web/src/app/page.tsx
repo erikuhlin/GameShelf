@@ -80,6 +80,27 @@ export default function HomePage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedUserId = localStorage.getItem('gameshelf_paired_user_id');
+      const cachedGames = localStorage.getItem('gameshelf_local_games');
+      const cachedCols = localStorage.getItem('gameshelf_local_collections');
+
+      if (cachedGames) {
+        try {
+          const parsed = JSON.parse(cachedGames);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setGames(parsed);
+          }
+        } catch (e) {}
+      }
+
+      if (cachedCols) {
+        try {
+          const parsedCols = JSON.parse(cachedCols);
+          if (Array.isArray(parsedCols) && parsedCols.length > 0) {
+            setCollections(parsedCols);
+          }
+        } catch (e) {}
+      }
+
       const loaded = loadUserProfile();
       setUserProfile(loaded);
       setProfileName(loaded.username);
@@ -382,14 +403,28 @@ export default function HomePage() {
         ]);
 
         if (gamesRes.data) {
-          const mapped = gamesRes.data.map(mapSupabaseGame);
-          setGames(mapped);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('gameshelf_local_games', JSON.stringify(mapped));
-          }
+          setGames((prev) => {
+            const existingMap = new Map(prev.map((g) => [g.id, g]));
+            const mapped = gamesRes.data.map((row: any) => {
+              const game = mapSupabaseGame(row);
+              const existing = existingMap.get(game.id);
+              if (!game.first_release_date && existing?.first_release_date) {
+                game.first_release_date = existing.first_release_date;
+              }
+              if (!game.igdb_id && existing?.igdb_id) {
+                game.igdb_id = existing.igdb_id;
+              }
+              return game;
+            });
 
-          // Berika befintliga spel i bakgrunden
-          enrichGamesWithReleaseDates(mapped, pairedUserId);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('gameshelf_local_games', JSON.stringify(mapped));
+            }
+
+            // Berika saknade spel i bakgrunden
+            enrichGamesWithReleaseDates(mapped, pairedUserId);
+            return mapped;
+          });
         }
 
         if (colRes.data) {

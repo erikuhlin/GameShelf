@@ -144,6 +144,7 @@ export function DiscoverView({
   const nextWishlistRelease = useMemo(() => {
     const now = Date.now();
     const currentYear = new Date().getFullYear();
+
     const candidates = games.filter((g) => {
       if (g.status !== 'Önskelista') return false;
       if (g.first_release_date) {
@@ -153,26 +154,27 @@ export function DiscoverView({
             : Number(g.first_release_date);
         return ms > now;
       }
-      return g.release_year && g.release_year > currentYear;
+      return Boolean(g.release_year && g.release_year >= currentYear);
     });
+
+    const getEffectiveDate = (g: Game): number => {
+      if (g.first_release_date) {
+        return Number(g.first_release_date) < 10000000000
+          ? Number(g.first_release_date) * 1000
+          : Number(g.first_release_date);
+      }
+      if (g.release_year) {
+        return new Date(g.release_year, 11, 31).getTime();
+      }
+      return Infinity;
+    };
 
     return (
       candidates.sort((a, b) => {
-        const timeA = a.first_release_date
-          ? Number(a.first_release_date) < 10000000000
-            ? Number(a.first_release_date) * 1000
-            : Number(a.first_release_date)
-          : a.release_year
-          ? new Date(a.release_year, 11, 31).getTime()
-          : Infinity;
-        const timeB = b.first_release_date
-          ? Number(b.first_release_date) < 10000000000
-            ? Number(b.first_release_date) * 1000
-            : Number(b.first_release_date)
-          : b.release_year
-          ? new Date(b.release_year, 11, 31).getTime()
-          : Infinity;
-        return timeA - timeB;
+        const timeA = getEffectiveDate(a);
+        const timeB = getEffectiveDate(b);
+        if (timeA !== timeB) return timeA - timeB;
+        return a.title.localeCompare(b.title);
       })[0] || null
     );
   }, [games]);
@@ -204,11 +206,11 @@ export function DiscoverView({
     let isCancelled = false;
 
     async function loadDiscoverFeed() {
-      // 1. Läs från sessionStorage om tillgängligt
+      // 1. Läs från localStorage för omedelbar rendering vid första sidöppning
       const cacheKey = `gameshelf_discover_${trendingSort}`;
       if (typeof window !== 'undefined') {
         try {
-          const cached = sessionStorage.getItem(cacheKey);
+          const cached = localStorage.getItem(cacheKey) || sessionStorage.getItem(cacheKey);
           if (cached) {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed.trending) && parsed.trending.length > 0) {
@@ -244,7 +246,9 @@ export function DiscoverView({
 
         if (typeof window !== 'undefined' && (freshTrending.length > 0 || freshUpcoming.length > 0)) {
           try {
-            sessionStorage.setItem(cacheKey, JSON.stringify({ trending: freshTrending, upcoming: freshUpcoming }));
+            const dataToSave = JSON.stringify({ trending: freshTrending, upcoming: freshUpcoming });
+            localStorage.setItem(cacheKey, dataToSave);
+            sessionStorage.setItem(cacheKey, dataToSave);
           } catch (e) {}
         }
       } catch (err) {
@@ -267,13 +271,12 @@ export function DiscoverView({
     let isCancelled = false;
 
     async function loadGenreGames() {
-      setIsLoadingGenre(true);
       setGenreLimit(12);
 
       const cacheKey = `gameshelf_genre_${selectedGenre}_${genreSort}`;
       if (typeof window !== 'undefined') {
         try {
-          const cached = sessionStorage.getItem(cacheKey);
+          const cached = localStorage.getItem(cacheKey) || sessionStorage.getItem(cacheKey);
           if (cached) {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed) && parsed.length > 0) {
@@ -293,7 +296,9 @@ export function DiscoverView({
           setGenreGames(data.results);
           if (typeof window !== 'undefined' && data.results.length > 0) {
             try {
-              sessionStorage.setItem(cacheKey, JSON.stringify(data.results));
+              const str = JSON.stringify(data.results);
+              localStorage.setItem(cacheKey, str);
+              sessionStorage.setItem(cacheKey, str);
             } catch (e) {}
           }
         }

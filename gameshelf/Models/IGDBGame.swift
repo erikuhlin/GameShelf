@@ -143,7 +143,7 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
         if let date = releaseDate {
             return date > Date()
         }
-        if let year = releaseYear, year > Calendar.current.component(.year, from: Date()) {
+        if let year = releaseYear, year >= Calendar.current.component(.year, from: Date()) {
             return true
         }
         return false

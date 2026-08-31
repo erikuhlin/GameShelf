@@ -50,7 +50,7 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         if let date = releaseDate {
             return date > Date()
         }
-        if releaseYear > Calendar.current.component(.year, from: Date()) {
+        if releaseYear >= Calendar.current.component(.year, from: Date()) {
             return true
         }
         return false

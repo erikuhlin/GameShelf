@@ -969,6 +969,8 @@ export default function HomePage() {
             onSelectGame={setSelectedGame}
             onAddGame={handleAddFromDiscover}
             onOpenRouletteModal={() => setIsRouletteModalOpen(true)}
+            userProfile={userProfile}
+            onOpenProfileModal={() => setIsProfileModalOpen(true)}
           />
         ) : viewMode === 'collections' ? (
           <CollectionsView

@@ -22,7 +22,12 @@ import {
   Bookmark,
   BookmarkCheck,
   ChevronDown,
+  Target,
+  Hourglass,
+  Trophy,
 } from 'lucide-react';
+import { UserProfile } from '@/types/profile';
+import { AVATAR_PRESETS } from '@/lib/profileStore';
 
 interface DiscoverViewProps {
   games: Game[];
@@ -30,6 +35,8 @@ interface DiscoverViewProps {
   onAddGame: (game: Game) => void;
   onOpenRouletteModal?: () => void;
   onOpenSearchWithQuery?: (query: string) => void;
+  userProfile?: UserProfile;
+  onOpenProfileModal?: () => void;
 }
 
 interface NewsItem {
@@ -67,6 +74,10 @@ export function DiscoverView({
   games,
   onSelectGame,
   onAddGame,
+  onOpenRouletteModal,
+  onOpenSearchWithQuery,
+  userProfile,
+  onOpenProfileModal,
 }: DiscoverViewProps) {
   const [activeTab, setActiveTab] = useState<'discover' | 'news'>('discover');
 
@@ -128,6 +139,65 @@ export function DiscoverView({
   const currentlyPlaying = useMemo(() => {
     return games.filter((g) => g.status === 'Spelar nu');
   }, [games]);
+
+  // Nästa släpp i din önskelista (identiskt med regeln i iOS-appen)
+  const nextWishlistRelease = useMemo(() => {
+    const now = Date.now();
+    const currentYear = new Date().getFullYear();
+    const candidates = games.filter((g) => {
+      if (g.status !== 'Önskelista') return false;
+      if (g.first_release_date) {
+        const ms =
+          Number(g.first_release_date) < 10000000000
+            ? Number(g.first_release_date) * 1000
+            : Number(g.first_release_date);
+        return ms > now;
+      }
+      return g.release_year && g.release_year > currentYear;
+    });
+
+    return (
+      candidates.sort((a, b) => {
+        const timeA = a.first_release_date
+          ? Number(a.first_release_date) < 10000000000
+            ? Number(a.first_release_date) * 1000
+            : Number(a.first_release_date)
+          : a.release_year
+          ? new Date(a.release_year, 11, 31).getTime()
+          : Infinity;
+        const timeB = b.first_release_date
+          ? Number(b.first_release_date) < 10000000000
+            ? Number(b.first_release_date) * 1000
+            : Number(b.first_release_date)
+          : b.release_year
+          ? new Date(b.release_year, 11, 31).getTime()
+          : Infinity;
+        return timeA - timeB;
+      })[0] || null
+    );
+  }, [games]);
+
+  const nextWishlistDays = useMemo(() => {
+    if (!nextWishlistRelease?.first_release_date) return null;
+    const ms =
+      Number(nextWishlistRelease.first_release_date) < 10000000000
+        ? Number(nextWishlistRelease.first_release_date) * 1000
+        : Number(nextWishlistRelease.first_release_date);
+    const diff = ms - Date.now();
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  }, [nextWishlistRelease]);
+
+  // Spelmål 2026 beräkning
+  const completedGamesCount = useMemo(() => {
+    return games.filter((g) => g.status === 'Klar').length;
+  }, [games]);
+
+  const annualGoal = userProfile?.annualGamingGoal || 12;
+  const goalProgressPct = Math.min(100, Math.round((completedGamesCount / annualGoal) * 100));
+
+  const avatarPreset = userProfile?.avatarType?.startsWith('preset:')
+    ? AVATAR_PRESETS.find((p) => p.id === userProfile.avatarType)
+    : null;
 
   // Hämta trending och upcoming
   useEffect(() => {
@@ -383,7 +453,164 @@ export function DiscoverView({
 
       {activeTab === 'discover' ? (
         <div className="space-y-8">
-          {/* 2. Hero: Smart Spelsnurra / Roulette Card */}
+          {/* 1. Välkomsthälsning & Spelmål 2026 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Välkomstkort */}
+            <div className="md:col-span-2 bg-gradient-to-r from-zinc-900/90 via-zinc-900/60 to-zinc-950 border border-zinc-800/80 rounded-3xl p-5 sm:p-6 flex items-center gap-4 sm:gap-5 shadow-lg">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl sm:text-3xl shadow-xl overflow-hidden border border-white/10 bg-zinc-800">
+                {userProfile?.avatarCustomImage ? (
+                  <img src={userProfile.avatarCustomImage} alt="Avatar" className="w-full h-full object-cover" />
+                ) : avatarPreset ? (
+                  <div
+                    className="w-full h-full flex items-center justify-center text-2xl sm:text-3xl"
+                    style={{
+                      background: `linear-gradient(135deg, ${avatarPreset.gradientColors[0]}, ${avatarPreset.gradientColors[1]})`,
+                    }}
+                  >
+                    <span>{avatarPreset.icon}</span>
+                  </div>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-brand-red to-rose-700 text-white font-black text-xl">
+                    {userProfile?.username ? userProfile.username.charAt(0).toUpperCase() : 'G'}
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight truncate">
+                    Hej {userProfile?.username || 'Gamer'}!
+                  </h2>
+                  <span className="text-xl">👋</span>
+                </div>
+                <p className="text-xs sm:text-sm text-zinc-400 mt-1 leading-relaxed line-clamp-1 sm:line-clamp-none">
+                  Håll koll på dina spel, kommande släpp och utforska nya världar.
+                </p>
+              </div>
+            </div>
+
+            {/* Spelmål 2026 kort */}
+            <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-3xl p-5 flex flex-col justify-between shadow-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-400">
+                  <Trophy className="w-4 h-4 text-amber-400" />
+                  <span>Spelmål 2026</span>
+                </div>
+                {onOpenProfileModal && (
+                  <button
+                    onClick={onOpenProfileModal}
+                    className="text-[11px] font-semibold text-zinc-400 hover:text-white transition cursor-pointer"
+                  >
+                    Ändra →
+                  </button>
+                )}
+              </div>
+
+              <div className="my-2">
+                <div className="flex items-baseline justify-between mb-1.5">
+                  <span className="text-xl font-black text-white font-mono">
+                    {completedGamesCount} / {annualGoal}
+                  </span>
+                  <span className="text-xs font-bold text-zinc-400 font-mono">
+                    {goalProgressPct}%
+                  </span>
+                </div>
+                <div className="w-full h-2.5 rounded-full bg-zinc-950 border border-zinc-800 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-amber-500 to-emerald-400 rounded-full transition-all duration-500"
+                    style={{ width: `${goalProgressPct}%` }}
+                  />
+                </div>
+              </div>
+
+              <span className="text-[11px] text-zinc-500 truncate">
+                {goalProgressPct >= 100
+                  ? 'Målet uppnått! Fantastiskt spelår! 🎉'
+                  : `${annualGoal - completedGamesCount} spel kvar till målet`}
+              </span>
+            </div>
+          </div>
+
+          {/* 2. Nästa släpp i din önskelista (om sådant finns) */}
+          {nextWishlistRelease && (
+            <div
+              onClick={() => onSelectGame(nextWishlistRelease)}
+              className="group relative overflow-hidden rounded-3xl bg-gradient-to-r from-red-950/40 via-zinc-900/90 to-zinc-950 border border-red-900/40 hover:border-brand-red/60 p-5 sm:p-6 shadow-xl cursor-pointer transition duration-300"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+                <div className="flex items-center gap-4 sm:gap-5 min-w-0">
+                  {/* Omslagsbild */}
+                  <div className="w-16 h-22 sm:w-20 sm:h-28 rounded-2xl overflow-hidden bg-zinc-950 flex-shrink-0 border border-zinc-800 shadow-2xl group-hover:scale-105 transition duration-300">
+                    {nextWishlistRelease.cover_url ? (
+                      <img
+                        src={nextWishlistRelease.cover_url}
+                        alt={nextWishlistRelease.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Gamepad className="w-8 h-8 text-zinc-600" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-brand-red/20 border border-brand-red/50 text-[10px] sm:text-[11px] font-black text-rose-300 uppercase tracking-wider">
+                        <Hourglass className="w-3 h-3 text-brand-red animate-pulse" />
+                        <span>Nästa släpp i din önskelista</span>
+                      </span>
+                    </div>
+
+                    <h3 className="text-base sm:text-xl font-black text-white group-hover:text-red-400 transition truncate">
+                      {nextWishlistRelease.title}
+                    </h3>
+
+                    <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-zinc-400">
+                      {nextWishlistRelease.first_release_date ? (
+                        <span className="flex items-center gap-1 font-semibold text-zinc-300">
+                          <Calendar className="w-3.5 h-3.5 text-brand-red" />
+                          {new Date(
+                            Number(nextWishlistRelease.first_release_date) *
+                              (Number(nextWishlistRelease.first_release_date) < 10000000000 ? 1000 : 1)
+                          ).toLocaleDateString('sv-SE', {
+                            weekday: 'short',
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </span>
+                      ) : (
+                        <span>{nextWishlistRelease.release_year}</span>
+                      )}
+                      {nextWishlistRelease.platforms?.[0] && (
+                        <>
+                          <span>•</span>
+                          <span>{nextWishlistRelease.platforms[0]}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Nedräkningsbadge & Knapp */}
+                <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                  {nextWishlistDays !== null && (
+                    <div className="px-3.5 py-2 rounded-2xl bg-zinc-950/80 border border-zinc-800 text-center shadow-inner">
+                      <span className="text-xs text-zinc-400 block font-semibold">Tid kvar</span>
+                      <span className="text-base sm:text-lg font-black text-rose-400 font-mono">
+                        {nextWishlistDays === 0 ? 'Släpps idag! 🎉' : `Om ${nextWishlistDays} d`}
+                      </span>
+                    </div>
+                  )}
+                  <div className="p-3 rounded-2xl bg-zinc-800/80 group-hover:bg-brand-red group-hover:text-white text-zinc-300 transition shadow-md">
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 3. Hero: Smart Spelsnurra / Roulette Card */}
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-900/90 via-zinc-950/95 to-black border border-zinc-800/80 p-5 sm:p-7 shadow-xl">
             <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
               <div className="max-w-md text-center md:text-left">
@@ -521,7 +748,104 @@ export function DiscoverView({
             </div>
           )}
 
-          {/* 4. 🔥 Trendar just nu */}
+          {/* 4. 📅 Kommande spelsläpp (Releasekalender från IGDB) */}
+          {upcomingGames.length > 0 && (
+            <div className="space-y-3.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-brand-red" />
+                  <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">
+                    Kommande spelsläpp (Releasekalender)
+                  </h3>
+                </div>
+                <span className="text-xs text-zinc-400 font-medium">
+                  {upcomingGames.length} heta släpp
+                </span>
+              </div>
+
+              <div className="flex gap-3.5 overflow-x-auto pb-2.5 scrollbar-thin scrollbar-thumb-zinc-800">
+                {upcomingGames.map((game) => {
+                  const inLibrary = isGameInLibrary(game.igdb_id, game.title);
+                  const relDate = game.first_release_date
+                    ? new Date(
+                        Number(game.first_release_date) *
+                          (Number(game.first_release_date) < 10000000000 ? 1000 : 1)
+                      ).toLocaleDateString('sv-SE', {
+                        month: 'short',
+                        day: 'numeric',
+                      })
+                    : (game.release_year ? String(game.release_year) : null);
+
+                  return (
+                    <div
+                      key={game.id}
+                      className="flex-shrink-0 w-36 sm:w-44 flex flex-col group bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden p-2.5 transition hover:border-zinc-700 relative"
+                    >
+                      {/* Datum-badge */}
+                      {relDate && (
+                        <div className="absolute top-4 left-4 z-10 px-2 py-0.5 rounded-md text-[10px] font-black shadow-md backdrop-blur-md bg-red-600/90 text-white border border-red-400/40 capitalize">
+                          {relDate}
+                        </div>
+                      )}
+
+                      <div
+                        onClick={() => onSelectGame(game)}
+                        className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-zinc-950 mb-2 relative cursor-pointer"
+                      >
+                        {game.cover_url ? (
+                          <img
+                            src={game.cover_url}
+                            alt={game.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Gamepad className="w-6 h-6 text-zinc-600" />
+                          </div>
+                        )}
+                      </div>
+
+                      <h4
+                        onClick={() => onSelectGame(game)}
+                        className="text-xs font-bold text-zinc-100 truncate cursor-pointer hover:text-red-400 transition"
+                      >
+                        {game.title}
+                      </h4>
+
+                      <span className="text-[10px] text-zinc-400 mt-0.5 truncate">
+                        {game.platforms?.[0] || 'Kommande'}
+                      </span>
+
+                      <button
+                        onClick={() => onAddGame({ ...game, status: 'Önskelista' })}
+                        disabled={inLibrary}
+                        className={`mt-2.5 w-full py-1.5 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 transition ${
+                          inLibrary
+                            ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-default'
+                            : 'bg-zinc-800 hover:bg-brand-red text-zinc-200 hover:text-white border border-zinc-700 hover:border-brand-red cursor-pointer'
+                        }`}
+                      >
+                        {inLibrary ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-400" />
+                            <span>I samlingen</span>
+                          </>
+                        ) : (
+                          <>
+                            <Bookmark className="w-3 h-3 text-amber-400" />
+                            <span>Önskelista</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 5. 🔥 Trendar just nu */}
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">

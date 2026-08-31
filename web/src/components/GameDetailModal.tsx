@@ -26,7 +26,9 @@ import {
   ExternalLink,
   ChevronRight,
   ShieldCheck,
+  Share2,
 } from 'lucide-react';
+import { GameShareModal } from './GameShareModal';
 
 interface GameDetailModalProps {
   game: Game | null;
@@ -94,6 +96,7 @@ export function GameDetailModal({
   const [remoteDetails, setRemoteDetails] = useState<RemoteDetails | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [activeLightboxImg, setActiveLightboxImg] = useState<string | null>(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   // Återställ formulärstate när ett nytt spel öppnas
   useEffect(() => {
@@ -437,13 +440,23 @@ export function GameDetailModal({
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition flex-shrink-0 ml-3"
-            aria-label="Stäng"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+            <button
+              onClick={() => setIsShareModalOpen(true)}
+              className="p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 hover:text-white transition flex items-center gap-1.5 text-xs font-bold border border-zinc-700/60 shadow-sm cursor-pointer"
+              title="Dela spelkort som bild eller länk"
+            >
+              <Share2 className="w-4 h-4 text-red-500" />
+              <span className="hidden sm:inline">Dela</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition flex-shrink-0"
+              aria-label="Stäng"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}
@@ -1020,6 +1033,23 @@ export function GameDetailModal({
           />
         </div>
       )}
+
+      {/* Delningskort (Share Card Modal) */}
+      <GameShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        game={game}
+        developer={displayDevelopers[0]}
+        releaseDateText={
+          liveReleaseDate
+            ? new Date(liveReleaseDate * 1000).toLocaleDateString('sv-SE', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+              })
+            : undefined
+        }
+      />
     </div>
   );
 }

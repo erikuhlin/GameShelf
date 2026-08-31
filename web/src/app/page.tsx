@@ -62,7 +62,7 @@ export default function HomePage() {
   // Library Sorting & Filtering state
   const [librarySort, setLibrarySort] = useState<LibrarySortOption>('dateAdded');
   const [libraryPlatformFilter, setLibraryPlatformFilter] = useState<string>('Alla');
-  const [libraryOwnershipFilter, setLibraryOwnershipFilter] = useState<'all' | 'owned' | 'memories'>('all');
+  const [libraryOwnershipFilter, setLibraryOwnershipFilter] = useState<'all' | 'owned' | 'wishlist'>('all');
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -121,7 +121,9 @@ export default function HomePage() {
       const savedPlatform = localStorage.getItem('gameshelf_library_platform');
       if (savedPlatform) setLibraryPlatformFilter(savedPlatform);
       const savedOwnership = localStorage.getItem('gameshelf_library_ownership') as any;
-      if (savedOwnership) setLibraryOwnershipFilter(savedOwnership);
+      if (savedOwnership) {
+        setLibraryOwnershipFilter(savedOwnership === 'memories' ? 'wishlist' : savedOwnership);
+      }
 
       const loaded = loadUserProfile();
       setUserProfile(loaded);
@@ -567,7 +569,7 @@ export default function HomePage() {
     setLibraryPlatformFilter(p);
     if (typeof window !== 'undefined') localStorage.setItem('gameshelf_library_platform', p);
   };
-  const handleOwnershipChange = (o: 'all' | 'owned' | 'memories') => {
+  const handleOwnershipChange = (o: 'all' | 'owned' | 'wishlist') => {
     setLibraryOwnershipFilter(o);
     if (typeof window !== 'undefined') localStorage.setItem('gameshelf_library_ownership', o);
   };
@@ -618,6 +620,24 @@ export default function HomePage() {
     return ['Alla', ...Array.from(set).sort()];
   }, [games]);
 
+  // Hjälpfunktion för att hämta lanserings-tidsstämpel i millisekunder
+  const getReleaseTimestamp = (game: Game): number => {
+    if (game.first_release_date) {
+      return game.first_release_date < 1e11
+        ? game.first_release_date * 1000
+        : game.first_release_date;
+    }
+    if (game.release_year && game.release_year > 0) {
+      return new Date(game.release_year, 0, 1).getTime();
+    }
+    return 0;
+  };
+
+  // Aktiva spel som spelas just nu
+  const playingNowGames = useMemo(() => {
+    return games.filter((g) => g.status === 'Spelar nu' && g.is_owned);
+  }, [games]);
+
   // Filtrerade och sorterade spel
   const filteredGames = useMemo(() => {
     let result = games.filter((game) => {
@@ -626,11 +646,11 @@ export default function HomePage() {
         return false;
       }
 
-      // 2. Ägarskapsfilter
-      if (libraryOwnershipFilter === 'owned' && !game.is_owned) {
+      // 2. Ägarskapsfilter / Önskelista
+      if (libraryOwnershipFilter === 'owned' && (!game.is_owned || game.status === 'Önskelista')) {
         return false;
       }
-      if (libraryOwnershipFilter === 'memories' && game.is_owned) {
+      if (libraryOwnershipFilter === 'wishlist' && (game.is_owned && game.status !== 'Önskelista')) {
         return false;
       }
 
@@ -706,10 +726,30 @@ export default function HomePage() {
         result.sort((a, b) => (b.rating || 0) - (a.rating || 0));
         break;
       case 'releaseYearDesc':
-        result.sort((a, b) => (b.release_year || 0) - (a.release_year || 0));
+        // Jämför lanseringsdatum kronologiskt fallande (nyast först) baserat på exakt datum
+        result.sort((a, b) => {
+          const dateA = getReleaseTimestamp(a);
+          const dateB = getReleaseTimestamp(b);
+          if (dateA !== dateB) {
+            if (dateA === 0) return 1;
+            if (dateB === 0) return -1;
+            return dateB - dateA;
+          }
+          return a.title.localeCompare(b.title, 'sv');
+        });
         break;
       case 'releaseYearAsc':
-        result.sort((a, b) => (a.release_year || 9999) - (b.release_year || 9999));
+        // Jämför lanseringsdatum kronologiskt stigande (äldst först) baserat på exakt datum
+        result.sort((a, b) => {
+          const dateA = getReleaseTimestamp(a);
+          const dateB = getReleaseTimestamp(b);
+          if (dateA !== dateB) {
+            if (dateA === 0) return 1;
+            if (dateB === 0) return -1;
+            return dateA - dateB;
+          }
+          return a.title.localeCompare(b.title, 'sv');
+        });
         break;
       case 'hours':
         result.sort(
@@ -1215,8 +1255,8 @@ export default function HomePage() {
                 <option value="titleAsc">Titel (A–Ö)</option>
                 <option value="titleDesc">Titel (Ö–A)</option>
                 <option value="rating">Högst betyg ⭐</option>
-                <option value="releaseYearDesc">Lanseringsår (Nyast först)</option>
-                <option value="releaseYearAsc">Lanseringsår (Äldst först)</option>
+                <option value="releaseYearDesc">Lanseringsdatum (Nyast först)</option>
+                <option value="releaseYearAsc">Lanseringsdatum (Äldst först)</option>
                 <option value="hours">Speltid ⏱️</option>
               </select>
 
@@ -1239,11 +1279,11 @@ export default function HomePage() {
               )}
             </div>
 
-            {/* Höger: Ägarskapsfilter (Alla / I ägo / Spelminnen) */}
+            {/* Höger: Ägarskapsfilter (Alla / I ägo / Önskelista) */}
             <div className="flex items-center gap-1 bg-zinc-900/90 border border-zinc-800/90 rounded-xl p-1 shrink-0">
               <button
                 onClick={() => handleOwnershipChange('all')}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
                   libraryOwnershipFilter === 'all'
                     ? 'bg-zinc-800 text-white shadow-sm'
                     : 'text-zinc-400 hover:text-zinc-200'
@@ -1253,25 +1293,25 @@ export default function HomePage() {
               </button>
               <button
                 onClick={() => handleOwnershipChange('owned')}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
                   libraryOwnershipFilter === 'owned'
                     ? 'bg-zinc-800 text-white shadow-sm'
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
-                title="Endast spel du äger fysiskt eller digitalt"
+                title="Endast spel du äger i ditt bibliotek"
               >
-                I ägo 🎮 ({games.filter((g) => g.is_owned).length})
+                I ägo 🎮 ({games.filter((g) => g.is_owned && g.status !== 'Önskelista').length})
               </button>
               <button
-                onClick={() => handleOwnershipChange('memories')}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
-                  libraryOwnershipFilter === 'memories'
+                onClick={() => handleOwnershipChange('wishlist')}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
+                  libraryOwnershipFilter === 'wishlist'
                     ? 'bg-zinc-800 text-white shadow-sm'
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
-                title="Spel du har spelat men inte äger längre"
+                title="Spel på din önskelista"
               >
-                Spelminnen 📜 ({games.filter((g) => !g.is_owned).length})
+                Önskelista 🎁 ({games.filter((g) => !g.is_owned || g.status === 'Önskelista').length})
               </button>
             </div>
           </div>
@@ -1333,11 +1373,81 @@ export default function HomePage() {
           </div>
         ) : (
           <>
+            {/* Spelar just nu - horisontell strip överst i biblioteket (motsvarande appen) */}
+            {selectedStatus === 'Alla' &&
+              !searchQuery.trim() &&
+              libraryOwnershipFilter !== 'wishlist' &&
+              playingNowGames.length > 0 && (
+                <div className="mb-6 space-y-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                    </span>
+                    <h3 className="text-xs font-black text-white uppercase tracking-wider">
+                      Spelar just nu
+                    </h3>
+                    <span className="text-xs text-zinc-500 font-semibold">
+                      ({playingNowGames.length})
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-none">
+                    {playingNowGames.map((game) => (
+                      <div
+                        key={`playing-${game.id}`}
+                        onClick={() => setSelectedGame(game)}
+                        className="flex items-center gap-3 p-2 bg-zinc-900/80 hover:bg-zinc-800/80 border border-zinc-800/80 hover:border-zinc-700 rounded-2xl cursor-pointer transition flex-shrink-0 w-64 sm:w-72 shadow-md group"
+                      >
+                        <div className="w-12 h-16 rounded-xl overflow-hidden bg-zinc-800 flex-shrink-0 border border-zinc-700/60 aspect-[3/4]">
+                          {game.cover_url ? (
+                            <img
+                              src={game.cover_url}
+                              alt={game.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-zinc-600">
+                              🎮
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            {game.platforms && game.platforms[0] && (
+                              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                                {game.platforms[0]}
+                              </span>
+                            )}
+                            {game.rating && (
+                              <span className="text-[10px] font-bold text-amber-400 ml-auto flex items-center gap-0.5">
+                                ★ {game.rating}
+                              </span>
+                            )}
+                          </div>
+                          <h4 className="text-xs font-bold text-white truncate group-hover:text-brand-red transition">
+                            {game.title}
+                          </h4>
+                          <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
+                            {game.developers?.[0] ||
+                              (game.estimated_hours ? `${game.estimated_hours}h speltid` : 'Aktiv')}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
             {viewMode === 'shelf' && (
               <ShelfView games={filteredGames} onSelectGame={setSelectedGame} />
             )}
             {viewMode === 'grid' && (
-              <GridView games={filteredGames} onSelectGame={setSelectedGame} />
+              <GridView
+                games={filteredGames}
+                onSelectGame={setSelectedGame}
+                groupByYear={librarySort === 'releaseYearDesc' || librarySort === 'releaseYearAsc'}
+              />
             )}
             {viewMode === 'list' && (
               <ListView games={filteredGames} onSelectGame={setSelectedGame} />

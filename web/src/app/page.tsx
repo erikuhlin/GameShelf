@@ -1287,6 +1287,7 @@ export default function HomePage() {
             onOpenRouletteModal={() => setIsRouletteModalOpen(true)}
             userProfile={userProfile}
             onOpenProfileModal={() => setIsProfileModalOpen(true)}
+            onUpdateProfile={handleUpdateProfile}
           />
         ) : viewMode === 'collections' ? (
           <CollectionsView

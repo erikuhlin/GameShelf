@@ -84,6 +84,7 @@ struct LibraryView: View {
     @State private var selectedStatusFilter: PlayStatusFilter = .all
     @State private var selectedSort: SortOption = .title
     @State private var showingCreateCollectionSheet = false
+    @State private var showingProfileSheet = false
     @State private var searchText = ""
     @State private var selectedPlatformIDs: Set<String> = []
     @State private var groupByYear: Bool = true
@@ -456,9 +457,29 @@ struct LibraryView: View {
         }
         .navigationTitle("Bibliotek")
         .navigationBarTitleDisplayMode(.inline)
-            .sheet(isPresented: $showingCreateCollectionSheet) {
-                CreateOrEditCollectionSheet()
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showingProfileSheet = true
+                } label: {
+                    UserAvatarView(size: 32)
+                }
+                .buttonStyle(.plain)
             }
+        }
+        .sheet(isPresented: $showingProfileSheet) {
+            NavigationStack {
+                ProfileView()
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Klar") { showingProfileSheet = false }
+                        }
+                    }
+            }
+        }
+        .sheet(isPresented: $showingCreateCollectionSheet) {
+            CreateOrEditCollectionSheet()
+        }
             .onAppear {
                 if store.games.isEmpty {
                     Task {

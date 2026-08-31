@@ -608,7 +608,11 @@ struct LiveDiscoverySection: View {
 
         // 1. Primär signal: Användarens Favoritspel från profilen
         let favoriteGames: [Game] = profile.favoriteGameIDs.compactMap { favID in
-            store.games.first(where: { $0.id.uuidString == favID })
+            let lower = favID.lowercased()
+            return store.games.first(where: {
+                $0.id.uuidString.lowercased() == lower ||
+                ($0.igdbID != nil && String($0.igdbID!) == favID)
+            })
         }
 
         // 2. Aktiva spel som spelas just nu

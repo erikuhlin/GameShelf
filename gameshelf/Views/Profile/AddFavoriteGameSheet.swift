@@ -18,12 +18,19 @@ struct AddFavoriteGameSheet: View {
 
     private var filteredLibraryGames: [Game] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let lowerFavIDs = Set(profile.favoriteGameIDs.map { $0.lowercased() })
         if q.isEmpty {
-            return store.games.filter { !profile.favoriteGameIDs.contains($0.id.uuidString) }
+            return store.games.filter {
+                let uuid = $0.id.uuidString.lowercased()
+                let igdbStr = $0.igdbID != nil ? String($0.igdbID!) : nil
+                return !lowerFavIDs.contains(uuid) && (igdbStr == nil || !lowerFavIDs.contains(igdbStr!))
+            }
         }
         return store.games.filter {
-            !profile.favoriteGameIDs.contains($0.id.uuidString) &&
-            $0.title.lowercased().contains(q)
+            let uuid = $0.id.uuidString.lowercased()
+            let igdbStr = $0.igdbID != nil ? String($0.igdbID!) : nil
+            let notFav = !lowerFavIDs.contains(uuid) && (igdbStr == nil || !lowerFavIDs.contains(igdbStr!))
+            return notFav && $0.title.lowercased().contains(q)
         }
     }
 
@@ -196,7 +203,11 @@ struct AddFavoriteGameSheet: View {
                 await MainActor.run {
                     self.igdbResults = results.filter { igdbG in
                         !profile.favoriteGameIDs.contains(where: { favID in
-                            store.games.first(where: { $0.id.uuidString == favID })?.igdbID == igdbG.id
+                            let lower = favID.lowercased()
+                            return store.games.first(where: {
+                                $0.id.uuidString.lowercased() == lower ||
+                                ($0.igdbID != nil && String($0.igdbID!) == favID)
+                            })?.igdbID == igdbG.id
                         })
                     }
                     self.isSearchingIGDB = false

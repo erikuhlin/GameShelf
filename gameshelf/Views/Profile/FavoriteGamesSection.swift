@@ -15,7 +15,11 @@ struct FavoriteGamesSection: View {
 
     private var favoriteGames: [Game] {
         profile.favoriteGameIDs.compactMap { id in
-            store.games.first(where: { $0.id.uuidString == id })
+            let lower = id.lowercased()
+            return store.games.first(where: {
+                $0.id.uuidString.lowercased() == lower ||
+                ($0.igdbID != nil && String($0.igdbID!) == id)
+            })
         }
     }
 

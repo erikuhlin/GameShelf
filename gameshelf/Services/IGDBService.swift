@@ -475,16 +475,16 @@ struct TrendingGameResult: Sendable {
     }
 
     /// Hämtar rekommenderade aktuella spel baserat på en lista av genrer
-    func fetchRecommendations(forGenres genres: [String], limit: Int = 15) async throws -> [IGDBGame] {
+    func fetchRecommendations(forGenres genres: [String], limit: Int = 35) async throws -> [IGDBGame] {
         let token = try await IGDBAuthManager.shared.getValidToken()
         guard let url = URL(string: "https://api.igdb.com/v4/games") else {
             throw URLError(.badURL)
         }
         let now = Int(Date().timeIntervalSince1970)
-        let threeYearsAgo = now - (1095 * 24 * 3600) // Senaste 3 åren
+        let fiveYearsAgo = now - (1825 * 24 * 3600) // Senaste 5 åren för rikare variation
 
         var genreClauses: [String] = []
-        for g in genres.prefix(3) {
+        for g in genres.prefix(4) {
             let safe = g.replacingOccurrences(of: "\"", with: "\\\"")
             genreClauses.append("genres.name = \"\(safe)\"")
         }
@@ -492,9 +492,9 @@ struct TrendingGameResult: Sendable {
 
         let bodyString = """
         fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, total_rating, total_rating_count;
-        where first_release_date > \(threeYearsAgo) & first_release_date <= \(now) & cover != null & total_rating > 75 & total_rating_count > 5\(genreCondition);
+        where first_release_date > \(fiveYearsAgo) & first_release_date <= \(now) & cover != null & total_rating > 70 & total_rating_count > 4\(genreCondition);
         sort total_rating desc;
-        limit \(limit);
+        limit \(max(30, limit));
         """
         return try await requestGames(body: bodyString, url: url, token: token)
     }

@@ -37,6 +37,7 @@ interface DiscoverViewProps {
   onOpenSearchWithQuery?: (query: string) => void;
   userProfile?: UserProfile;
   onOpenProfileModal?: () => void;
+  onUpdateProfile?: (updated: UserProfile) => void;
 }
 
 interface NewsItem {
@@ -152,8 +153,13 @@ export function DiscoverView({
   onOpenSearchWithQuery,
   userProfile,
   onOpenProfileModal,
+  onUpdateProfile,
 }: DiscoverViewProps) {
   const [activeTab, setActiveTab] = useState<'discover' | 'news'>('discover');
+
+  // Spelmål editing state
+  const [isEditingGoal, setIsEditingGoal] = useState(false);
+  const [goalInput, setGoalInput] = useState<number>(userProfile?.annualGamingGoal || 12);
 
   // --- Discover State ---
   const [trendingGames, setTrendingGames] = useState<Game[]>([]);
@@ -263,9 +269,9 @@ export function DiscoverView({
     return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
   }, [nextWishlistRelease]);
 
-  // Spelmål 2026 beräkning
+  // Spelmål 2026 beräkning (räknar endast aktiva ägda spel, exkluderar gamla spelminnen)
   const completedGamesCount = useMemo(() => {
-    return games.filter((g) => g.status === 'Klar').length;
+    return games.filter((g) => g.status === 'Klar' && g.is_owned).length;
   }, [games]);
 
   const annualGoal = userProfile?.annualGamingGoal || 12;
@@ -634,14 +640,14 @@ export function DiscoverView({
                   </div>
                 )}
               </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight truncate">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight">
                     Hej {userProfile?.username || 'Gamer'}!
                   </h2>
                   <span className="text-xl">👋</span>
                 </div>
-                <p className="text-xs sm:text-sm text-zinc-400 mt-1 leading-relaxed line-clamp-1 sm:line-clamp-none">
+                <p className="text-xs sm:text-sm text-zinc-400 mt-1 leading-relaxed">
                   Håll koll på dina spel, kommande släpp och utforska nya världar.
                 </p>
               </div>
@@ -654,55 +660,90 @@ export function DiscoverView({
                   <Trophy className="w-4 h-4 text-amber-400" />
                   <span>Spelmål 2026</span>
                 </div>
-                {onOpenProfileModal && (
-                  <button
-                    onClick={onOpenProfileModal}
-                    className="text-[11px] font-semibold text-zinc-400 hover:text-white transition cursor-pointer"
-                  >
-                    Ändra mål →
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGoalInput(userProfile?.annualGamingGoal || 12);
+                    setIsEditingGoal(!isEditingGoal);
+                  }}
+                  className="text-[11px] font-semibold text-zinc-400 hover:text-white transition cursor-pointer"
+                >
+                  {isEditingGoal ? 'Stäng ✕' : 'Ändra mål →'}
+                </button>
               </div>
 
-              <div className="my-2">
-                <div className="flex items-baseline justify-between mb-1.5">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xl font-black text-white font-mono">
-                      {completedGamesCount >= annualGoal
-                        ? `${completedGamesCount} klara`
-                        : `${completedGamesCount} / ${annualGoal}`}
-                    </span>
-                    {completedGamesCount >= annualGoal && (
-                      <span className="text-[11px] font-bold text-emerald-400 font-mono">
-                        (Mål: {annualGoal})
-                      </span>
-                    )}
+              {isEditingGoal ? (
+                <div className="my-2.5 space-y-2.5 p-3 bg-zinc-950/80 rounded-2xl border border-zinc-800">
+                  <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium">
+                    <span>Välj mål för 2026:</span>
+                    <span className="font-bold text-amber-400">{goalInput} spel</span>
                   </div>
-                  <span
-                    className={`text-xs font-bold font-mono ${
-                      completedGamesCount >= annualGoal ? 'text-emerald-400' : 'text-zinc-400'
-                    }`}
-                  >
-                    {completedGamesCount >= annualGoal ? '100% 🏆' : `${goalProgressPct}%`}
-                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {[12, 25, 50, 75, 100].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => {
+                          setGoalInput(preset);
+                          if (userProfile && onUpdateProfile) {
+                            onUpdateProfile({ ...userProfile, annualGamingGoal: preset });
+                          }
+                          setIsEditingGoal(false);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                          annualGoal === preset
+                            ? 'bg-amber-500 text-zinc-950 shadow-sm'
+                            : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800 border border-zinc-800'
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="w-full h-2.5 rounded-full bg-zinc-950 border border-zinc-800 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      completedGamesCount >= annualGoal
-                        ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
-                        : 'bg-gradient-to-r from-amber-500 to-emerald-400'
-                    }`}
-                    style={{ width: `${goalProgressPct}%` }}
-                  />
-                </div>
-              </div>
+              ) : (
+                <>
+                  <div className="my-2">
+                    <div className="flex items-baseline justify-between mb-1.5">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-xl font-black text-white font-mono">
+                          {completedGamesCount >= annualGoal
+                            ? `${completedGamesCount} klara`
+                            : `${completedGamesCount} / ${annualGoal}`}
+                        </span>
+                        {completedGamesCount >= annualGoal && (
+                          <span className="text-[11px] font-bold text-emerald-400 font-mono">
+                            (Mål: {annualGoal})
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className={`text-xs font-bold font-mono ${
+                          completedGamesCount >= annualGoal ? 'text-emerald-400' : 'text-zinc-400'
+                        }`}
+                      >
+                        {completedGamesCount >= annualGoal ? '100% 🏆' : `${goalProgressPct}%`}
+                      </span>
+                    </div>
+                    <div className="w-full h-2.5 rounded-full bg-zinc-950 border border-zinc-800 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          completedGamesCount >= annualGoal
+                            ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                            : 'bg-gradient-to-r from-amber-500 to-emerald-400'
+                        }`}
+                        style={{ width: `${goalProgressPct}%` }}
+                      />
+                    </div>
+                  </div>
 
-              <span className="text-[11px] text-zinc-400 truncate font-medium">
-                {completedGamesCount >= annualGoal
-                  ? 'Målet uppnått! Fantastiskt spelår! 🎉'
-                  : `${annualGoal - completedGamesCount} spel kvar till målet`}
-              </span>
+                  <span className="text-[11px] text-zinc-400 font-medium">
+                    {completedGamesCount >= annualGoal
+                      ? 'Målet uppnått! Fantastiskt spelår! 🎉'
+                      : `${Math.max(0, annualGoal - completedGamesCount)} spel kvar till målet`}
+                  </span>
+                </>
+              )}
             </div>
           </div>
 

@@ -741,8 +741,9 @@ struct AddGameView: View {
                 for g in userTopGenres where !g.isEmpty { counts[g, default: 0] += 1 }
                 let top = counts.sorted { $0.value > $1.value }.prefix(3).map(\.key)
                 if top.isEmpty { return [] }
-                let candidates = try await IGDBService.shared.fetchRecommendations(forGenres: Array(top), limit: 12)
-                return candidates.filter { !libraryIDs.contains($0.id) && !libraryTitles.contains($0.name.lowercased()) }
+                let candidates = try await IGDBService.shared.fetchRecommendations(forGenres: Array(top), limit: 35)
+                let unowned = candidates.filter { !libraryIDs.contains($0.id) && !libraryTitles.contains($0.name.lowercased()) }
+                return Array(unowned.shuffled().prefix(8))
             }()
 
             let userPlatforms = Array(profile.platforms)

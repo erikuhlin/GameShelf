@@ -57,19 +57,29 @@ export function ProfileModal({
     return calculateSpelDNA(libraryGames, profile.playFor);
   }, [libraryGames, profile.playFor]);
 
-  // Hämta favoritspelobjekt
+  // Hämta favoritspelobjekt med skiftlägesokänslig UUID och IGDB ID matchning
   const favoriteGames = useMemo(() => {
     return profile.favoriteGameIDs
-      .map((id) => libraryGames.find((g) => g.id === id))
+      .map((id) => {
+        const lower = id.toLowerCase();
+        return libraryGames.find(
+          (g) =>
+            g.id.toLowerCase() === lower ||
+            (g.igdb_id && String(g.igdb_id) === id)
+        );
+      })
       .filter((g): g is Game => Boolean(g));
   }, [profile.favoriteGameIDs, libraryGames]);
 
   // Spel som kan läggas till i favoriter (ur biblioteket)
   const availableForFavorites = useMemo(() => {
     const search = favoriteSearch.toLowerCase().trim();
+    const lowerFavIDs = new Set(profile.favoriteGameIDs.map((id) => id.toLowerCase()));
     return libraryGames.filter((g) => {
-      const alreadyFav = profile.favoriteGameIDs.includes(g.id);
-      if (alreadyFav) return false;
+      const isFav =
+        lowerFavIDs.has(g.id.toLowerCase()) ||
+        (g.igdb_id && lowerFavIDs.has(String(g.igdb_id)));
+      if (isFav) return false;
       if (!search) return true;
       return g.title.toLowerCase().includes(search);
     });
@@ -139,9 +149,10 @@ export function ProfileModal({
   };
 
   const handleRemoveFavorite = (gameId: string) => {
+    const lower = gameId.toLowerCase();
     const updated = {
       ...profile,
-      favoriteGameIDs: profile.favoriteGameIDs.filter((id) => id !== gameId),
+      favoriteGameIDs: profile.favoriteGameIDs.filter((id) => id.toLowerCase() !== lower),
     };
     onUpdateProfile(updated);
     saveUserProfile(updated);
@@ -570,7 +581,46 @@ export function ProfileModal({
                 </div>
               </div>
 
-              {/* 5. Mina favoritspel */}
+              {/* 5. Årligt spelmål */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Target className="w-4 h-4 text-amber-400" />
+                  <h4 className="text-sm font-bold text-white">Spelmål 2026</h4>
+                </div>
+
+                <div className="p-4 bg-zinc-900/60 border border-zinc-800 rounded-2xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-zinc-400">
+                      Välj hur många spel du siktar på att klara under 2026:
+                    </span>
+                    <span className="text-sm font-black text-amber-400 font-mono">
+                      {profile.annualGamingGoal || 12} spel
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {[12, 25, 50, 75, 100].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => {
+                          const updated = { ...profile, annualGamingGoal: num };
+                          onUpdateProfile(updated);
+                          saveUserProfile(updated);
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                          (profile.annualGamingGoal || 12) === num
+                            ? 'bg-amber-500 text-zinc-950 shadow-md font-black'
+                            : 'bg-zinc-900 text-zinc-300 border border-zinc-800 hover:border-zinc-700'
+                        }`}
+                      >
+                        {num} spel
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* 6. Mina favoritspel */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">

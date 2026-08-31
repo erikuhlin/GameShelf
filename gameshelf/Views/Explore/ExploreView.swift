@@ -55,6 +55,7 @@ struct ExploreView: View {
     @State private var findError: String? = nil
     @State private var forYouRefreshID = UUID()
     @State private var showingAddGameSheet = false
+    @State private var showingProfileSheet = false
 
     // Startsida State
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
@@ -213,6 +214,16 @@ struct ExploreView: View {
             .sheet(isPresented: $showingGamingGoalSheet) {
                 gamingGoalSheet
             }
+            .sheet(isPresented: $showingProfileSheet) {
+                NavigationStack {
+                    ProfileView()
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button("Klar") { showingProfileSheet = false }
+                            }
+                        }
+                }
+            }
             .alert("Hitta spel i IGDB", isPresented: findAlertBinding) {
                 Button("OK", role: .cancel) { findError = nil }
             } message: {
@@ -224,13 +235,19 @@ struct ExploreView: View {
     // MARK: - 1. Välkomsthälsning & Spelmål
     private var greetingHeader: some View {
         HStack(alignment: .center, spacing: 12) {
-            UserAvatarView(size: 42)
+            Button {
+                showingProfileSheet = true
+            } label: {
+                UserAvatarView(size: 42)
+            }
+            .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(greetingText)
                     .font(.headline)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 Text("Redo för dagens spelsession?")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -260,7 +277,7 @@ struct ExploreView: View {
     }
 
     private var goalBadge: some View {
-        let completedCount = store.games.filter { $0.status == .completed }.count
+        let completedCount = store.games.filter { $0.status == .completed && $0.isOwned }.count
         let targetGoal = max(1, profile.annualGamingGoal)
         let isGoalReached = completedCount >= targetGoal
 
@@ -309,8 +326,8 @@ struct ExploreView: View {
                         .font(.title3.bold())
                         .foregroundStyle(.primary)
 
-                    let completedCount = store.games.filter { $0.status == .completed }.count
-                    Text("Du har klarat \(completedCount) spel totalt! Välj ett årsmål som motiverar dig.")
+                    let completedCount = store.games.filter { $0.status == .completed && $0.isOwned }.count
+                    Text("Du har klarat \(completedCount) spel i ditt aktiva bibliotek! Välj ett årsmål som motiverar dig.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)

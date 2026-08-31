@@ -252,12 +252,14 @@ final class ProfileStore: ObservableObject {
     }
 
     func addFavoriteGame(id: String) {
-        guard !favoriteGameIDs.contains(id) else { return }
+        let lower = id.lowercased()
+        guard !favoriteGameIDs.contains(where: { $0.lowercased() == lower }) else { return }
         guard favoriteGameIDs.count < 10 else { return }
         favoriteGameIDs.append(id)
     }
 
     func removeFavoriteGame(id: String) {
-        favoriteGameIDs.removeAll { $0 == id }
+        let lower = id.lowercased()
+        favoriteGameIDs.removeAll { $0.lowercased() == lower }
     }
 }

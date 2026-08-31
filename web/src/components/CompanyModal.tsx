@@ -161,7 +161,7 @@ export function CompanyModal({
     role === 'developer' ? 'Utvecklare' : role === 'publisher' ? 'Utgivare' : 'Spelstudio';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
       <div className="relative w-full max-w-4xl max-h-[90vh] bg-[#121319] border border-zinc-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden">
         {/* Header bar */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800/80 bg-zinc-950/60 shrink-0">

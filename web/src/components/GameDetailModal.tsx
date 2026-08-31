@@ -38,6 +38,7 @@ interface GameDetailModalProps {
   onDeleteGame: (id: string) => void;
   collections: GameCollection[];
   onToggleCollection: (gameId: string, collectionId: string) => void;
+  onCreateCollection?: (name: string, gameId: string) => Promise<void> | void;
   onOpenCompany?: (companyId: number, companyName: string, role: 'developer' | 'publisher') => void;
 }
 
@@ -75,6 +76,7 @@ export function GameDetailModal({
   onDeleteGame,
   collections,
   onToggleCollection,
+  onCreateCollection,
   onOpenCompany,
 }: GameDetailModalProps) {
   if (!isOpen || !game) return null;
@@ -98,6 +100,11 @@ export function GameDetailModal({
   const [activeLightboxImg, setActiveLightboxImg] = useState<string | null>(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
+  // Samlingsskapare state
+  const [isCreatingCollection, setIsCreatingCollection] = useState(false);
+  const [newCollectionName, setNewCollectionName] = useState('');
+  const [isSubmittingCollection, setIsSubmittingCollection] = useState(false);
+
   // Återställ formulärstate när ett nytt spel öppnas
   useEffect(() => {
     if (game) {
@@ -109,6 +116,8 @@ export function GameDetailModal({
       setTodos(game.todos || []);
       setLiveReleaseDate(game.first_release_date || null);
       setRemoteDetails(null);
+      setIsCreatingCollection(false);
+      setNewCollectionName('');
     }
   }, [game?.id]);
 
@@ -223,6 +232,8 @@ export function GameDetailModal({
               artworks: detailsData.artworks || [],
               developers: detailsData.developers || [],
               publishers: detailsData.publishers || [],
+              developerCompanies: detailsData.developerCompanies || [],
+              publisherCompanies: detailsData.publisherCompanies || [],
               gameModes: detailsData.gameModes || [],
               themes: detailsData.themes || [],
               videos: detailsData.videos || [],
@@ -285,6 +296,23 @@ export function GameDetailModal({
 
   const handleDeleteTodo = (todoId: string) => {
     setTodos(todos.filter((t) => t.id !== todoId));
+  };
+
+  const handleCreateCollection = async () => {
+    const trimmed = newCollectionName.trim();
+    if (!trimmed) return;
+    setIsSubmittingCollection(true);
+    try {
+      if (onCreateCollection) {
+        await onCreateCollection(trimmed, game.id);
+      }
+      setNewCollectionName('');
+      setIsCreatingCollection(false);
+    } catch (e) {
+      console.error('Failed to create collection:', e);
+    } finally {
+      setIsSubmittingCollection(false);
+    }
   };
 
   const handleSave = async () => {
@@ -528,7 +556,7 @@ export function GameDetailModal({
                   Äger spelet
                 </span>
                 <span className="text-xs text-zinc-500">
-                  Finns i din fysiska eller digitala samling
+                  Markerad som fysisk eller digital utgåva i din ägo
                 </span>
               </div>
               <input
@@ -840,34 +868,137 @@ export function GameDetailModal({
             </div>
           )}
 
-          {/* 11. Collections Toggle Section */}
-          {collections.length > 0 && (
-            <div className="bg-zinc-900/60 border border-zinc-800 p-5 rounded-2xl">
-              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                <Bookmark className="w-4 h-4 text-red-500" />
-                Samlingar
-              </label>
-              <div className="flex flex-wrap gap-2">
+          {/* 11. Samlingar (Collections) */}
+          <div className="bg-zinc-900/60 border border-zinc-800 p-5 rounded-2xl space-y-3.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Bookmark className="w-4 h-4 text-brand-red" />
+                <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
+                  Samlingar
+                </span>
+              </div>
+              <div className="text-xs text-zinc-400">
+                {collections.filter(
+                  (c) =>
+                    c.game_ids?.includes(game.id) ||
+                    (game.igdb_id && c.game_ids?.includes(String(game.igdb_id)))
+                ).length > 0 ? (
+                  <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                    <Check className="w-3.5 h-3.5" />
+                    I {
+                      collections.filter(
+                        (c) =>
+                          c.game_ids?.includes(game.id) ||
+                          (game.igdb_id && c.game_ids?.includes(String(game.igdb_id)))
+                      ).length
+                    }{' '}
+                    {collections.filter(
+                      (c) =>
+                        c.game_ids?.includes(game.id) ||
+                        (game.igdb_id && c.game_ids?.includes(String(game.igdb_id)))
+                    ).length === 1
+                      ? 'samling'
+                      : 'samlingar'}
+                  </span>
+                ) : (
+                  <span className="text-zinc-500">Ingen samling vald</span>
+                )}
+              </div>
+            </div>
+
+            {/* Befintliga samlingar som taggar */}
+            {collections.length > 0 ? (
+              <div className="flex flex-wrap gap-2 pt-1">
                 {collections.map((col) => {
-                  const isInCollection = col.game_ids?.includes(game.id);
+                  const isInCollection = Boolean(
+                    col.game_ids?.includes(game.id) ||
+                      (game.igdb_id && col.game_ids?.includes(String(game.igdb_id)))
+                  );
                   return (
                     <button
                       key={col.id}
+                      type="button"
                       onClick={() => onToggleCollection(game.id, col.id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition flex items-center gap-1.5 ${
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 cursor-pointer ${
                         isInCollection
-                          ? 'bg-red-500/20 border-red-500/60 text-red-300'
-                          : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                          ? 'bg-brand-red/20 border-brand-red/60 text-white shadow-sm'
+                          : 'bg-zinc-950/80 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
                       }`}
+                      title={
+                        isInCollection
+                          ? `Ta bort från ${col.name}`
+                          : `Lägg till i ${col.name}`
+                      }
                     >
-                      {isInCollection && <Check className="w-3.5 h-3.5 text-red-400" />}
-                      {col.name}
+                      {isInCollection ? (
+                        <Check className="w-3.5 h-3.5 text-brand-red" />
+                      ) : (
+                        <Plus className="w-3.5 h-3.5 text-zinc-500" />
+                      )}
+                      <span>{col.name}</span>
                     </button>
                   );
                 })}
               </div>
-            </div>
-          )}
+            ) : (
+              <p className="text-xs text-zinc-500 italic">
+                Du har inga samlingar skapade ännu. Skapa en nedan!
+              </p>
+            )}
+
+            {/* Inline Skapa ny samling */}
+            {isCreatingCollection ? (
+              <div className="flex items-center gap-2 pt-2 border-t border-zinc-800/80">
+                <input
+                  type="text"
+                  value={newCollectionName}
+                  onChange={(e) => setNewCollectionName(e.target.value)}
+                  placeholder="Namn på samling (t.ex. 🎃 Halloween, Favoriter)"
+                  className="bg-zinc-950 border border-zinc-700 text-zinc-100 px-3 py-1.5 rounded-xl text-xs flex-1 focus:outline-none focus:border-brand-red"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleCreateCollection();
+                    }
+                    if (e.key === 'Escape') {
+                      setIsCreatingCollection(false);
+                      setNewCollectionName('');
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleCreateCollection}
+                  disabled={!newCollectionName.trim() || isSubmittingCollection}
+                  className="px-3.5 py-1.5 bg-brand-red hover:bg-brand-redPressed text-white rounded-xl text-xs font-semibold disabled:opacity-50 transition cursor-pointer"
+                >
+                  {isSubmittingCollection ? 'Sparar...' : 'Skapa'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreatingCollection(false);
+                    setNewCollectionName('');
+                  }}
+                  className="px-2.5 py-1.5 bg-zinc-800 text-zinc-400 hover:text-white rounded-xl text-xs transition cursor-pointer"
+                >
+                  Avbryt
+                </button>
+              </div>
+            ) : (
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingCollection(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-dashed border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Skapa ny samling</span>
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* 12. Notes & Checklist */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

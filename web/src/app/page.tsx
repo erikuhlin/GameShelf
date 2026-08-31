@@ -36,7 +36,17 @@ import {
   Library,
   LayoutGrid,
   List,
+  ArrowUpDown,
 } from 'lucide-react';
+
+export type LibrarySortOption =
+  | 'dateAdded'
+  | 'titleAsc'
+  | 'titleDesc'
+  | 'rating'
+  | 'releaseYearDesc'
+  | 'releaseYearAsc'
+  | 'hours';
 
 export default function HomePage() {
   const [games, setGames] = useState<Game[]>([]);
@@ -48,6 +58,11 @@ export default function HomePage() {
   const [profileName, setProfileName] = useState<string>('');
   const [pairedUserId, setPairedUserId] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile>(DEFAULT_PROFILE);
+
+  // Library Sorting & Filtering state
+  const [librarySort, setLibrarySort] = useState<LibrarySortOption>('dateAdded');
+  const [libraryPlatformFilter, setLibraryPlatformFilter] = useState<string>('Alla');
+  const [libraryOwnershipFilter, setLibraryOwnershipFilter] = useState<'all' | 'owned' | 'memories'>('all');
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -100,6 +115,13 @@ export default function HomePage() {
           }
         } catch (e) {}
       }
+
+      const savedSort = localStorage.getItem('gameshelf_library_sort') as LibrarySortOption;
+      if (savedSort) setLibrarySort(savedSort);
+      const savedPlatform = localStorage.getItem('gameshelf_library_platform');
+      if (savedPlatform) setLibraryPlatformFilter(savedPlatform);
+      const savedOwnership = localStorage.getItem('gameshelf_library_ownership') as any;
+      if (savedOwnership) setLibraryOwnershipFilter(savedOwnership);
 
       const loaded = loadUserProfile();
       setUserProfile(loaded);
@@ -536,23 +558,128 @@ export default function HomePage() {
     };
   }, [pairedUserId]);
 
-  // Filtered games
+  // Filterändringshandlers med localStorage-persistens
+  const handleSortChange = (sort: LibrarySortOption) => {
+    setLibrarySort(sort);
+    if (typeof window !== 'undefined') localStorage.setItem('gameshelf_library_sort', sort);
+  };
+  const handlePlatformChange = (p: string) => {
+    setLibraryPlatformFilter(p);
+    if (typeof window !== 'undefined') localStorage.setItem('gameshelf_library_platform', p);
+  };
+  const handleOwnershipChange = (o: 'all' | 'owned' | 'memories') => {
+    setLibraryOwnershipFilter(o);
+    if (typeof window !== 'undefined') localStorage.setItem('gameshelf_library_ownership', o);
+  };
+
+  // Dynamiska plattformar som finns i biblioteket
+  const availablePlatforms = useMemo(() => {
+    const set = new Set<string>();
+    games.forEach((g) => {
+      (g.platforms || []).forEach((p) => {
+        const lower = p.toLowerCase();
+        if (
+          lower.includes('playstation') ||
+          lower.includes('ps5') ||
+          lower.includes('ps4') ||
+          lower.includes('ps3') ||
+          lower.includes('ps2') ||
+          lower.includes('ps1') ||
+          lower.includes('psp') ||
+          lower.includes('vita')
+        ) {
+          set.add('PlayStation');
+        } else if (lower.includes('xbox')) {
+          set.add('Xbox');
+        } else if (
+          lower.includes('nintendo') ||
+          lower.includes('switch') ||
+          lower.includes('wii') ||
+          lower.includes('ds') ||
+          lower.includes('game boy') ||
+          lower.includes('nes') ||
+          lower.includes('snes') ||
+          lower.includes('n64') ||
+          lower.includes('gamecube')
+        ) {
+          set.add('Nintendo');
+        } else if (
+          lower.includes('pc') ||
+          lower.includes('windows') ||
+          lower.includes('mac') ||
+          lower.includes('linux')
+        ) {
+          set.add('PC');
+        } else {
+          set.add(p);
+        }
+      });
+    });
+    return ['Alla', ...Array.from(set).sort()];
+  }, [games]);
+
+  // Filtrerade och sorterade spel
   const filteredGames = useMemo(() => {
-    return games.filter((game) => {
-      // Status filter
+    let result = games.filter((game) => {
+      // 1. Spelstatus filter
       if (selectedStatus !== 'Alla' && game.status !== selectedStatus) {
         return false;
       }
 
-      // Collection filter
+      // 2. Ägarskapsfilter
+      if (libraryOwnershipFilter === 'owned' && !game.is_owned) {
+        return false;
+      }
+      if (libraryOwnershipFilter === 'memories' && game.is_owned) {
+        return false;
+      }
+
+      // 3. Plattformsfilter
+      if (libraryPlatformFilter !== 'Alla') {
+        const pFilter = libraryPlatformFilter.toLowerCase();
+        const hasPlatform = (game.platforms || []).some((p) => {
+          const lp = p.toLowerCase();
+          if (pFilter === 'playstation') {
+            return lp.includes('playstation') || lp.includes('ps');
+          }
+          if (pFilter === 'xbox') {
+            return lp.includes('xbox');
+          }
+          if (pFilter === 'nintendo') {
+            return (
+              lp.includes('nintendo') ||
+              lp.includes('switch') ||
+              lp.includes('wii') ||
+              lp.includes('ds')
+            );
+          }
+          if (pFilter === 'pc') {
+            return (
+              lp.includes('pc') ||
+              lp.includes('windows') ||
+              lp.includes('mac') ||
+              lp.includes('linux')
+            );
+          }
+          return lp.includes(pFilter);
+        });
+        if (!hasPlatform) return false;
+      }
+
+      // 4. Samlingsfilter
       if (selectedCollectionId) {
         const col = collections.find((c) => c.id === selectedCollectionId);
-        if (col && !col.game_ids?.includes(game.id)) {
+        const matchesCol = Boolean(
+          col &&
+            (col.game_ids?.includes(game.id) ||
+              (game.igdb_id && col.game_ids?.includes(String(game.igdb_id))))
+        );
+        if (!matchesCol) {
           return false;
         }
       }
 
-      // Search query
+      // 5. Textsökning
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesTitle = game.title.toLowerCase().includes(q);
@@ -566,7 +693,46 @@ export default function HomePage() {
 
       return true;
     });
-  }, [games, selectedStatus, selectedCollectionId, searchQuery, collections]);
+
+    // 6. Sortering
+    switch (librarySort) {
+      case 'titleAsc':
+        result.sort((a, b) => a.title.localeCompare(b.title, 'sv'));
+        break;
+      case 'titleDesc':
+        result.sort((a, b) => b.title.localeCompare(a.title, 'sv'));
+        break;
+      case 'rating':
+        result.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+        break;
+      case 'releaseYearDesc':
+        result.sort((a, b) => (b.release_year || 0) - (a.release_year || 0));
+        break;
+      case 'releaseYearAsc':
+        result.sort((a, b) => (a.release_year || 9999) - (b.release_year || 9999));
+        break;
+      case 'hours':
+        result.sort(
+          (a, b) => (Number(b.estimated_hours) || 0) - (Number(a.estimated_hours) || 0)
+        );
+        break;
+      case 'dateAdded':
+      default:
+        // Behåll standardordning (senast tillagda/index)
+        break;
+    }
+
+    return result;
+  }, [
+    games,
+    selectedStatus,
+    libraryOwnershipFilter,
+    libraryPlatformFilter,
+    selectedCollectionId,
+    searchQuery,
+    collections,
+    librarySort,
+  ]);
 
   // Status counts for tab pills
   const statusCounts = useMemo(() => {
@@ -686,6 +852,41 @@ export default function HomePage() {
       await supabase.from('collections').update({ game_ids: nextIds }).eq('id', colId);
     } catch (err) {
       console.error('Failed to update collection members:', err);
+    }
+  };
+
+  const handleCreateCollectionAndAddGame = async (name: string, gameId: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+
+    const newColId = crypto.randomUUID();
+    const newCol: GameCollection = {
+      id: newColId,
+      name: trimmed,
+      description: '',
+      game_ids: [gameId],
+      created_at: new Date().toISOString(),
+    };
+
+    setCollections((prev) => {
+      const next = [newCol, ...prev];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('gameshelf_local_collections', JSON.stringify(next));
+      }
+      return next;
+    });
+
+    if (pairedUserId) {
+      try {
+        await supabase.from('collections').insert({
+          id: newColId,
+          user_id: pairedUserId,
+          name: trimmed,
+          game_ids: [gameId],
+        });
+      } catch (err) {
+        console.error('Failed to create collection in Supabase:', err);
+      }
     }
   };
 
@@ -908,7 +1109,8 @@ export default function HomePage() {
 
         {/* Library Sub-bar: Status Filter Tabs & View Mode Switcher */}
         {viewMode !== 'collections' && viewMode !== 'stats' && viewMode !== 'discover' && games.length > 0 && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
+          <div className="space-y-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
             {/* Left: Status Filter Pills */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
               <button
@@ -995,7 +1197,86 @@ export default function HomePage() {
               </button>
             </div>
           </div>
-        )}
+
+          {/* Sub-toolbar: Sortering & Anpassa biblioteksvyn */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 pb-2 border-t border-zinc-800/60 text-xs">
+            {/* Vänster: Sorteringsdropdown & Plattformsfilter */}
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="flex items-center gap-1.5 text-zinc-400 font-medium">
+                <ArrowUpDown className="w-3.5 h-3.5 text-brand-red" />
+                <span>Sortera:</span>
+              </div>
+              <select
+                value={librarySort}
+                onChange={(e) => handleSortChange(e.target.value as LibrarySortOption)}
+                className="bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-brand-red cursor-pointer font-medium hover:border-zinc-700 transition"
+              >
+                <option value="dateAdded">Senast tillagda</option>
+                <option value="titleAsc">Titel (A–Ö)</option>
+                <option value="titleDesc">Titel (Ö–A)</option>
+                <option value="rating">Högst betyg ⭐</option>
+                <option value="releaseYearDesc">Lanseringsår (Nyast först)</option>
+                <option value="releaseYearAsc">Lanseringsår (Äldst först)</option>
+                <option value="hours">Speltid ⏱️</option>
+              </select>
+
+              {/* Plattformsfilter */}
+              {availablePlatforms.length > 2 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-600 hidden sm:inline">•</span>
+                  <select
+                    value={libraryPlatformFilter}
+                    onChange={(e) => handlePlatformChange(e.target.value)}
+                    className="bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-brand-red cursor-pointer font-medium hover:border-zinc-700 transition"
+                  >
+                    {availablePlatforms.map((p) => (
+                      <option key={p} value={p}>
+                        {p === 'Alla' ? 'Alla plattformar' : p}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Höger: Ägarskapsfilter (Alla / I ägo / Spelminnen) */}
+            <div className="flex items-center gap-1 bg-zinc-900/90 border border-zinc-800/90 rounded-xl p-1 shrink-0">
+              <button
+                onClick={() => handleOwnershipChange('all')}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                  libraryOwnershipFilter === 'all'
+                    ? 'bg-zinc-800 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                Alla ({games.length})
+              </button>
+              <button
+                onClick={() => handleOwnershipChange('owned')}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                  libraryOwnershipFilter === 'owned'
+                    ? 'bg-zinc-800 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+                title="Endast spel du äger fysiskt eller digitalt"
+              >
+                I ägo 🎮 ({games.filter((g) => g.is_owned).length})
+              </button>
+              <button
+                onClick={() => handleOwnershipChange('memories')}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                  libraryOwnershipFilter === 'memories'
+                    ? 'bg-zinc-800 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+                title="Spel du har spelat men inte äger längre"
+              >
+                Spelminnen 📜 ({games.filter((g) => !g.is_owned).length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
         {/* Views Switcher: Discover, Collections, Stats, or Library (Shelf, Grid, List) */}
         {viewMode === 'discover' ? (
@@ -1080,6 +1361,7 @@ export default function HomePage() {
         onDeleteGame={handleDeleteGame}
         collections={collections}
         onToggleCollection={handleToggleCollection}
+        onCreateCollection={handleCreateCollectionAndAddGame}
         onOpenCompany={(companyId, companyName, role) => {
           setActiveCompanyModal({ id: companyId, name: companyName, role });
         }}

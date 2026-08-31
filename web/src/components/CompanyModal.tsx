@@ -44,7 +44,7 @@ interface CompanyData {
 }
 
 interface CompanyModalProps {
-  companyId: number;
+  companyId?: number | null;
   companyName?: string;
   role?: 'developer' | 'publisher' | 'company';
   isOpen: boolean;
@@ -80,13 +80,15 @@ export function CompanyModal({
   const [sortBy, setSortBy] = useState<'year' | 'rating' | 'name'>('year');
 
   useEffect(() => {
-    if (!isOpen || !companyId) return;
+    if (!isOpen) return;
+    const identifier = companyId && companyId > 0 ? String(companyId) : companyName?.trim();
+    if (!identifier) return;
 
     let isMounted = true;
     setLoading(true);
     setError(null);
 
-    fetch(`/api/igdb/companies/${companyId}`)
+    fetch(`/api/igdb/companies/${encodeURIComponent(identifier)}`)
       .then((res) => {
         if (!res.ok) throw new Error('Kunde inte läsa in företagsdetaljer');
         return res.json();

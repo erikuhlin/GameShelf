@@ -21,6 +21,7 @@ import {
   Command,
   Flame,
   Loader2,
+  Building2,
 } from 'lucide-react';
 
 interface UniversalSearchModalProps {
@@ -29,6 +30,7 @@ interface UniversalSearchModalProps {
   games: Game[];
   onSelectGame: (game: Game) => void;
   onAddGame: (game: Game) => void;
+  onOpenCompany?: (companyId: number, companyName: string, role: 'developer' | 'publisher') => void;
 }
 
 interface NewsItem {
@@ -58,6 +60,7 @@ export function UniversalSearchModal({
   games,
   onSelectGame,
   onAddGame,
+  onOpenCompany,
 }: UniversalSearchModalProps) {
   const [query, setQuery] = useState('');
   const [igdbResults, setIgdbResults] = useState<IGDBSearchResult[]>([]);
@@ -430,6 +433,39 @@ export function UniversalSearchModal({
                         <ArrowRight className="w-4 h-4 text-zinc-500 group-hover:text-white transition shrink-0 ml-2" />
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Studio & Utgivare snabbåtkomst */}
+              {query.trim().length >= 2 && onOpenCompany && (
+                <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-3 sm:p-4 hover:border-brand-red/40 transition">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-brand-red/10 border border-brand-red/20 flex items-center justify-center text-brand-red shrink-0">
+                        <Building2 className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                          Utforska Studio & Utgivare
+                        </div>
+                        <div className="text-sm font-bold text-white truncate">
+                          "{query.trim()}"
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        saveSearchTerm(query.trim());
+                        onClose();
+                        onOpenCompany(0, query.trim(), 'developer');
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl bg-brand-red hover:bg-red-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-brand-red/20 cursor-pointer shrink-0 ml-3"
+                    >
+                      <span>Öppna studio</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               )}

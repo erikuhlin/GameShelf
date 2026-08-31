@@ -5,19 +5,29 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const companyId = params.id;
+  const companyParam = params.id;
 
-  if (!companyId || isNaN(Number(companyId))) {
-    return NextResponse.json({ error: 'Ogiltigt företags-ID' }, { status: 400 });
+  if (!companyParam || companyParam.trim() === '') {
+    return NextResponse.json({ error: 'Företagsidentifierare saknas' }, { status: 400 });
   }
 
   try {
-    // 1. Hämta företagsdetaljer
-    const companyQuery = `
-      where id = ${companyId};
-      fields name, description, logo.image_id, logo.url, start_date, country, url, developed, published;
-      limit 1;
-    `;
+    // 1. Hämta företagsdetaljer (antingen via numeriskt ID eller namnsökning)
+    let companyQuery = '';
+    if (!isNaN(Number(companyParam)) && Number(companyParam) > 0) {
+      companyQuery = `
+        where id = ${companyParam};
+        fields name, description, logo.image_id, logo.url, start_date, country, url, developed, published;
+        limit 1;
+      `;
+    } else {
+      const decoded = decodeURIComponent(companyParam).replace(/"/g, '\\"');
+      companyQuery = `
+        search "${decoded}";
+        fields name, description, logo.image_id, logo.url, start_date, country, url, developed, published;
+        limit 1;
+      `;
+    }
 
     const companyData = await queryIGDB('companies', companyQuery);
 
@@ -26,6 +36,7 @@ export async function GET(
     }
 
     const comp = companyData[0];
+    const targetCompanyId = comp.id;
 
     // Formatera logotyp
     let logoUrl = comp.logo?.url;
@@ -40,7 +51,7 @@ export async function GET(
 
     // 2. Hämta spelkatalog för företaget (både utvecklade och utgivna)
     const gamesQuery = `
-      where involved_companies.company = ${companyId} & category = (0, 8, 9, 10, 11);
+      where involved_companies.company = ${targetCompanyId} & category = (0, 8, 9, 10, 11);
       fields name, summary, first_release_date, cover.image_id, cover.url, total_rating, total_rating_count, rating, genres.name, platforms.name, involved_companies.company, involved_companies.developer, involved_companies.publisher;
       sort first_release_date desc;
       limit 100;
@@ -61,7 +72,7 @@ export async function GET(
 
       // Avgör roll för spelet (utvecklare eller utgivare)
       const thisCompanyInv = (g.involved_companies || []).find(
-        (ic: any) => ic.company === Number(companyId)
+        (ic: any) => ic.company === Number(targetCompanyId)
       );
 
       const isDeveloper = thisCompanyInv ? Boolean(thisCompanyInv.developer) : false;
@@ -98,7 +109,7 @@ export async function GET(
       games: formattedGames,
     });
   } catch (error: any) {
-    console.error(`[API Companies ${companyId}] Error:`, error);
+    console.error(`[API Companies ${companyParam}] Error:`, error);
     return NextResponse.json(
       { error: error.message || 'Kunde inte hämta företagsdetaljer' },
       { status: 500 }

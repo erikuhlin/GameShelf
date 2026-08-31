@@ -83,7 +83,10 @@ export default function HomePage() {
       const loaded = loadUserProfile();
       setUserProfile(loaded);
       setProfileName(loaded.username);
-      if (savedUserId) setPairedUserId(savedUserId);
+      if (savedUserId) {
+        setPairedUserId(savedUserId);
+        fetchRemoteProfile(savedUserId);
+      }
 
       const handleProfileUpdate = () => {
         const p = loadUserProfile();
@@ -94,6 +97,119 @@ export default function HomePage() {
       return () => window.removeEventListener('gameshelf_profile_updated', handleProfileUpdate);
     }
   }, []);
+
+  const fetchRemoteProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (!error && data) {
+        let prefs: any = {};
+        if (data.full_name) {
+          try {
+            prefs = JSON.parse(data.full_name);
+          } catch {}
+        }
+        const updated: UserProfile = {
+          username: data.username || 'Spelare',
+          age: prefs.age || 27,
+          platforms: Array.isArray(prefs.platforms) ? prefs.platforms : ['PlayStation 5', 'PC'],
+          favoriteGenres: Array.isArray(prefs.favoriteGenres) ? prefs.favoriteGenres : ['RPG', 'Action', 'Skräck'],
+          playFor: Array.isArray(prefs.playFor) ? prefs.playFor : ['Story', 'Utforskning'],
+          favoriteGameIDs: Array.isArray(prefs.favoriteGameIDs) ? prefs.favoriteGameIDs : [],
+          annualGamingGoal: prefs.annualGamingGoal || 12,
+          avatarType: data.avatar_url || prefs.avatarType || 'initial',
+          avatarCustomImage: data.avatar_url?.startsWith('data:') ? data.avatar_url : undefined,
+        };
+        setUserProfile(updated);
+        setProfileName(updated.username);
+        saveUserProfile(updated);
+      }
+    } catch (e) {
+      console.error('Kunde inte läsa in profil från Supabase:', e);
+    }
+  };
+
+  const handleUpdateProfile = async (updated: UserProfile) => {
+    setUserProfile(updated);
+    setProfileName(updated.username);
+    saveUserProfile(updated);
+
+    if (pairedUserId) {
+      const prefs = {
+        age: updated.age,
+        platforms: updated.platforms,
+        favoriteGenres: updated.favoriteGenres,
+        playFor: updated.playFor,
+        favoriteGameIDs: updated.favoriteGameIDs,
+        annualGamingGoal: updated.annualGamingGoal,
+        avatarType: updated.avatarType,
+      };
+      try {
+        await supabase.from('profiles').upsert({
+          id: pairedUserId,
+          username: updated.username,
+          full_name: JSON.stringify(prefs),
+          avatar_url: updated.avatarCustomImage || updated.avatarType,
+          updated_at: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.error('Kunde inte synka profil till Supabase:', err);
+      }
+    }
+  };
+
+  // Realtidssynk för profilen
+  useEffect(() => {
+    if (!pairedUserId) return;
+
+    fetchRemoteProfile(pairedUserId);
+
+    const profileChannel = supabase
+      .channel(`profile:${pairedUserId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${pairedUserId}`,
+        },
+        (payload: any) => {
+          if (payload.new) {
+            const data = payload.new;
+            let prefs: any = {};
+            if (data.full_name) {
+              try {
+                prefs = JSON.parse(data.full_name);
+              } catch {}
+            }
+            const updated: UserProfile = {
+              username: data.username || 'Spelare',
+              age: prefs.age || 27,
+              platforms: Array.isArray(prefs.platforms) ? prefs.platforms : ['PlayStation 5', 'PC'],
+              favoriteGenres: Array.isArray(prefs.favoriteGenres) ? prefs.favoriteGenres : ['RPG', 'Action', 'Skräck'],
+              playFor: Array.isArray(prefs.playFor) ? prefs.playFor : ['Story', 'Utforskning'],
+              favoriteGameIDs: Array.isArray(prefs.favoriteGameIDs) ? prefs.favoriteGameIDs : [],
+              annualGamingGoal: prefs.annualGamingGoal || 12,
+              avatarType: data.avatar_url || prefs.avatarType || 'initial',
+              avatarCustomImage: data.avatar_url?.startsWith('data:') ? data.avatar_url : undefined,
+            };
+            setUserProfile(updated);
+            setProfileName(updated.username);
+            saveUserProfile(updated);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(profileChannel);
+    };
+  }, [pairedUserId]);
 
   // Hjälpfunktion för att berika spel med IGDB releasedatum i bakgrunden
   const enrichGamesWithReleaseDates = (
@@ -542,10 +658,12 @@ export default function HomePage() {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('gameshelf_profile_name');
       localStorage.removeItem('gameshelf_paired_user_id');
+      localStorage.removeItem('gameshelf_user_profile');
       localStorage.removeItem('gameshelf_local_games');
       localStorage.removeItem('gameshelf_local_collections');
     }
     setProfileName('');
+    setUserProfile(DEFAULT_PROFILE);
     setPairedUserId(null);
     setGames([]);
     setCollections([]);
@@ -559,6 +677,9 @@ export default function HomePage() {
       if (userId) localStorage.setItem('gameshelf_paired_user_id', userId);
     }
     setProfileName(user);
+    if (userId) {
+      await fetchRemoteProfile(userId);
+    }
 
     // Identifiera gästspel som skapats lokalt och migrera dem till användarens konto
     try {
@@ -959,16 +1080,20 @@ export default function HomePage() {
         games={games}
         onSelectGame={setSelectedGame}
         onAddGame={handleAddFromDiscover}
+        onOpenCompany={(companyId, companyName, role) => {
+          setActiveCompanyModal({
+            id: companyId,
+            name: companyName,
+            role,
+          });
+        }}
       />
 
       <ProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
         profile={userProfile}
-        onUpdateProfile={(updated) => {
-          setUserProfile(updated);
-          setProfileName(updated.username);
-        }}
+        onUpdateProfile={handleUpdateProfile}
         libraryGames={games}
         onSelectGame={(igdbId) => {
           const local = games.find((g) => g.igdb_id === igdbId);

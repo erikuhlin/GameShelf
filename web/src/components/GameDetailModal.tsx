@@ -400,7 +400,24 @@ export function GameDetailModal({
                 {displayDevelopers.length > 0 && (
                   <>
                     <span>•</span>
-                    <span className="text-zinc-300 font-medium">{displayDevelopers.join(', ')}</span>
+                    <div className="inline-flex items-center gap-1.5 flex-wrap">
+                      {displayDevelopers.map((devName, i) => {
+                        const compObj = remoteDetails?.developerCompanies?.find((c) => c.name === devName);
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => onOpenCompany?.(compObj?.id || 0, devName, 'developer')}
+                            className="inline-flex items-center gap-1 text-red-400 hover:text-red-300 font-semibold transition hover:underline cursor-pointer"
+                            title={`Visa alla spel från ${devName}`}
+                          >
+                            <Building2 className="w-3.5 h-3.5 text-red-500" />
+                            <span>{devName}</span>
+                            <span className="text-[10px] text-zinc-500">→</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </>
                 )}
               </div>
@@ -634,23 +651,22 @@ export function GameDetailModal({
                       Utvecklare
                     </span>
                     <div className="flex flex-wrap gap-1.5">
-                      {remoteDetails?.developerCompanies && remoteDetails.developerCompanies.length > 0 ? (
-                        remoteDetails.developerCompanies.map((c) => (
+                      {displayDevelopers.map((devName, i) => {
+                        const compObj = remoteDetails?.developerCompanies?.find((c) => c.name === devName);
+                        return (
                           <button
-                            key={c.id}
-                            onClick={() => onOpenCompany?.(c.id, c.name, 'developer')}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-brand-red/20 text-sm font-semibold text-zinc-200 hover:text-white border border-zinc-800 hover:border-brand-red/50 transition group"
-                            title={`Visa alla spel från ${c.name}`}
+                            key={i}
+                            type="button"
+                            onClick={() => onOpenCompany?.(compObj?.id || 0, devName, 'developer')}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-brand-red/20 text-sm font-semibold text-zinc-200 hover:text-white border border-zinc-800 hover:border-brand-red/50 transition group cursor-pointer"
+                            title={`Visa alla spel från ${devName}`}
                           >
-                            <span>{c.name}</span>
+                            <Building2 className="w-3.5 h-3.5 text-brand-red" />
+                            <span>{devName}</span>
                             <span className="text-[11px] text-zinc-500 group-hover:text-brand-red transition">→</span>
                           </button>
-                        ))
-                      ) : (
-                        <span className="text-sm font-semibold text-zinc-200">
-                          {displayDevelopers.join(', ')}
-                        </span>
-                      )}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -660,23 +676,22 @@ export function GameDetailModal({
                       Utgivare
                     </span>
                     <div className="flex flex-wrap gap-1.5">
-                      {remoteDetails?.publisherCompanies && remoteDetails.publisherCompanies.length > 0 ? (
-                        remoteDetails.publisherCompanies.map((c) => (
+                      {displayPublishers.map((pubName, i) => {
+                        const compObj = remoteDetails?.publisherCompanies?.find((c) => c.name === pubName);
+                        return (
                           <button
-                            key={c.id}
-                            onClick={() => onOpenCompany?.(c.id, c.name, 'publisher')}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-brand-red/20 text-sm font-semibold text-zinc-200 hover:text-white border border-zinc-800 hover:border-brand-red/50 transition group"
-                            title={`Visa alla spel utgivna av ${c.name}`}
+                            key={i}
+                            type="button"
+                            onClick={() => onOpenCompany?.(compObj?.id || 0, pubName, 'publisher')}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-brand-red/20 text-sm font-semibold text-zinc-200 hover:text-white border border-zinc-800 hover:border-brand-red/50 transition group cursor-pointer"
+                            title={`Visa alla spel utgivna av ${pubName}`}
                           >
-                            <span>{c.name}</span>
+                            <Building2 className="w-3.5 h-3.5 text-brand-red" />
+                            <span>{pubName}</span>
                             <span className="text-[11px] text-zinc-500 group-hover:text-brand-red transition">→</span>
                           </button>
-                        ))
-                      ) : (
-                        <span className="text-sm font-semibold text-zinc-200">
-                          {displayPublishers.join(', ')}
-                        </span>
-                      )}
+                        );
+                      })}
                     </div>
                   </div>
                 )}

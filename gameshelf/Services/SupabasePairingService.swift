@@ -42,12 +42,35 @@ public actor SupabasePairingService {
         let currentEmail = await MainActor.run { SupabaseAuthManager.shared.currentUser?.email }
         let currentToken = await MainActor.run { SupabaseAuthManager.shared.session?.accessToken }
 
+        let (storedName, aType, aAge, pPlatforms, fGenres, pPlayFor, fGameIDs, gGoal) = await MainActor.run {
+            let store = ProfileStore()
+            return (store.username, store.avatarType, store.age, Array(store.platforms), Array(store.favoriteGenres), Array(store.playFor), store.favoriteGameIDs, store.annualGamingGoal)
+        }
+
+        let effectiveUsername = (username != nil && !username!.isEmpty) ? username! : storedName
+        let prefs = SupabaseSyncService.ProfilePreferencesData(
+            age: aAge,
+            platforms: pPlatforms,
+            favoriteGenres: fGenres,
+            playFor: pPlayFor,
+            favoriteGameIDs: fGameIDs,
+            annualGamingGoal: gGoal,
+            avatarType: aType
+        )
+
+        try? await SupabaseSyncService.shared.upsertProfile(
+            userId: currentUserId,
+            username: effectiveUsername,
+            avatarUrl: aType,
+            preferences: prefs
+        )
+
         let payload: [String: Any] = [
             "status": "approved",
             "user_id": currentUserId.uuidString,
             "session_data": [
                 "email": currentEmail ?? "guest@gameshelf.local",
-                "username": username ?? "",
+                "username": effectiveUsername,
                 "token": currentToken ?? SupabaseConfig.anonKey
             ]
         ]

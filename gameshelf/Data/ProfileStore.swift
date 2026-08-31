@@ -31,52 +31,96 @@ final class ProfileStore: ObservableObject {
     static let defaultPlayFor: Set<String> = ["Story", "Utforskning"]
     static let defaultAvatarType = "initial"
 
+    private var isUpdatingFromRemote = false
+
     @Published var username: String {
-        didSet { if username != oldValue { UserDefaults.standard.set(username, forKey: Keys.username) } }
+        didSet {
+            if username != oldValue {
+                UserDefaults.standard.set(username, forKey: Keys.username)
+                syncToRemote()
+            }
+        }
     }
 
     @Published var avatarType: String {
-        didSet { if avatarType != oldValue { UserDefaults.standard.set(avatarType, forKey: Keys.avatarType) } }
+        didSet {
+            if avatarType != oldValue {
+                UserDefaults.standard.set(avatarType, forKey: Keys.avatarType)
+                syncToRemote()
+            }
+        }
     }
 
     @Published var avatarCustomImageData: Data? {
-        didSet { UserDefaults.standard.set(avatarCustomImageData, forKey: Keys.avatarCustomImageData) }
+        didSet {
+            UserDefaults.standard.set(avatarCustomImageData, forKey: Keys.avatarCustomImageData)
+            syncToRemote()
+        }
     }
 
     @Published var age: Int {
         didSet {
             if age != oldValue {
                 UserDefaults.standard.set(age, forKey: Keys.age)
-                // Uppdatera även birthdate approximativt
                 if let newDate = Calendar.current.date(byAdding: .year, value: -age, to: Date()) {
                     self.birthdate = newDate
                 }
+                syncToRemote()
             }
         }
     }
 
     @Published var birthdate: Date {
-        didSet { if birthdate != oldValue { UserDefaults.standard.set(birthdate, forKey: Keys.birthdate) } }
+        didSet {
+            if birthdate != oldValue {
+                UserDefaults.standard.set(birthdate, forKey: Keys.birthdate)
+            }
+        }
     }
 
     @Published var annualGamingGoal: Int {
-        didSet { if annualGamingGoal != oldValue { UserDefaults.standard.set(annualGamingGoal, forKey: Keys.annualGamingGoal) } }
+        didSet {
+            if annualGamingGoal != oldValue {
+                UserDefaults.standard.set(annualGamingGoal, forKey: Keys.annualGamingGoal)
+                syncToRemote()
+            }
+        }
     }
 
     @Published var platforms: Set<String> {
-        didSet { if platforms != oldValue { UserDefaults.standard.set(Array(platforms), forKey: Keys.platforms) } }
+        didSet {
+            if platforms != oldValue {
+                UserDefaults.standard.set(Array(platforms), forKey: Keys.platforms)
+                syncToRemote()
+            }
+        }
     }
 
     @Published var favoriteGenres: Set<String> {
-        didSet { if favoriteGenres != oldValue { UserDefaults.standard.set(Array(favoriteGenres), forKey: Keys.favoriteGenres) } }
+        didSet {
+            if favoriteGenres != oldValue {
+                UserDefaults.standard.set(Array(favoriteGenres), forKey: Keys.favoriteGenres)
+                syncToRemote()
+            }
+        }
     }
 
     @Published var playFor: Set<String> {
-        didSet { if playFor != oldValue { UserDefaults.standard.set(Array(playFor), forKey: Keys.playFor) } }
+        didSet {
+            if playFor != oldValue {
+                UserDefaults.standard.set(Array(playFor), forKey: Keys.playFor)
+                syncToRemote()
+            }
+        }
     }
 
     @Published var favoriteGameIDs: [String] {
-        didSet { if favoriteGameIDs != oldValue { UserDefaults.standard.set(favoriteGameIDs, forKey: Keys.favoriteGameIDs) } }
+        didSet {
+            if favoriteGameIDs != oldValue {
+                UserDefaults.standard.set(favoriteGameIDs, forKey: Keys.favoriteGameIDs)
+                syncToRemote()
+            }
+        }
     }
 
     init() {
@@ -123,6 +167,68 @@ final class ProfileStore: ObservableObject {
 
         self.avatarType = UserDefaults.standard.string(forKey: Keys.avatarType) ?? Self.defaultAvatarType
         self.avatarCustomImageData = UserDefaults.standard.data(forKey: Keys.avatarCustomImageData)
+
+        // Hämta och synka profil mot Supabase i bakgrunden
+        Task { [weak self] in
+            await self?.syncWithRemote()
+        }
+    }
+
+    private func syncToRemote() {
+        guard !isUpdatingFromRemote else { return }
+        Task { [weak self] in
+            guard let self = self else { return }
+            let userId = await MainActor.run { SupabaseAuthManager.shared.persistentUserId }
+            let (uName, aType, aAge, pPlatforms, fGenres, pPlayFor, fGameIDs, gGoal) = await MainActor.run {
+                (self.username, self.avatarType, self.age, Array(self.platforms), Array(self.favoriteGenres), Array(self.playFor), self.favoriteGameIDs, self.annualGamingGoal)
+            }
+            let prefs = SupabaseSyncService.ProfilePreferencesData(
+                age: aAge,
+                platforms: pPlatforms,
+                favoriteGenres: fGenres,
+                playFor: pPlayFor,
+                favoriteGameIDs: fGameIDs,
+                annualGamingGoal: gGoal,
+                avatarType: aType
+            )
+            try? await SupabaseSyncService.shared.upsertProfile(
+                userId: userId,
+                username: uName,
+                avatarUrl: aType,
+                preferences: prefs
+            )
+        }
+    }
+
+    func syncWithRemote() async {
+        let userId = await MainActor.run { SupabaseAuthManager.shared.persistentUserId }
+        do {
+            if let result = try await SupabaseSyncService.shared.fetchProfile(userId: userId) {
+                await MainActor.run {
+                    self.isUpdatingFromRemote = true
+                    defer { self.isUpdatingFromRemote = false }
+                    if let u = result.username, !u.isEmpty {
+                        self.username = u
+                    }
+                    if let a = result.avatarUrl, !a.isEmpty {
+                        self.avatarType = a
+                    }
+                    if let prefs = result.preferences {
+                        if let age = prefs.age, age > 0 { self.age = age }
+                        if let plats = prefs.platforms { self.platforms = Set(plats) }
+                        if let genres = prefs.favoriteGenres { self.favoriteGenres = Set(genres) }
+                        if let pf = prefs.playFor { self.playFor = Set(pf) }
+                        if let favs = prefs.favoriteGameIDs { self.favoriteGameIDs = favs }
+                        if let goal = prefs.annualGamingGoal, goal > 0 { self.annualGamingGoal = goal }
+                        if let at = prefs.avatarType, !at.isEmpty { self.avatarType = at }
+                    }
+                }
+            } else {
+                syncToRemote()
+            }
+        } catch {
+            print("⚠️ ProfileStore syncWithRemote error: \(error)")
+        }
     }
 
     func toggle(_ platform: String) {

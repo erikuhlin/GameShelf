@@ -323,4 +323,79 @@ actor SupabaseSyncService {
             throw URLError(.badServerResponse)
         }
     }
+
+    // MARK: - Profile Sync
+    struct RemoteProfileRecord: Codable {
+        var id: String
+        var username: String?
+        var full_name: String?
+        var avatar_url: String?
+        var updated_at: String?
+    }
+
+    struct ProfilePreferencesData: Codable {
+        var age: Int?
+        var platforms: [String]?
+        var favoriteGenres: [String]?
+        var playFor: [String]?
+        var favoriteGameIDs: [String]?
+        var annualGamingGoal: Int?
+        var avatarType: String?
+    }
+
+    func fetchProfile(userId: UUID) async throws -> (username: String?, avatarUrl: String?, preferences: ProfilePreferencesData?)? {
+        guard let request = await makeRequest(
+            endpoint: "profiles?id=eq.\(userId.uuidString)&select=*",
+            method: "GET"
+        ) else { return nil }
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            return nil
+        }
+
+        let records = try JSONDecoder().decode([RemoteProfileRecord].self, from: data)
+        guard let record = records.first else { return nil }
+
+        var prefs: ProfilePreferencesData? = nil
+        if let fn = record.full_name, let fnData = fn.data(using: .utf8) {
+            prefs = try? JSONDecoder().decode(ProfilePreferencesData.self, from: fnData)
+        }
+
+        return (record.username, record.avatar_url, prefs)
+    }
+
+    func upsertProfile(
+        userId: UUID,
+        username: String,
+        avatarUrl: String?,
+        preferences: ProfilePreferencesData
+    ) async throws {
+        let prefsData = try JSONEncoder().encode(preferences)
+        let fullNameJSON = String(data: prefsData, encoding: .utf8) ?? "{}"
+
+        let record = RemoteProfileRecord(
+            id: userId.uuidString,
+            username: username,
+            full_name: fullNameJSON,
+            avatar_url: avatarUrl,
+            updated_at: ISO8601DateFormatter().string(from: Date())
+        )
+
+        let body = try JSONEncoder().encode(record)
+        guard let request = await makeRequest(
+            endpoint: "profiles",
+            method: "POST",
+            body: body,
+            prefer: "resolution=merge-duplicates,return=representation"
+        ) else { return }
+
+        let (respData, response) = try await session.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 500
+        guard (200...299).contains(statusCode) else {
+            let err = String(data: respData, encoding: .utf8) ?? "Kunde inte spara profil"
+            print("❌ upsertProfile error (\(statusCode)): \(err)")
+            return
+        }
+    }
 }

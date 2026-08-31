@@ -91,10 +91,10 @@ export function DiscoverView({
   const [genreGames, setGenreGames] = useState<Game[]>([]);
   const [genreSort, setGenreSort] = useState<'popularity' | 'rating' | 'newest'>('popularity');
   const [genreLimit, setGenreLimit] = useState<number>(12);
-  const [isLoadingGenre, setIsLoadingGenre] = useState(false);
+  const [isLoadingGenre, setIsLoadingGenre] = useState(true);
   const [isLoadingMoreGenre, setIsLoadingMoreGenre] = useState(false);
 
-  const [isLoadingDiscover, setIsLoadingDiscover] = useState(false);
+  const [isLoadingDiscover, setIsLoadingDiscover] = useState(true);
 
   // --- In-view Roulette State ---
   const [rouletteMode, setRouletteMode] = useState<'library' | 'igdb'>('library');
@@ -199,51 +199,117 @@ export function DiscoverView({
     ? AVATAR_PRESETS.find((p) => p.id === userProfile.avatarType)
     : null;
 
-  // Hämta trending och upcoming
+  // Hämta trending och upcoming med lokal cache för omedelbar respons
   useEffect(() => {
+    let isCancelled = false;
+
     async function loadDiscoverFeed() {
-      setIsLoadingDiscover(true);
+      // 1. Läs från sessionStorage om tillgängligt
+      const cacheKey = `gameshelf_discover_${trendingSort}`;
+      if (typeof window !== 'undefined') {
+        try {
+          const cached = sessionStorage.getItem(cacheKey);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed.trending) && parsed.trending.length > 0) {
+              setTrendingGames(parsed.trending);
+            }
+            if (Array.isArray(parsed.upcoming) && parsed.upcoming.length > 0) {
+              setUpcomingGames(parsed.upcoming);
+            }
+            setIsLoadingDiscover(false);
+          }
+        } catch (e) {}
+      }
+
       try {
         const [trendRes, upRes] = await Promise.allSettled([
           fetch(`/api/games/discover?category=trending&sort=${trendingSort}&era=recent&limit=25`).then((r) => r.json()),
           fetch('/api/games/discover?category=upcoming&limit=20').then((r) => r.json()),
         ]);
 
-        if (trendRes.status === 'fulfilled' && trendRes.value.results) {
-          setTrendingGames(trendRes.value.results);
+        if (isCancelled) return;
+
+        let freshTrending: Game[] = [];
+        let freshUpcoming: Game[] = [];
+
+        if (trendRes.status === 'fulfilled' && Array.isArray(trendRes.value?.results)) {
+          freshTrending = trendRes.value.results;
+          setTrendingGames(freshTrending);
         }
-        if (upRes.status === 'fulfilled' && upRes.value.results) {
-          setUpcomingGames(upRes.value.results);
+        if (upRes.status === 'fulfilled' && Array.isArray(upRes.value?.results)) {
+          freshUpcoming = upRes.value.results;
+          setUpcomingGames(freshUpcoming);
+        }
+
+        if (typeof window !== 'undefined' && (freshTrending.length > 0 || freshUpcoming.length > 0)) {
+          try {
+            sessionStorage.setItem(cacheKey, JSON.stringify({ trending: freshTrending, upcoming: freshUpcoming }));
+          } catch (e) {}
         }
       } catch (err) {
         console.error('Error loading discover feed:', err);
       } finally {
-        setIsLoadingDiscover(false);
+        if (!isCancelled) {
+          setIsLoadingDiscover(false);
+        }
       }
     }
 
     loadDiscoverFeed();
+    return () => {
+      isCancelled = true;
+    };
   }, [trendingSort]);
 
   // Hämta genrespel vid byte av genre eller sortering
   useEffect(() => {
+    let isCancelled = false;
+
     async function loadGenreGames() {
       setIsLoadingGenre(true);
       setGenreLimit(12);
+
+      const cacheKey = `gameshelf_genre_${selectedGenre}_${genreSort}`;
+      if (typeof window !== 'undefined') {
+        try {
+          const cached = sessionStorage.getItem(cacheKey);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setGenreGames(parsed);
+              setIsLoadingGenre(false);
+            }
+          }
+        } catch (e) {}
+      }
+
       try {
         const res = await fetch(
           `/api/games/discover?genre=${encodeURIComponent(selectedGenre)}&sort=${genreSort}&era=recent&limit=12`
         );
         const data = await res.json();
-        if (data.results) {
+        if (!isCancelled && Array.isArray(data?.results)) {
           setGenreGames(data.results);
+          if (typeof window !== 'undefined' && data.results.length > 0) {
+            try {
+              sessionStorage.setItem(cacheKey, JSON.stringify(data.results));
+            } catch (e) {}
+          }
         }
       } catch (e) {
+        console.error('Error loading genre games:', e);
       } finally {
-        setIsLoadingGenre(false);
+        if (!isCancelled) {
+          setIsLoadingGenre(false);
+        }
       }
     }
+
     loadGenreGames();
+    return () => {
+      isCancelled = true;
+    };
   }, [selectedGenre, genreSort]);
 
   // Hämta fler spel sömlöst utan att hoppa till toppen
@@ -500,37 +566,129 @@ export function DiscoverView({
                     onClick={onOpenProfileModal}
                     className="text-[11px] font-semibold text-zinc-400 hover:text-white transition cursor-pointer"
                   >
-                    Ändra →
+                    Ändra mål →
                   </button>
                 )}
               </div>
 
               <div className="my-2">
                 <div className="flex items-baseline justify-between mb-1.5">
-                  <span className="text-xl font-black text-white font-mono">
-                    {completedGamesCount} / {annualGoal}
-                  </span>
-                  <span className="text-xs font-bold text-zinc-400 font-mono">
-                    {goalProgressPct}%
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xl font-black text-white font-mono">
+                      {completedGamesCount >= annualGoal
+                        ? `${completedGamesCount} klara`
+                        : `${completedGamesCount} / ${annualGoal}`}
+                    </span>
+                    {completedGamesCount >= annualGoal && (
+                      <span className="text-[11px] font-bold text-emerald-400 font-mono">
+                        (Mål: {annualGoal})
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    className={`text-xs font-bold font-mono ${
+                      completedGamesCount >= annualGoal ? 'text-emerald-400' : 'text-zinc-400'
+                    }`}
+                  >
+                    {completedGamesCount >= annualGoal ? '100% 🏆' : `${goalProgressPct}%`}
                   </span>
                 </div>
                 <div className="w-full h-2.5 rounded-full bg-zinc-950 border border-zinc-800 overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-amber-500 to-emerald-400 rounded-full transition-all duration-500"
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      completedGamesCount >= annualGoal
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                        : 'bg-gradient-to-r from-amber-500 to-emerald-400'
+                    }`}
                     style={{ width: `${goalProgressPct}%` }}
                   />
                 </div>
               </div>
 
-              <span className="text-[11px] text-zinc-500 truncate">
-                {goalProgressPct >= 100
+              <span className="text-[11px] text-zinc-400 truncate font-medium">
+                {completedGamesCount >= annualGoal
                   ? 'Målet uppnått! Fantastiskt spelår! 🎉'
                   : `${annualGoal - completedGamesCount} spel kvar till målet`}
               </span>
             </div>
           </div>
 
-          {/* 2. Nästa släpp i din önskelista (om sådant finns) */}
+          {/* 2. Zon 1: Ditt Spelande (Fortsätt spela) - Ligger alltid överst när man har aktiva spel */}
+          {currentlyPlaying.length > 0 && (
+            <div className="space-y-3.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-zinc-200 uppercase tracking-wider">
+                  <Play className="w-3.5 h-3.5 text-emerald-400 fill-current" />
+                  <span>Ditt spelande just nu ({currentlyPlaying.length})</span>
+                </div>
+                {onOpenRouletteModal ? (
+                  <button
+                    onClick={onOpenRouletteModal}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs font-semibold text-zinc-300 hover:text-white transition cursor-pointer"
+                  >
+                    <Dices className="w-3.5 h-3.5 text-brand-red" />
+                    <span>Snurra fram ett spel</span>
+                  </button>
+                ) : (
+                  <a
+                    href="#roulette-section"
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs font-semibold text-zinc-300 hover:text-white transition"
+                  >
+                    <Dices className="w-3.5 h-3.5 text-brand-red" />
+                    <span>Snurra fram ett spel</span>
+                  </a>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                {currentlyPlaying.map((game) => (
+                  <div
+                    key={game.id}
+                    onClick={() => onSelectGame(game)}
+                    className="flex items-center gap-3.5 p-3 rounded-2xl bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 cursor-pointer group transition shadow-sm"
+                  >
+                    <div className="w-12 h-16 rounded-xl overflow-hidden bg-zinc-950 flex-shrink-0 border border-zinc-800 shadow-md">
+                      {game.cover_url ? (
+                        <img
+                          src={game.cover_url}
+                          alt={game.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Gamepad className="w-6 h-6 text-zinc-600" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
+                          Spelar nu
+                        </span>
+                      </div>
+                      <h4 className="text-xs sm:text-sm font-bold text-white truncate group-hover:text-red-400 transition">
+                        {game.title}
+                      </h4>
+                      <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
+                        {game.platforms?.[0] || 'Aktivt spel'}
+                      </p>
+                      {game.rating && (
+                        <span className="text-[10px] text-amber-400 font-semibold mt-0.5 block">
+                          ⭐ {game.rating}/10
+                        </span>
+                      )}
+                    </div>
+                    <div className="p-2 rounded-xl bg-zinc-800/60 group-hover:bg-brand-red group-hover:text-white text-zinc-400 transition flex-shrink-0">
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 3. Nästa släpp i din önskelista (om sådant finns) */}
           {nextWishlistRelease && (
             <div
               onClick={() => onSelectGame(nextWishlistRelease)}
@@ -594,14 +752,21 @@ export function DiscoverView({
 
                 {/* Nedräkningsbadge & Knapp */}
                 <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
-                  {nextWishlistDays !== null && (
+                  {nextWishlistDays !== null ? (
                     <div className="px-3.5 py-2 rounded-2xl bg-zinc-950/80 border border-zinc-800 text-center shadow-inner">
-                      <span className="text-xs text-zinc-400 block font-semibold">Tid kvar</span>
-                      <span className="text-base sm:text-lg font-black text-rose-400 font-mono">
+                      <span className="text-[10px] text-zinc-400 block font-semibold uppercase tracking-wider">Tid kvar</span>
+                      <span className="text-sm sm:text-base font-black text-rose-400 font-mono">
                         {nextWishlistDays === 0 ? 'Släpps idag! 🎉' : `Om ${nextWishlistDays} d`}
                       </span>
                     </div>
-                  )}
+                  ) : nextWishlistRelease.release_year ? (
+                    <div className="px-3.5 py-2 rounded-2xl bg-zinc-950/80 border border-zinc-800 text-center shadow-inner">
+                      <span className="text-[10px] text-zinc-400 block font-semibold uppercase tracking-wider">Planerat</span>
+                      <span className="text-sm sm:text-base font-black text-amber-400 font-mono">
+                        {nextWishlistRelease.release_year}
+                      </span>
+                    </div>
+                  ) : null}
                   <div className="p-3 rounded-2xl bg-zinc-800/80 group-hover:bg-brand-red group-hover:text-white text-zinc-300 transition shadow-md">
                     <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition" />
                   </div>
@@ -610,159 +775,128 @@ export function DiscoverView({
             </div>
           )}
 
-          {/* 3. Hero: Smart Spelsnurra / Roulette Card */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-900/90 via-zinc-950/95 to-black border border-zinc-800/80 p-5 sm:p-7 shadow-xl">
-            <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="max-w-md text-center md:text-left">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-red/10 border border-brand-red/30 text-rose-300 text-xs font-bold uppercase tracking-wider mb-2.5">
-                  <Dices className="w-3.5 h-3.5 text-brand-red" />
-                  <span>Smart Spelsnurra</span>
-                </div>
-                <h3 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
-                  Vad ska du spela ikväll?
-                </h3>
-                <p className="text-xs sm:text-sm text-zinc-400 mt-1 leading-relaxed">
-                  Låt slumpen välja bland dina ospelade spel i backloggen eller upptäck nya rekommendationer.
-                </p>
-
-                {/* Mode Selector */}
-                <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-3.5">
-                  <button
-                    onClick={() => setRouletteMode('library')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
-                      rouletteMode === 'library'
-                        ? 'bg-white text-zinc-950 border-white'
-                        : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                    }`}
-                  >
-                    Mina spel ({games.length})
-                  </button>
-                  <button
-                    onClick={() => setRouletteMode('igdb')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
-                      rouletteMode === 'igdb'
-                        ? 'bg-white text-zinc-950 border-white'
-                        : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                    }`}
-                  >
-                    Upptäck från IGDB
-                  </button>
-                </div>
-              </div>
-
-              {/* Roulette Action / Result Card */}
-              <div className="flex flex-col items-center gap-3.5 w-full sm:w-auto">
-                {winnerGame ? (
-                  <div
-                    onClick={() => onSelectGame(winnerGame)}
-                    className="flex items-center gap-3.5 p-2.5 bg-zinc-900/90 border border-zinc-700/80 rounded-2xl cursor-pointer hover:border-zinc-500 transition shadow-lg w-full max-w-sm group"
-                  >
-                    <div className="w-14 h-18 rounded-xl overflow-hidden bg-zinc-950 flex-shrink-0 relative border border-zinc-800">
-                      {winnerGame.cover_url ? (
-                        <img
-                          src={winnerGame.cover_url}
-                          alt={winnerGame.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Gamepad className="w-6 h-6 text-zinc-600" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider block">
-                        Utvalt spel!
-                      </span>
-                      <h4 className="text-sm font-bold text-white truncate group-hover:text-red-400 transition">
-                        {winnerGame.title}
-                      </h4>
-                      <p className="text-[11px] text-zinc-400 mt-0.5">
-                        {winnerGame.release_year ? `${winnerGame.release_year} • ` : ''}
-                        {winnerGame.genres?.[0] || 'Spel'}
-                      </p>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-zinc-400 group-hover:text-white transition mr-1" />
+          {/* Om användaren INTE har några spel i Spelar nu: visa Spelsnurran här */}
+          {currentlyPlaying.length === 0 && (
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-900/90 via-zinc-950/95 to-black border border-zinc-800/80 p-5 sm:p-7 shadow-xl">
+              <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="max-w-md text-center md:text-left">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-red/10 border border-brand-red/30 text-rose-300 text-xs font-bold uppercase tracking-wider mb-2.5">
+                    <Dices className="w-3.5 h-3.5 text-brand-red" />
+                    <span>Smart Spelsnurra</span>
                   </div>
-                ) : (
-                  <div className="w-full max-w-sm h-20 border border-dashed border-zinc-800 rounded-2xl flex items-center justify-center text-zinc-500 text-xs px-4 text-center">
-                    Klicka nedan för att slumpa fram ett spel
+                  <h3 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
+                    Vad ska du spela ikväll?
+                  </h3>
+                  <p className="text-xs sm:text-sm text-zinc-400 mt-1 leading-relaxed">
+                    Låt slumpen välja bland dina ospelade spel i backloggen eller upptäck nya rekommendationer.
+                  </p>
+
+                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-3.5">
+                    <button
+                      onClick={() => setRouletteMode('library')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
+                        rouletteMode === 'library'
+                          ? 'bg-white text-zinc-950 border-white'
+                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      Mina spel ({games.length})
+                    </button>
+                    <button
+                      onClick={() => setRouletteMode('igdb')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
+                        rouletteMode === 'igdb'
+                          ? 'bg-white text-zinc-950 border-white'
+                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      Upptäck från IGDB
+                    </button>
                   </div>
-                )}
+                </div>
 
-                <button
-                  onClick={handleSpinRoulette}
-                  disabled={isSpinning || (rouletteMode === 'library' && games.length === 0)}
-                  className="w-full sm:w-auto px-7 py-2.5 bg-gradient-to-r from-brand-red to-rose-600 hover:from-brand-redPressed hover:to-rose-700 disabled:opacity-50 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg transition flex items-center justify-center gap-2"
-                >
-                  <Dices className={`w-4 h-4 ${isSpinning ? 'animate-spin' : ''}`} />
-                  <span>{isSpinning ? 'Snurrar hjulet...' : '🎲 Snurra fram ett spel!'}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* 3. Fortsätt spela (om man har aktiva spel) */}
-          {currentlyPlaying.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-zinc-300 uppercase tracking-wider">
-                <Play className="w-3.5 h-3.5 text-emerald-400 fill-current" />
-                <span>Fortsätt spela</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {currentlyPlaying.map((game) => (
-                  <div
-                    key={game.id}
-                    onClick={() => onSelectGame(game)}
-                    className="flex items-center gap-3 p-2.5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 cursor-pointer group transition shadow-sm"
-                  >
-                    <div className="w-11 h-14 rounded-xl overflow-hidden bg-zinc-950 flex-shrink-0 border border-zinc-800">
-                      {game.cover_url ? (
-                        <img
-                          src={game.cover_url}
-                          alt={game.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Gamepad className="w-5 h-5 text-zinc-600" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-xs sm:text-sm font-bold text-zinc-100 truncate group-hover:text-red-400 transition">
-                        {game.title}
-                      </h4>
-                      <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
-                        {game.platforms?.[0] || 'Spelas nu'}
-                      </p>
-                      {game.rating && (
-                        <span className="text-[10px] text-amber-400 font-semibold mt-0.5 block">
-                          ⭐ {game.rating}/10
+                <div className="flex flex-col items-center gap-3.5 w-full sm:w-auto">
+                  {winnerGame ? (
+                    <div
+                      onClick={() => onSelectGame(winnerGame)}
+                      className="flex items-center gap-3.5 p-2.5 bg-zinc-900/90 border border-zinc-700/80 rounded-2xl cursor-pointer hover:border-zinc-500 transition shadow-lg w-full max-w-sm group"
+                    >
+                      <div className="w-14 h-18 rounded-xl overflow-hidden bg-zinc-950 flex-shrink-0 relative border border-zinc-800">
+                        {winnerGame.cover_url ? (
+                          <img
+                            src={winnerGame.cover_url}
+                            alt={winnerGame.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Gamepad className="w-6 h-6 text-zinc-600" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider block">
+                          Utvalt spel!
                         </span>
-                      )}
+                        <h4 className="text-sm font-bold text-white truncate group-hover:text-red-400 transition">
+                          {winnerGame.title}
+                        </h4>
+                        <p className="text-[11px] text-zinc-400 mt-0.5">
+                          {winnerGame.release_year ? `${winnerGame.release_year} • ` : ''}
+                          {winnerGame.genres?.[0] || 'Spel'}
+                        </p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-zinc-400 group-hover:text-white transition mr-1" />
                     </div>
-                  </div>
-                ))}
+                  ) : (
+                    <div className="w-full max-w-sm h-20 border border-dashed border-zinc-800 rounded-2xl flex items-center justify-center text-zinc-500 text-xs px-4 text-center">
+                      Klicka nedan för att slumpa fram ett spel
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleSpinRoulette}
+                    disabled={isSpinning || (rouletteMode === 'library' && games.length === 0)}
+                    className="w-full sm:w-auto px-7 py-2.5 bg-gradient-to-r from-brand-red to-rose-600 hover:from-brand-redPressed hover:to-rose-700 disabled:opacity-50 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg transition flex items-center justify-center gap-2"
+                  >
+                    <Dices className={`w-4 h-4 ${isSpinning ? 'animate-spin' : ''}`} />
+                    <span>{isSpinning ? 'Snurrar hjulet...' : '🎲 Snurra fram ett spel!'}</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
 
           {/* 4. 📅 Kommande spelsläpp (Releasekalender från IGDB) */}
-          {upcomingGames.length > 0 && (
-            <div className="space-y-3.5">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-brand-red" />
-                  <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">
-                    Kommande spelsläpp (Releasekalender)
-                  </h3>
-                </div>
-                <span className="text-xs text-zinc-400 font-medium">
-                  {upcomingGames.length} heta släpp
-                </span>
+          <div className="space-y-3.5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-brand-red" />
+                <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">
+                  Kommande spelsläpp (Releasekalender)
+                </h3>
               </div>
+              <span className="text-xs text-zinc-400 font-medium">
+                {isLoadingDiscover && upcomingGames.length === 0
+                  ? 'Hämtar släpp...'
+                  : `${upcomingGames.length} heta släpp`}
+              </span>
+            </div>
 
+            {isLoadingDiscover && upcomingGames.length === 0 ? (
+              <div className="flex gap-3.5 overflow-x-auto pb-2.5 scrollbar-none">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div
+                    key={i}
+                    className="flex-shrink-0 w-36 sm:w-44 h-56 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 animate-pulse flex flex-col p-2.5"
+                  >
+                    <div className="w-full aspect-[3/4] rounded-xl bg-zinc-800/60 mb-2.5" />
+                    <div className="w-3/4 h-3 bg-zinc-800 rounded mb-1.5" />
+                    <div className="w-1/2 h-2.5 bg-zinc-800/60 rounded" />
+                  </div>
+                ))}
+              </div>
+            ) : upcomingGames.length > 0 ? (
               <div className="flex gap-3.5 overflow-x-auto pb-2.5 scrollbar-thin scrollbar-thumb-zinc-800">
                 {upcomingGames.map((game) => {
                   const inLibrary = isGameInLibrary(game.igdb_id, game.title);
@@ -842,8 +976,8 @@ export function DiscoverView({
                   );
                 })}
               </div>
-            </div>
-          )}
+            ) : null}
+          </div>
 
           {/* 5. 🔥 Trendar just nu */}
           <div className="space-y-3">
@@ -864,7 +998,21 @@ export function DiscoverView({
               </select>
             </div>
 
-            <div className="flex gap-3.5 overflow-x-auto pb-2.5 scrollbar-thin scrollbar-thumb-zinc-800">
+            {isLoadingDiscover && trendingGames.length === 0 ? (
+              <div className="flex gap-3.5 overflow-x-auto pb-2.5 scrollbar-none">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div
+                    key={i}
+                    className="flex-shrink-0 w-32 sm:w-40 h-52 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 animate-pulse flex flex-col p-2"
+                  >
+                    <div className="w-full aspect-[3/4] rounded-xl bg-zinc-800/60 mb-2" />
+                    <div className="w-3/4 h-3 bg-zinc-800 rounded mb-1.5" />
+                    <div className="w-1/2 h-2.5 bg-zinc-800/60 rounded" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex gap-3.5 overflow-x-auto pb-2.5 scrollbar-thin scrollbar-thumb-zinc-800">
               {trendingGames.map((game, idx) => {
                 const inLibrary = isGameInLibrary(game.igdb_id, game.title);
                 return (
@@ -947,7 +1095,8 @@ export function DiscoverView({
                 );
               })}
             </div>
-          </div>
+          )}
+        </div>
 
           {/* 5. 🎮 Utforska per genre */}
           <div className="space-y-3.5 pt-2">
@@ -987,13 +1136,37 @@ export function DiscoverView({
 
             {/* Spelrutnät för vald genre */}
             {isLoadingGenre && genreGames.length === 0 ? (
-              <div className="flex items-center justify-center py-16 text-zinc-500 gap-2">
-                <RefreshCw className="w-4 h-4 animate-spin text-brand-red" />
-                <span className="text-xs">Laddar {currentGenreLabel}-spel...</span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((i) => (
+                  <div
+                    key={i}
+                    className="h-56 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 animate-pulse flex flex-col p-2.5"
+                  >
+                    <div className="w-full aspect-[3/4] rounded-xl bg-zinc-800/60 mb-2" />
+                    <div className="w-3/4 h-3 bg-zinc-800 rounded mb-1.5" />
+                    <div className="w-1/2 h-2.5 bg-zinc-800/60 rounded" />
+                  </div>
+                ))}
               </div>
             ) : genreGames.length === 0 ? (
-              <div className="text-center py-10 text-zinc-500 border border-dashed border-zinc-800 rounded-2xl">
+              <div className="text-center py-10 text-zinc-500 border border-dashed border-zinc-800 rounded-2xl space-y-2">
                 <p className="text-xs">Inga spel hittades inom {currentGenreLabel}.</p>
+                <button
+                  onClick={() => {
+                    setIsLoadingGenre(true);
+                    fetch(
+                      `/api/games/discover?genre=${encodeURIComponent(selectedGenre)}&sort=${genreSort}&era=recent&limit=12`
+                    )
+                      .then((r) => r.json())
+                      .then((d) => {
+                        if (d.results) setGenreGames(d.results);
+                      })
+                      .finally(() => setIsLoadingGenre(false));
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-zinc-800 text-xs text-white font-semibold hover:bg-zinc-700 transition cursor-pointer"
+                >
+                  Försök igen
+                </button>
               </div>
             ) : (
               <div className="space-y-4">
@@ -1091,6 +1264,101 @@ export function DiscoverView({
               </div>
             )}
           </div>
+
+          {/* 6. 🎲 Smart Spelsnurra (Inspiration & Slumpare när man har aktiva spel) */}
+          {currentlyPlaying.length > 0 && (
+            <div
+              id="roulette-section"
+              className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-900/90 via-zinc-950/95 to-black border border-zinc-800/80 p-5 sm:p-7 shadow-xl"
+            >
+              <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="max-w-md text-center md:text-left">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-red/10 border border-brand-red/30 text-rose-300 text-xs font-bold uppercase tracking-wider mb-2.5">
+                    <Dices className="w-3.5 h-3.5 text-brand-red" />
+                    <span>Smart Spelsnurra</span>
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
+                    Behöver du inspiration?
+                  </h3>
+                  <p className="text-xs sm:text-sm text-zinc-400 mt-1 leading-relaxed">
+                    Låt slumpen välja vad du ska spela härnäst bland dina ospelade spel i backloggen eller upptäck nya rekommendationer.
+                  </p>
+
+                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-3.5">
+                    <button
+                      onClick={() => setRouletteMode('library')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                        rouletteMode === 'library'
+                          ? 'bg-white text-zinc-950 border-white font-bold'
+                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      Mina spel ({games.length})
+                    </button>
+                    <button
+                      onClick={() => setRouletteMode('igdb')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                        rouletteMode === 'igdb'
+                          ? 'bg-white text-zinc-950 border-white font-bold'
+                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      Upptäck från IGDB
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-center gap-3.5 w-full sm:w-auto">
+                  {winnerGame ? (
+                    <div
+                      onClick={() => onSelectGame(winnerGame)}
+                      className="flex items-center gap-3.5 p-2.5 bg-zinc-900/90 border border-zinc-700/80 rounded-2xl cursor-pointer hover:border-zinc-500 transition shadow-lg w-full max-w-sm group"
+                    >
+                      <div className="w-14 h-18 rounded-xl overflow-hidden bg-zinc-950 flex-shrink-0 relative border border-zinc-800">
+                        {winnerGame.cover_url ? (
+                          <img
+                            src={winnerGame.cover_url}
+                            alt={winnerGame.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Gamepad className="w-6 h-6 text-zinc-600" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider block">
+                          Utvalt spel!
+                        </span>
+                        <h4 className="text-sm font-bold text-white truncate group-hover:text-red-400 transition">
+                          {winnerGame.title}
+                        </h4>
+                        <p className="text-[11px] text-zinc-400 mt-0.5">
+                          {winnerGame.release_year ? `${winnerGame.release_year} • ` : ''}
+                          {winnerGame.genres?.[0] || 'Spel'}
+                        </p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-zinc-400 group-hover:text-white transition mr-1" />
+                    </div>
+                  ) : (
+                    <div className="w-full max-w-sm h-20 border border-dashed border-zinc-800 rounded-2xl flex items-center justify-center text-zinc-500 text-xs px-4 text-center">
+                      Klicka nedan för att slumpa fram ett spel
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleSpinRoulette}
+                    disabled={isSpinning || (rouletteMode === 'library' && games.length === 0)}
+                    className="w-full sm:w-auto px-7 py-2.5 bg-gradient-to-r from-brand-red to-rose-600 hover:from-brand-redPressed hover:to-rose-700 disabled:opacity-50 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Dices className={`w-4 h-4 ${isSpinning ? 'animate-spin' : ''}`} />
+                    <span>{isSpinning ? 'Snurrar hjulet...' : '🎲 Snurra fram ett spel!'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         /* --- Avancerad Spelnyhets- & Recensionshub --- */

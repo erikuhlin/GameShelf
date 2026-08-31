@@ -3,14 +3,18 @@ import { queryIGDB } from '@/lib/igdb-server';
 
 export const revalidate = 300; // 5 minuters edge cache
 
+// In-memory cache for ultra-fast response times & rate-limit protection
+const DISCOVER_CACHE = new Map<string, { results: any[]; expiresAt: number }>();
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minuter
+
 const GENRE_CLAUSES: Record<string, string> = {
-  'Action': 'genres = (25, 5, 4)',
+  'Action': 'genres = (25, 4, 5, 31)',
   'Role-playing (RPG)': 'genres = (12)',
   'RPG': 'genres = (12)',
   'Adventure': 'genres = (31)',
   'Äventyr': 'genres = (31)',
-  'Shooter': 'genres = (5)',
-  'Skjutspel': 'genres = (5)',
+  'Shooter': 'genres = (5, 24)',
+  'Skjutspel': 'genres = (5, 24)',
   'Indie': 'genres = (32)',
   'Strategy': 'genres = (15, 11, 16, 24)',
   'Strategi': 'genres = (15, 11, 16, 24)',
@@ -33,21 +37,36 @@ export async function GET(request: NextRequest) {
   const category = searchParams.get('category') || 'trending';
   const genreParam = searchParams.get('genre')?.trim();
   const sortParam = searchParams.get('sort') || 'popularity';
-  const eraParam = searchParams.get('era') || 'recent'; // 'recent' (2022-2026), 'prev_gen' (2017-2021), 'classics', 'all'
+  const eraParam = searchParams.get('era') || 'recent';
   const limitParam = Math.min(Number(searchParams.get('limit')) || 25, 60);
   const excludeIdsParam = searchParams.get('exclude_ids') || '';
   const excludeIds = new Set(excludeIdsParam.split(',').map((id) => Number(id.trim())).filter(Boolean));
 
   const nowSeconds = Math.floor(Date.now() / 1000);
+  const cacheKey = `${category}_${genreParam || ''}_${sortParam}_${eraParam}_${limitParam}`;
 
-  // Tidsfilter (Aktuella spel som standard)
+  // 1. Svara omedelbart om cachat i minnet
+  const cached = DISCOVER_CACHE.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now() && cached.results.length > 0) {
+    const filtered = cached.results.filter((game: any) => !excludeIds.has(game.igdb_id));
+    return NextResponse.json(
+      { results: filtered },
+      {
+        headers: {
+          'Cache-Control': 'public, s-maxage=900, stale-while-revalidate=1800',
+        },
+      }
+    );
+  }
+
+  // Tidsfilter
   let dateClause = '';
   if (eraParam === 'recent') {
-    dateClause = `& first_release_date >= 1640995200 & first_release_date <= ${nowSeconds + 31536000}`; // 2022-01-01 och framåt
+    dateClause = `& first_release_date >= 1640995200 & first_release_date <= ${nowSeconds + 31536000}`;
   } else if (eraParam === 'prev_gen') {
-    dateClause = `& first_release_date >= 1483228800 & first_release_date < 1640995200`; // 2017-2021
+    dateClause = `& first_release_date >= 1483228800 & first_release_date < 1640995200`;
   } else if (eraParam === 'classics') {
-    dateClause = `& first_release_date < 1483228800`; // Innan 2017
+    dateClause = `& first_release_date < 1483228800`;
   }
 
   try {
@@ -63,26 +82,26 @@ export async function GET(request: NextRequest) {
     } else if (category === 'top_rated') {
       igdbQuery = `
         fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary, total_rating_count;
-        where (rating >= 85 | total_rating >= 85) & total_rating_count >= 10 ${dateClause} & cover != null;
-        sort rating desc;
+        where total_rating_count >= 15 ${dateClause} & cover != null;
+        sort total_rating desc;
         limit ${limitParam};
       `;
     } else if (genreParam && genreParam !== 'Alla genrer') {
       const genreClause = GENRE_CLAUSES[genreParam] || `genres.name = "${genreParam.replace(/"/g, '\\"')}"`;
 
       let sortClause = 'sort total_rating_count desc;';
-      if (sortParam === 'rating') sortClause = 'sort rating desc;';
+      if (sortParam === 'rating') sortClause = 'sort total_rating desc;';
       else if (sortParam === 'newest') sortClause = 'sort first_release_date desc;';
       else if (sortParam === 'popularity') sortClause = 'sort total_rating_count desc;';
 
       igdbQuery = `
         fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary, total_rating_count, hypes;
-        where ${genreClause} & (total_rating >= 70 | rating >= 70 | hypes >= 5 | total_rating_count >= 5) ${dateClause} & cover != null;
+        where ${genreClause} & first_release_date >= 1577836800 & cover != null;
         ${sortClause}
         limit ${limitParam};
       `;
     } else {
-      // Trending default (Heta aktuella spel)
+      // Trending default (Heta aktuella spel med snabb, indexerad sökning)
       let sortClause = 'sort total_rating_count desc;';
       if (sortParam === 'popularity') sortClause = 'sort total_rating_count desc;';
       else if (sortParam === 'rating') sortClause = 'sort total_rating desc;';
@@ -90,7 +109,7 @@ export async function GET(request: NextRequest) {
 
       igdbQuery = `
         fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary, hypes, total_rating_count;
-        where (rating >= 72 | total_rating >= 72 | hypes >= 5 | total_rating_count >= 10) ${dateClause} & cover != null;
+        where first_release_date >= 1640995200 & total_rating_count >= 8 & cover != null;
         ${sortClause}
         limit ${limitParam};
       `;
@@ -100,6 +119,7 @@ export async function GET(request: NextRequest) {
     try {
       data = await queryIGDB('games', igdbQuery);
     } catch (e) {
+      console.warn('Initial IGDB query failed, using fast fallback:', e);
       const fallbackQuery = `
         fields name, cover.url, cover.image_id, first_release_date, genres.name, involved_companies.company.name, involved_companies.developer, platforms.name, total_rating, rating, summary;
         where cover != null;
@@ -153,9 +173,28 @@ export async function GET(request: NextRequest) {
         };
       });
 
-    return NextResponse.json({ results });
+    if (results.length > 0) {
+      DISCOVER_CACHE.set(cacheKey, {
+        results,
+        expiresAt: Date.now() + CACHE_TTL_MS,
+      });
+    }
+
+    return NextResponse.json(
+      { results },
+      {
+        headers: {
+          'Cache-Control': 'public, s-maxage=900, stale-while-revalidate=1800',
+        },
+      }
+    );
   } catch (error: any) {
     console.error('Error in /api/games/discover:', error);
+    // Om vi har gammal cache, returnera den istället för 500
+    const stale = DISCOVER_CACHE.get(cacheKey);
+    if (stale && stale.results.length > 0) {
+      return NextResponse.json({ results: stale.results });
+    }
     return NextResponse.json(
       { error: 'Kunde inte hämta upptäcktsdata från IGDB' },
       { status: 500 }

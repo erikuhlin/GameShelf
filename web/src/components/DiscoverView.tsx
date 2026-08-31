@@ -68,6 +68,80 @@ const GENRE_LIST = [
   { id: 'Sport', label: 'Sport' },
 ];
 
+const GENRE_SWEDISH_NAMES: Record<string, string> = {
+  'role-playing (rpg)': 'RPG',
+  'rpg': 'RPG',
+  'shooter': 'Skjutspel',
+  'adventure': 'Äventyr',
+  'hack and slash/beat \'em up': 'Action',
+  'action': 'Action',
+  'platform': 'Plattform',
+  'racing': 'Racing',
+  'fighting': 'Fighting',
+  'horror': 'Skräck',
+  'strategy': 'Strategi',
+  'real time strategy (rts)': 'RTS',
+  'turn-based strategy (tbs)': 'Turbaserat',
+  'tactical': 'Taktik',
+  'simulator': 'Simulator',
+  'puzzle': 'Pussel',
+  'sport': 'Sport',
+  'arcade': 'Arkad',
+  'indie': 'Indie',
+  'card & board game': 'Kortspel',
+  'point-and-click': 'Äventyr',
+  'visual novel': 'Visuell roman',
+};
+
+const GENRE_HIERARCHY = [
+  'role-playing (rpg)',
+  'rpg',
+  'horror',
+  'hack and slash/beat \'em up',
+  'fighting',
+  'racing',
+  'sport',
+  'strategy',
+  'real time strategy (rts)',
+  'shooter',
+  'platform',
+  'puzzle',
+  'simulator',
+  'adventure',
+  'arcade',
+  'indie',
+];
+
+export function getPrimaryGenre(genres?: string[], preferredGenre?: string): string {
+  if (!genres || genres.length === 0) {
+    if (preferredGenre) {
+      return GENRE_SWEDISH_NAMES[preferredGenre.toLowerCase()] || preferredGenre;
+    }
+    return 'Spel';
+  }
+
+  // 1. Om användaren filtrerar på en specifik genre (t.ex. RPG) och spelet har den: prioritera den!
+  if (preferredGenre) {
+    const prefLower = preferredGenre.toLowerCase();
+    const match = genres.find(
+      (g) => g.toLowerCase() === prefLower || g.toLowerCase().includes(prefLower) || prefLower.includes(g.toLowerCase())
+    );
+    if (match) {
+      return GENRE_SWEDISH_NAMES[match.toLowerCase()] || match;
+    }
+  }
+
+  // 2. Prioriteringsordning: Välj spelets mest definierande genre (t.ex. RPG eller Skräck framför generiskt Äventyr)
+  for (const prio of GENRE_HIERARCHY) {
+    const match = genres.find((g) => g.toLowerCase() === prio || g.toLowerCase().includes(prio));
+    if (match) {
+      return GENRE_SWEDISH_NAMES[match.toLowerCase()] || match;
+    }
+  }
+
+  return GENRE_SWEDISH_NAMES[genres[0].toLowerCase()] || genres[0];
+}
+
 const PLATFORMS = ['Alla plattformar', 'PlayStation', 'Xbox', 'Nintendo', 'PC'];
 
 export function DiscoverView({
@@ -206,28 +280,38 @@ export function DiscoverView({
     let isCancelled = false;
 
     async function loadDiscoverFeed() {
-      // 1. Läs från localStorage för omedelbar rendering vid första sidöppning
+      // 1. Läs från cache för omedelbar rendering vid sidöppning
       const cacheKey = `gameshelf_discover_${trendingSort}`;
       if (typeof window !== 'undefined') {
         try {
           const cached = localStorage.getItem(cacheKey) || sessionStorage.getItem(cacheKey);
           if (cached) {
             const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed.trending) && parsed.trending.length > 0) {
+            const hasTrending = Array.isArray(parsed.trending) && parsed.trending.length > 0;
+            const hasUpcoming = Array.isArray(parsed.upcoming) && parsed.upcoming.length > 0;
+            if (hasTrending) {
               setTrendingGames(parsed.trending);
             }
-            if (Array.isArray(parsed.upcoming) && parsed.upcoming.length > 0) {
+            if (hasUpcoming) {
               setUpcomingGames(parsed.upcoming);
             }
-            setIsLoadingDiscover(false);
+            if (hasTrending && hasUpcoming) {
+              setIsLoadingDiscover(false);
+            }
           }
         } catch (e) {}
       }
 
       try {
         const [trendRes, upRes] = await Promise.allSettled([
-          fetch(`/api/games/discover?category=trending&sort=${trendingSort}&era=recent&limit=25`).then((r) => r.json()),
-          fetch('/api/games/discover?category=upcoming&limit=20').then((r) => r.json()),
+          fetch(`/api/games/discover?category=trending&sort=${trendingSort}&era=recent&limit=25`).then((r) => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+          }),
+          fetch('/api/games/discover?category=upcoming&limit=20').then((r) => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+          }),
         ]);
 
         if (isCancelled) return;
@@ -235,18 +319,21 @@ export function DiscoverView({
         let freshTrending: Game[] = [];
         let freshUpcoming: Game[] = [];
 
-        if (trendRes.status === 'fulfilled' && Array.isArray(trendRes.value?.results)) {
+        if (trendRes.status === 'fulfilled' && Array.isArray(trendRes.value?.results) && trendRes.value.results.length > 0) {
           freshTrending = trendRes.value.results;
           setTrendingGames(freshTrending);
         }
-        if (upRes.status === 'fulfilled' && Array.isArray(upRes.value?.results)) {
+        if (upRes.status === 'fulfilled' && Array.isArray(upRes.value?.results) && upRes.value.results.length > 0) {
           freshUpcoming = upRes.value.results;
           setUpcomingGames(freshUpcoming);
         }
 
         if (typeof window !== 'undefined' && (freshTrending.length > 0 || freshUpcoming.length > 0)) {
           try {
-            const dataToSave = JSON.stringify({ trending: freshTrending, upcoming: freshUpcoming });
+            const dataToSave = JSON.stringify({
+              trending: freshTrending.length > 0 ? freshTrending : trendingGames,
+              upcoming: freshUpcoming.length > 0 ? freshUpcoming : upcomingGames,
+            });
             localStorage.setItem(cacheKey, dataToSave);
             sessionStorage.setItem(cacheKey, dataToSave);
           } catch (e) {}
@@ -291,10 +378,11 @@ export function DiscoverView({
         const res = await fetch(
           `/api/games/discover?genre=${encodeURIComponent(selectedGenre)}&sort=${genreSort}&era=recent&limit=12`
         );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        if (!isCancelled && Array.isArray(data?.results)) {
+        if (!isCancelled && Array.isArray(data?.results) && data.results.length > 0) {
           setGenreGames(data.results);
-          if (typeof window !== 'undefined' && data.results.length > 0) {
+          if (typeof window !== 'undefined') {
             try {
               const str = JSON.stringify(data.results);
               localStorage.setItem(cacheKey, str);
@@ -953,7 +1041,7 @@ export function DiscoverView({
                       </h4>
 
                       <span className="text-[10px] text-zinc-400 mt-0.5 truncate">
-                        {game.platforms?.[0] || 'Kommande'}
+                        {getPrimaryGenre(game.genres)} • {game.platforms?.[0] || 'Kommande'}
                       </span>
 
                       <button
@@ -981,7 +1069,25 @@ export function DiscoverView({
                   );
                 })}
               </div>
-            ) : null}
+            ) : (
+              <div className="py-6 px-4 rounded-2xl bg-zinc-900/40 border border-dashed border-zinc-800 text-center flex flex-col items-center justify-center gap-2">
+                <p className="text-xs text-zinc-400">Inga kommande spelsläpp kunde hämtas just nu.</p>
+                <button
+                  onClick={() => {
+                    setIsLoadingDiscover(true);
+                    fetch('/api/games/discover?category=upcoming&limit=20')
+                      .then((r) => r.json())
+                      .then((d) => {
+                        if (Array.isArray(d.results)) setUpcomingGames(d.results);
+                      })
+                      .finally(() => setIsLoadingDiscover(false));
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-zinc-800 text-xs font-semibold text-white hover:bg-zinc-700 transition"
+                >
+                  Försök igen
+                </button>
+              </div>
+            )}
           </div>
 
           {/* 5. 🔥 Trendar just nu */}
@@ -1016,7 +1122,7 @@ export function DiscoverView({
                   </div>
                 ))}
               </div>
-            ) : (
+            ) : trendingGames.length > 0 ? (
               <div className="flex gap-3.5 overflow-x-auto pb-2.5 scrollbar-thin scrollbar-thumb-zinc-800">
               {trendingGames.map((game, idx) => {
                 const inLibrary = isGameInLibrary(game.igdb_id, game.title);
@@ -1072,7 +1178,7 @@ export function DiscoverView({
 
                     <span className="text-[10px] text-zinc-400 mt-0.5 truncate">
                       {game.release_year ? `${game.release_year} • ` : ''}
-                      {game.genres?.[0] || 'Spel'}
+                      {getPrimaryGenre(game.genres)}
                     </span>
 
                     <button
@@ -1099,6 +1205,24 @@ export function DiscoverView({
                   </div>
                 );
               })}
+            </div>
+          ) : (
+            <div className="py-6 px-4 rounded-2xl bg-zinc-900/40 border border-dashed border-zinc-800 text-center flex flex-col items-center justify-center gap-2">
+              <p className="text-xs text-zinc-400">Inga trendande spel kunde hämtas just nu.</p>
+              <button
+                onClick={() => {
+                  setIsLoadingDiscover(true);
+                  fetch(`/api/games/discover?category=trending&sort=${trendingSort}&era=recent&limit=25`)
+                    .then((r) => r.json())
+                    .then((d) => {
+                      if (Array.isArray(d.results)) setTrendingGames(d.results);
+                    })
+                    .finally(() => setIsLoadingDiscover(false));
+                }}
+                className="px-3 py-1.5 rounded-xl bg-zinc-800 text-xs font-semibold text-white hover:bg-zinc-700 transition"
+              >
+                Försök igen
+              </button>
             </div>
           )}
         </div>
@@ -1215,7 +1339,7 @@ export function DiscoverView({
 
                         <span className="text-[10px] text-zinc-400 mt-0.5 truncate">
                           {game.release_year ? `${game.release_year} • ` : ''}
-                          {game.developers?.[0] || currentGenreLabel}
+                          {getPrimaryGenre(game.genres, selectedGenre)}
                         </span>
 
                         <button

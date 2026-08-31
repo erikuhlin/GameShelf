@@ -1425,7 +1425,7 @@ export default function HomePage() {
                               </span>
                             )}
                           </div>
-                          <h4 className="text-xs font-bold text-white truncate group-hover:text-brand-red transition">
+                          <h4 className="text-xs font-bold text-white line-clamp-2 leading-tight group-hover:text-brand-red transition">
                             {game.title}
                           </h4>
                           <p className="text-[11px] text-zinc-400 mt-0.5 truncate">

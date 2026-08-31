@@ -84,7 +84,7 @@ export function ShelfView({ games, onSelectGame }: ShelfViewProps) {
 
                   {/* Title & Platform label */}
                   <div className="w-full mt-2 sm:mt-2.5 text-center px-1">
-                    <h4 className="text-xs sm:text-sm font-semibold text-zinc-200 group-hover:text-brand-red transition text-center line-clamp-1">
+                    <h4 className="text-xs sm:text-sm font-semibold text-zinc-200 group-hover:text-brand-red transition text-center line-clamp-2 min-h-[2.25rem] leading-tight">
                       {game.title}
                     </h4>
                     <p className="text-[10px] sm:text-xs text-zinc-500 truncate mt-0.5">

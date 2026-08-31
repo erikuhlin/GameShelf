@@ -828,8 +828,9 @@ export function DiscoverView({
               onClick={() => onSelectGame(nextWishlistRelease)}
               className="group relative overflow-hidden rounded-3xl bg-gradient-to-r from-red-950/40 via-zinc-900/90 to-zinc-950 border border-red-900/40 hover:border-brand-red/60 p-5 sm:p-6 shadow-xl cursor-pointer transition duration-300"
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
-                <div className="flex items-center gap-4 sm:gap-5 min-w-0">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
+                {/* Vänster: Spelinfo & Omslag */}
+                <div className="flex items-center gap-4 sm:gap-5 min-w-0 flex-1">
                   {/* Omslagsbild */}
                   <div className="w-16 h-22 sm:w-20 sm:h-28 rounded-2xl overflow-hidden bg-zinc-950 flex-shrink-0 border border-zinc-800 shadow-2xl group-hover:scale-105 transition duration-300">
                     {nextWishlistRelease.cover_url ? (
@@ -884,25 +885,48 @@ export function DiscoverView({
                   </div>
                 </div>
 
-                {/* Nedräkningsbadge & Knapp */}
-                <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
-                  {nextWishlistDays !== null ? (
-                    <div className="px-3.5 py-2 rounded-2xl bg-zinc-950/80 border border-zinc-800 text-center shadow-inner">
-                      <span className="text-[10px] text-zinc-400 block font-semibold uppercase tracking-wider">Tid kvar</span>
-                      <span className="text-sm sm:text-base font-black text-rose-400 font-mono">
-                        {nextWishlistDays === 0 ? 'Släpps idag! 🎉' : `Om ${nextWishlistDays} d`}
+                {/* Mitten: Rymlig nedräkning (ersätter den lilla rutan) */}
+                {nextWishlistDays !== null ? (
+                  <div className="flex items-center gap-4 sm:gap-5 py-2 px-4 sm:px-5 rounded-2xl bg-zinc-950/70 border border-zinc-800/80 shrink-0 shadow-inner">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl sm:text-4xl font-black text-rose-400 font-mono tracking-tight">
+                        {nextWishlistDays}
                       </span>
+                      <div className="flex flex-col">
+                        <span className="text-xs sm:text-sm font-bold text-white leading-none">
+                          {nextWishlistDays === 1 ? 'dag' : 'dagar'}
+                        </span>
+                        <span className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mt-0.5">
+                          kvar till release
+                        </span>
+                      </div>
                     </div>
-                  ) : nextWishlistRelease.release_year ? (
-                    <div className="px-3.5 py-2 rounded-2xl bg-zinc-950/80 border border-zinc-800 text-center shadow-inner">
-                      <span className="text-[10px] text-zinc-400 block font-semibold uppercase tracking-wider">Planerat</span>
-                      <span className="text-sm sm:text-base font-black text-amber-400 font-mono">
-                        {nextWishlistRelease.release_year}
-                      </span>
-                    </div>
-                  ) : null}
-                  <div className="p-3 rounded-2xl bg-zinc-800/80 group-hover:bg-brand-red group-hover:text-white text-zinc-300 transition shadow-md">
-                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition" />
+
+                    {nextWishlistDays > 30 && (
+                      <div className="hidden lg:flex flex-col pl-4 border-l border-zinc-800 text-left">
+                        <span className="text-xs font-bold text-zinc-300">
+                          Ca {Math.round((nextWishlistDays / 30.4) * 10) / 10} månader
+                        </span>
+                        <span className="text-[10px] text-zinc-500 font-medium">
+                          Spikat släppdatum
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ) : nextWishlistRelease.release_year ? (
+                  <div className="flex items-center gap-3 py-2.5 px-4 sm:px-5 rounded-2xl bg-zinc-950/70 border border-zinc-800/80 shrink-0 shadow-inner">
+                    <span className="text-xs text-zinc-400 font-medium">Planerat släpp:</span>
+                    <span className="text-xl sm:text-2xl font-black text-amber-400 font-mono">
+                      {nextWishlistRelease.release_year}
+                    </span>
+                  </div>
+                ) : null}
+
+                {/* Höger: Tydlig knapp */}
+                <div className="flex items-center justify-end shrink-0">
+                  <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-zinc-800/80 group-hover:bg-brand-red group-hover:text-white text-zinc-300 transition shadow-md font-semibold text-xs">
+                    <span className="hidden sm:inline">Visa spel</span>
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition" />
                   </div>
                 </div>
               </div>

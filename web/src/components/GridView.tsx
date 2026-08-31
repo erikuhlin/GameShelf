@@ -100,7 +100,7 @@ export function GridView({ games, onSelectGame, groupByYear = false }: GridViewP
         {/* Content Details */}
         <div className="p-3 flex flex-col flex-1 justify-between gap-2">
           <div>
-            <h3 className="font-semibold text-sm text-zinc-100 group-hover:text-brand-red transition line-clamp-1">
+            <h3 className="font-semibold text-sm text-zinc-100 group-hover:text-brand-red transition line-clamp-2 min-h-[2.5rem] leading-snug">
               {game.title}
             </h3>
             <div className="flex items-center gap-2 mt-1 text-xs text-zinc-400">

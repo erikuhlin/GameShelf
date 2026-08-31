@@ -10,6 +10,7 @@ import SwiftUI
 struct AddGameView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var store: LibraryStore
+    @EnvironmentObject var profile: ProfileStore
 
     @State private var searchText = ""
     @State private var searchResults: [IGDBGame] = []
@@ -32,9 +33,11 @@ struct AddGameView: View {
     @AppStorage("gameshelf_ios_recent_searches") private var recentSearchesRaw: String = ""
 
     let prefillTitle: String?
+    let isModal: Bool
 
-    init(prefillTitle: String? = nil) {
+    init(prefillTitle: String? = nil, isModal: Bool = true) {
         self.prefillTitle = prefillTitle
+        self.isModal = isModal
         self._searchText = State(initialValue: prefillTitle ?? "")
     }
 
@@ -44,7 +47,7 @@ struct AddGameView: View {
 
     private func saveSearchTerm(_ term: String) {
         let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard trimmed.count >= 2 else { return }
         var current = recentSearches.filter { $0.lowercased() != trimmed.lowercased() }
         current.insert(trimmed, at: 0)
         recentSearchesRaw = current.prefix(6).joined(separator: "|||")
@@ -106,13 +109,17 @@ struct AddGameView: View {
                 }
             }
             .background(Color.ds.background.ignoresSafeArea())
-            .navigationTitle("Lägg till spel")
+            .navigationTitle(isModal ? "Lägg till spel" : "Sök")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: Int.self) { gameID in
                 GameDetailView(igdbID: gameID)
             }
-            .searchable(text: $searchText, prompt: "Sök spel på titel...")
+            .searchable(text: $searchText, prompt: "Sök och lägg till spel...")
             .onSubmit(of: .search) {
+                let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.count >= 2 {
+                    saveSearchTerm(trimmed)
+                }
                 performSearch()
             }
             .onChange(of: searchText) { _, newValue in
@@ -138,9 +145,11 @@ struct AddGameView: View {
                 }
             }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Klar") {
-                        dismiss()
+                if isModal {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Klar") {
+                            dismiss()
+                        }
                     }
                 }
 
@@ -485,7 +494,7 @@ struct AddGameView: View {
                                     }
                                     discoveryDebounceTask?.cancel()
                                     discoveryDebounceTask = Task {
-                                        await loadDiscoveryData(genre: newFilter)
+                                        await loadDiscoveryData(genre: newFilter, forceGenre: true)
                                     }
                                 } label: {
                                     Text(genre)
@@ -495,6 +504,7 @@ struct AddGameView: View {
                                         .background(isSelected ? Color.red : Color(.secondarySystemGroupedBackground))
                                         .foregroundStyle(isSelected ? .white : .primary)
                                         .clipShape(Capsule())
+                                        .overlay(Capsule().stroke(isSelected ? Color.clear : Color.white.opacity(0.1), lineWidth: 0.8))
                                         .shadow(color: .black.opacity(0.04), radius: 3, x: 0, y: 1)
                                 }
                                 .buttonStyle(.plain)
@@ -504,72 +514,121 @@ struct AddGameView: View {
                     }
                 }
 
-                // 2. Förslag baserade på biblioteket
-                if !recommendedGames.isEmpty {
+                // Om en specifik genre är vald: Visa genrens spel direkt här
+                if let activeGenre = selectedGenreFilter {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("Rekommenderat för dig")
+                            Text("Toppspel inom \(activeGenre)")
                                 .font(.title3.bold())
                                 .foregroundStyle(.primary)
                             Spacer()
                         }
 
-                        LazyVStack(spacing: 10) {
-                            ForEach(recommendedGames.prefix(5), id: \.id) { game in
-                                let localGame = store.games.first(where: {
-                                    ($0.igdbID != nil && $0.igdbID == game.id) ||
-                                    $0.title.lowercased() == game.name.lowercased()
-                                })
-                                NavigationLink(value: game.id) {
-                                    IGDBSearchRow(
-                                        igdbGame: game,
-                                        localGame: localGame,
-                                        onQuickAdd: { status in
-                                            quickAdd(game: game, status: status)
-                                        }
-                                    )
+                        if isLoadingDiscovery {
+                            HStack(spacing: 10) {
+                                ProgressView()
+                                    .tint(.red)
+                                Text("Hämtar \(activeGenre)-spel...")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 32)
+                        } else if popularGames.isEmpty {
+                            Text("Inga spel hittades för \(activeGenre).")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .padding(.vertical, 20)
+                        } else {
+                            LazyVStack(spacing: 10) {
+                                ForEach(popularGames, id: \.id) { game in
+                                    let localGame = store.games.first(where: {
+                                        ($0.igdbID != nil && $0.igdbID == game.id) ||
+                                        $0.title.lowercased() == game.name.lowercased()
+                                    })
+                                    NavigationLink(value: game.id) {
+                                        IGDBSearchRow(
+                                            igdbGame: game,
+                                            localGame: localGame,
+                                            onQuickAdd: { status in
+                                                quickAdd(game: game, status: status)
+                                            }
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                     }
-                }
+                } else {
+                    // Om "Alla" är valt:
+                    // 2. Förslag baserade på biblioteket (exkluderar redan tillagda spel)
+                    if !recommendedGames.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Text("Rekommenderat för dig")
+                                    .font(.title3.bold())
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                            }
 
-                // 3. Populära spel just nu
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text(selectedGenreFilter != nil ? "Populärt inom \(selectedGenreFilter!)" : "Populärt just nu")
-                            .font(.title3.bold())
-                            .foregroundStyle(.primary)
-                        Spacer()
+                            LazyVStack(spacing: 10) {
+                                ForEach(recommendedGames.prefix(5), id: \.id) { game in
+                                    let localGame = store.games.first(where: {
+                                        ($0.igdbID != nil && $0.igdbID == game.id) ||
+                                        $0.title.lowercased() == game.name.lowercased()
+                                    })
+                                    NavigationLink(value: game.id) {
+                                        IGDBSearchRow(
+                                            igdbGame: game,
+                                            localGame: localGame,
+                                            onQuickAdd: { status in
+                                                quickAdd(game: game, status: status)
+                                            }
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
                     }
 
-                    if isLoadingDiscovery {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 30)
-                    } else if popularGames.isEmpty {
-                        Text("Inga spel hittades för denna genre.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.vertical, 16)
-                    } else {
-                        LazyVStack(spacing: 10) {
-                            ForEach(popularGames, id: \.id) { game in
-                                let localGame = store.games.first(where: {
-                                    ($0.igdbID != nil && $0.igdbID == game.id) ||
-                                    $0.title.lowercased() == game.name.lowercased()
-                                })
-                                NavigationLink(value: game.id) {
-                                    IGDBSearchRow(
-                                        igdbGame: game,
-                                        localGame: localGame,
-                                        onQuickAdd: { status in
-                                            quickAdd(game: game, status: status)
-                                        }
-                                    )
+                    // 3. Populära spel just nu
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Populärt just nu")
+                                .font(.title3.bold())
+                                .foregroundStyle(.primary)
+                            Spacer()
+                        }
+
+                        if isLoadingDiscovery {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 30)
+                        } else if popularGames.isEmpty {
+                            Text("Inga populära spel hittades just nu.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .padding(.vertical, 16)
+                        } else {
+                            LazyVStack(spacing: 10) {
+                                ForEach(popularGames, id: \.id) { game in
+                                    let localGame = store.games.first(where: {
+                                        ($0.igdbID != nil && $0.igdbID == game.id) ||
+                                        $0.title.lowercased() == game.name.lowercased()
+                                    })
+                                    NavigationLink(value: game.id) {
+                                        IGDBSearchRow(
+                                            igdbGame: game,
+                                            localGame: localGame,
+                                            onQuickAdd: { status in
+                                                quickAdd(game: game, status: status)
+                                            }
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -587,7 +646,8 @@ struct AddGameView: View {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
 
-        let platforms = game.platforms?.map(\.name) ?? []
+        let available = game.platforms?.map(\.name) ?? []
+        let platforms = PlatformMatcher.resolvePlatforms(availableIGDBPlatforms: available, userProfilePlatforms: profile.platforms)
         let genres = game.genres?.map(\.name) ?? []
         let normalizedRating = (game.totalRating ?? 0.0) / 20.0
         let est = game.timeToBeat?.mainStoryHours ?? game.timeToBeat?.mainExtraHours
@@ -630,10 +690,6 @@ struct AddGameView: View {
             return
         }
 
-        if !trimmed.isEmpty {
-            saveSearchTerm(trimmed)
-        }
-
         await MainActor.run {
             isLoading = true
             errorMessage = nil
@@ -665,34 +721,44 @@ struct AddGameView: View {
     }
 
     // MARK: - Ladda Förslag & Rekommendationer
-    private func loadDiscoveryData(genre: String? = nil) async {
+    private func loadDiscoveryData(genre: String? = nil, forceGenre: Bool = false) async {
         await MainActor.run {
             isLoadingDiscovery = true
         }
 
-        let targetGenre = genre ?? selectedGenreFilter
+        let targetGenre = forceGenre ? genre : (genre ?? selectedGenreFilter)
         let mappedGenre = targetGenre.flatMap(mapGenreName)
+        let currentGames = store.games
+        let libraryIDs = Set(currentGames.compactMap { $0.igdbID })
+        let libraryTitles = Set(currentGames.map { $0.title.lowercased() })
+        let userTopGenres = currentGames.flatMap(\.genres)
 
         do {
             async let recommendedFetch: [IGDBGame] = {
-                if !recommendedGames.isEmpty { return recommendedGames }
-                let userTopGenres = store.games.flatMap(\.genres)
+                // Bara för "Alla": hämta kurerade rekommendationer och filtrera bort spel som redan finns i biblioteket
+                if targetGenre != nil { return [] }
                 var counts: [String: Int] = [:]
                 for g in userTopGenres where !g.isEmpty { counts[g, default: 0] += 1 }
                 let top = counts.sorted { $0.value > $1.value }.prefix(3).map(\.key)
                 if top.isEmpty { return [] }
-                return try await IGDBService.shared.fetchRecommendations(forGenres: Array(top), limit: 5)
+                let candidates = try await IGDBService.shared.fetchRecommendations(forGenres: Array(top), limit: 12)
+                return candidates.filter { !libraryIDs.contains($0.id) && !libraryTitles.contains($0.name.lowercased()) }
             }()
 
+            let userPlatforms = Array(profile.platforms)
+            let platformIDs = TrendingFetcher.platformIDs(forFamilies: userPlatforms)
+
             async let popularFetch: [IGDBGame] = {
-                return try await IGDBService.shared.fetchPopularGames(genre: mappedGenre, limit: 12)
+                return try await IGDBService.shared.fetchPopularGames(genre: mappedGenre, platformIDs: platformIDs, limit: 15)
             }()
 
             let (recommended, popular) = try await (recommendedFetch, popularFetch)
             if Task.isCancelled { return }
 
             await MainActor.run {
-                self.recommendedGames = recommended
+                if targetGenre == nil {
+                    self.recommendedGames = recommended
+                }
                 self.popularGames = popular
                 self.isLoadingDiscovery = false
             }

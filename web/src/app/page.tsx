@@ -16,6 +16,10 @@ import { PairingModal } from '@/components/PairingModal';
 import { GameRouletteModal } from '@/components/GameRouletteModal';
 import { DiscoverView } from '@/components/DiscoverView';
 import { UniversalSearchModal } from '@/components/UniversalSearchModal';
+import { ProfileModal } from '@/components/ProfileModal';
+import { CompanyModal } from '@/components/CompanyModal';
+import { UserProfile } from '@/types/profile';
+import { loadUserProfile, saveUserProfile, DEFAULT_PROFILE } from '@/lib/profileStore';
 import { StatusBadge } from '@/components/StatusBadge';
 import {
   Layers,
@@ -43,6 +47,7 @@ export default function HomePage() {
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [profileName, setProfileName] = useState<string>('');
   const [pairedUserId, setPairedUserId] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile>(DEFAULT_PROFILE);
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -50,6 +55,12 @@ export default function HomePage() {
   const [isCollectionsModalOpen, setIsCollectionsModalOpen] = useState(false);
   const [isPairingModalOpen, setIsPairingModalOpen] = useState(false);
   const [isRouletteModalOpen, setIsRouletteModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [activeCompanyModal, setActiveCompanyModal] = useState<{
+    id: number;
+    name: string;
+    role: 'developer' | 'publisher';
+  } | null>(null);
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -69,9 +80,18 @@ export default function HomePage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedUserId = localStorage.getItem('gameshelf_paired_user_id');
-      const savedName = localStorage.getItem('gameshelf_profile_name');
-      if (savedName) setProfileName(savedName);
+      const loaded = loadUserProfile();
+      setUserProfile(loaded);
+      setProfileName(loaded.username);
       if (savedUserId) setPairedUserId(savedUserId);
+
+      const handleProfileUpdate = () => {
+        const p = loadUserProfile();
+        setUserProfile(p);
+        setProfileName(p.username);
+      };
+      window.addEventListener('gameshelf_profile_updated', handleProfileUpdate);
+      return () => window.removeEventListener('gameshelf_profile_updated', handleProfileUpdate);
     }
   }, []);
 
@@ -649,6 +669,7 @@ export default function HomePage() {
         onOpenSearchModal={() => setIsSearchModalOpen(true)}
         onOpenCollectionsModal={() => setIsCollectionsModalOpen(false)}
         onOpenPairingModal={() => setIsPairingModalOpen(true)}
+        onOpenProfileModal={() => setIsProfileModalOpen(true)}
         onOpenRouletteModal={() => setIsRouletteModalOpen(true)}
         onLogout={handleLogout}
         searchQuery={searchQuery}
@@ -659,6 +680,7 @@ export default function HomePage() {
         isSyncing={isSyncing}
         totalGames={games.length}
         profileName={profileName}
+        profile={userProfile}
       />
 
       {/* Main Content Area */}
@@ -900,6 +922,9 @@ export default function HomePage() {
         onDeleteGame={handleDeleteGame}
         collections={collections}
         onToggleCollection={handleToggleCollection}
+        onOpenCompany={(companyId, companyName, role) => {
+          setActiveCompanyModal({ id: companyId, name: companyName, role });
+        }}
       />
 
       <CollectionsModal
@@ -935,6 +960,57 @@ export default function HomePage() {
         onSelectGame={setSelectedGame}
         onAddGame={handleAddFromDiscover}
       />
+
+      <ProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        profile={userProfile}
+        onUpdateProfile={(updated) => {
+          setUserProfile(updated);
+          setProfileName(updated.username);
+        }}
+        libraryGames={games}
+        onSelectGame={(igdbId) => {
+          const local = games.find((g) => g.igdb_id === igdbId);
+          if (local) {
+            setSelectedGame(local);
+          }
+        }}
+      />
+
+      {activeCompanyModal && (
+        <CompanyModal
+          companyId={activeCompanyModal.id}
+          companyName={activeCompanyModal.name}
+          role={activeCompanyModal.role}
+          isOpen={Boolean(activeCompanyModal)}
+          onClose={() => setActiveCompanyModal(null)}
+          libraryGames={games}
+          onAddGame={async (newGame) => {
+            const gameToAdd: Game = {
+              id: crypto.randomUUID(),
+              title: newGame.title,
+              igdb_id: newGame.igdbId,
+              cover_url: newGame.coverUrl || null,
+              release_year: newGame.releaseYear || null,
+              genres: newGame.genres,
+              developers: newGame.developers,
+              platforms: newGame.platforms,
+              status: 'Önskelista',
+              is_owned: false,
+              notes: '',
+              todos: [],
+            };
+            await handleAddFromDiscover(gameToAdd);
+          }}
+          onSelectGame={(igdbId) => {
+            const local = games.find((g) => g.igdb_id === igdbId);
+            if (local) {
+              setSelectedGame(local);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

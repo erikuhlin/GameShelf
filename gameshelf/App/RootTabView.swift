@@ -8,9 +8,9 @@
 import SwiftUI
 
 struct RootTabView: View {
-    enum Tab { case explore, library, activity }
+    enum Tab { case explore, library, search, profile }
 
-    @State private var selection: Tab = .library
+    @State private var selection: Tab = .explore
 
     var body: some View {
         TabView(selection: $selection) {
@@ -22,9 +22,13 @@ struct RootTabView: View {
                 .tabItem { Label("Bibliotek", systemImage: "books.vertical.fill") }
                 .tag(Tab.library)
 
-            ActivityView()
-                .tabItem { Label("Aktivitet", systemImage: "chart.bar.xaxis") }
-                .tag(Tab.activity)
+            AddGameView(isModal: false)
+                .tabItem { Label("Sök", systemImage: "magnifyingglass") }
+                .tag(Tab.search)
+
+            ProfileView()
+                .tabItem { Label("Profil", systemImage: "person.crop.circle.fill") }
+                .tag(Tab.profile)
         }
         .tint(.ds.brandRed)
     }

@@ -24,8 +24,13 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
     let ageRatings: [IGDBAgeRating]?
     let timeToBeat: IGDBTimeToBeat?
     let totalRatingCount: Int?
+    let category: Int?
+    let gameType: Int?
+    let parentGame: Int?
+    let hypes: Int?
+    let franchises: [IGDBFranchise]?
 
-    init(
+    nonisolated init(
         id: Int,
         name: String,
         summary: String? = nil,
@@ -47,7 +52,12 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
         themes: [IGDBNamedItem]? = nil,
         ageRatings: [IGDBAgeRating]? = nil,
         timeToBeat: IGDBTimeToBeat? = nil,
-        totalRatingCount: Int? = nil
+        totalRatingCount: Int? = nil,
+        category: Int? = nil,
+        gameType: Int? = nil,
+        parentGame: Int? = nil,
+        hypes: Int? = nil,
+        franchises: [IGDBFranchise]? = nil
     ) {
         self.id = id
         self.name = name
@@ -71,11 +81,18 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
         self.ageRatings = ageRatings
         self.timeToBeat = timeToBeat
         self.totalRatingCount = totalRatingCount
+        self.category = category
+        self.gameType = gameType
+        self.parentGame = parentGame
+        self.hypes = hypes
+        self.franchises = franchises
     }
 
     enum CodingKeys: String, CodingKey {
         case id, name, summary, cover, platforms, genres, collection, screenshots, artworks, videos
-        case dlcs, expansions, themes
+        case dlcs, expansions, themes, category, hypes, franchises
+        case gameType = "game_type"
+        case parentGame = "parent_game"
         case firstReleaseDate = "first_release_date"
         case totalRating = "total_rating"
         case aggregatedRating = "aggregated_rating"
@@ -87,19 +104,79 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
         case totalRatingCount = "total_rating_count"
     }
 
+    nonisolated var isDLC: Bool {
+        // IGDB game_type / category:
+        // 1: dlc_addon, 2: expansion, 5: mod, 13: pack, 14: update
+        let dlcTypes: Set<Int> = [1, 2, 5, 13, 14]
+        if let type = gameType, dlcTypes.contains(type) {
+            return true
+        }
+        if let cat = category, dlcTypes.contains(cat) {
+            return true
+        }
+        // Om spelet har ett parent_game och inte är remake (8), remaster (9) eller fristående (4)
+        if parentGame != nil {
+            let type = gameType ?? category ?? -1
+            if type != 8 && type != 9 && type != 4 {
+                return true
+            }
+        }
+        let lower = name.lowercased()
+        if lower.contains(" - dlc") || lower.contains(" season pass") || lower.contains(" expansion pack") {
+            return true
+        }
+        return false
+    }
+
     var releaseYear: Int? {
         guard let timestamp = firstReleaseDate else { return nil }
         let date = Date(timeIntervalSince1970: TimeInterval(timestamp))
         return Calendar.current.component(.year, from: date)
     }
 
-    var releaseDateFormatted: String? {
+    var releaseDate: Date? {
         guard let timestamp = firstReleaseDate else { return nil }
-        let date = Date(timeIntervalSince1970: TimeInterval(timestamp))
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "sv_SE")
-        formatter.dateStyle = .medium
-        return formatter.string(from: date)
+        return Date(timeIntervalSince1970: TimeInterval(timestamp))
+    }
+
+    var isUnreleased: Bool {
+        if let date = releaseDate {
+            return date > Date()
+        }
+        if let year = releaseYear, year > Calendar.current.component(.year, from: Date()) {
+            return true
+        }
+        return false
+    }
+
+    var hasExactReleaseDate: Bool {
+        guard let date = releaseDate else { return false }
+        if isUnreleased && date.isYearPlaceholderDate {
+            return false
+        }
+        return true
+    }
+
+    var releaseDateFormatted: String? {
+        if let date = releaseDate {
+            if date > Date() && date.isYearPlaceholderDate {
+                if let year = releaseYear ?? Calendar.current.component(.year, from: date) as Int?, year > 0 {
+                    return "Kommande \(year)"
+                }
+                return "Kommande"
+            }
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "sv_SE")
+            formatter.dateStyle = .long
+            return formatter.string(from: date)
+        }
+        if let year = releaseYear, year > 0 {
+            if year > Calendar.current.component(.year, from: Date()) {
+                return "Kommande \(year)"
+            }
+            return String(year)
+        }
+        return nil
     }
 
     var coverURL: URL? {
@@ -113,6 +190,38 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
 
     var publisherName: String? {
         involvedCompanies?.first(where: { $0.publisher == true })?.company?.name
+    }
+
+    /// Samlar alla unika spel i franchisen eller serien exklusive det aktuella spelet, sorterade kronologiskt
+    var franchiseGames: [IGDBRelatedGame] {
+        var all: [IGDBRelatedGame] = []
+        if let colGames = collection?.games {
+            all.append(contentsOf: colGames)
+        }
+        if let franGames = franchises?.compactMap({ $0.games }).flatMap({ $0 }) {
+            all.append(contentsOf: franGames)
+        }
+
+        var seen = Set<Int>()
+        seen.insert(self.id)
+
+        var unique: [IGDBRelatedGame] = []
+        for g in all {
+            if !seen.contains(g.id) {
+                seen.insert(g.id)
+                unique.append(g)
+            }
+        }
+
+        return unique.sorted { (g1, g2) in
+            (g1.firstReleaseDate ?? 0) < (g2.firstReleaseDate ?? 0)
+        }
+    }
+
+    var franchiseName: String? {
+        if let name = collection?.name, !name.isEmpty { return name }
+        if let name = franchises?.first?.name, !name.isEmpty { return name }
+        return nil
     }
 }
 
@@ -156,15 +265,34 @@ struct IGDBInvolvedCompany: Decodable, Sendable {
 
 struct IGDBCollection: Decodable, Sendable {
     let id: Int
-    let name: String
+    let name: String?
+    let games: [IGDBRelatedGame]?
+}
+
+struct IGDBFranchise: Decodable, Identifiable, Sendable {
+    let id: Int
+    let name: String?
+    let games: [IGDBRelatedGame]?
 }
 
 struct IGDBRelatedGame: Decodable, Identifiable, Sendable {
     let id: Int
     let name: String?
     let cover: IGDBImage?
+    let firstReleaseDate: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, cover
+        case firstReleaseDate = "first_release_date"
+    }
 
     var coverURL: URL? { cover?.url(size: "t_cover_big") }
+
+    var releaseYear: Int? {
+        guard let ts = firstReleaseDate else { return nil }
+        let date = Date(timeIntervalSince1970: TimeInterval(ts))
+        return Calendar.current.component(.year, from: date)
+    }
 }
 
 struct IGDBVideo: Decodable, Identifiable, Sendable {
@@ -238,19 +366,19 @@ struct IGDBTimeToBeat: Decodable, Sendable {
         return Int(round(Double(completely) / 3600.0))
     }
 
-    var mainStoryFormatted: String {
+    nonisolated var mainStoryFormatted: String {
         formatSeconds(hastily)
     }
 
-    var mainExtraFormatted: String {
+    nonisolated var mainExtraFormatted: String {
         formatSeconds(normally)
     }
 
-    var completionistFormatted: String {
+    nonisolated var completionistFormatted: String {
         formatSeconds(completely)
     }
 
-    private func formatSeconds(_ seconds: Int?) -> String {
+    nonisolated private func formatSeconds(_ seconds: Int?) -> String {
         guard let seconds = seconds, seconds > 0 else { return "—" }
         let hours = Int(round(Double(seconds) / 3600.0))
         if hours == 0 {

@@ -35,8 +35,10 @@ struct GameHeroHeader: View {
                 HStack(spacing: Spacing.s) {
                     StatusBadge(status: game.status)
                     Text(game.platforms.joined(separator: ", "))
-                    Text("·")
-                    Text("\(game.releaseYear)")
+                    if !releaseDateText(for: game).isEmpty {
+                        Text("·")
+                        Text(releaseDateText(for: game))
+                    }
                 }
                 .font(Typography.caption)
                 .foregroundColor(.white.opacity(0.9))
@@ -49,6 +51,22 @@ struct GameHeroHeader: View {
         // .clipShape(RoundedRectangle(cornerRadius: Radius.l, style: .continuous))
         // .overlay(RoundedRectangle(cornerRadius: Radius.l, style: .continuous).stroke(.separator.opacity(0.4), lineWidth: 1))
         // .padding(.horizontal)
+    }
+
+    private func releaseDateText(for game: Game) -> String {
+        if let date = game.releaseDate {
+            if date > Date() && date.isYearPlaceholderDate {
+                return game.releaseYear > 0 ? "Kommande \(game.releaseYear)" : "Kommande"
+            }
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "sv_SE")
+            formatter.dateStyle = .long
+            return formatter.string(from: date)
+        }
+        if game.releaseYear > 0 {
+            return game.releaseYear > Calendar.current.component(.year, from: Date()) ? "Kommande \(game.releaseYear)" : "\(game.releaseYear)"
+        }
+        return ""
     }
 }
 
@@ -71,8 +89,10 @@ struct CompactGameHeroHeader: View {
                 HStack(spacing: Spacing.s) {
                     StatusBadge(status: game.status)
                     Text(game.platforms.first ?? "")
-                    Text("·")
-                    Text("\(game.releaseYear)")
+                    if !releaseDateText(for: game).isEmpty {
+                        Text("·")
+                        Text(releaseDateText(for: game))
+                    }
                 }
                 .font(Typography.caption)
                 .foregroundColor(.ds.textSecondary)
@@ -80,5 +100,21 @@ struct CompactGameHeroHeader: View {
             Spacer()
         }
         .padding(.horizontal, Spacing.m)
+    }
+
+    private func releaseDateText(for game: Game) -> String {
+        if let date = game.releaseDate {
+            if date > Date() && date.isYearPlaceholderDate {
+                return game.releaseYear > 0 ? "Kommande \(game.releaseYear)" : "Kommande"
+            }
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "sv_SE")
+            formatter.dateStyle = .long
+            return formatter.string(from: date)
+        }
+        if game.releaseYear > 0 {
+            return game.releaseYear > Calendar.current.component(.year, from: Date()) ? "Kommande \(game.releaseYear)" : "\(game.releaseYear)"
+        }
+        return ""
     }
 }

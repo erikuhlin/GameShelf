@@ -11,8 +11,8 @@
 
 import Foundation
 
-enum RSSParser {
-    static func parse(data: Data) -> [NewsItem] {
+enum RSSParser: Sendable {
+    nonisolated static func parse(data: Data) -> [NewsItem] {
         let delegate = RSSDelegate()
         let parser = XMLParser(data: data)
         parser.delegate = delegate
@@ -21,7 +21,7 @@ enum RSSParser {
     }
 
     // MARK: Delegate
-    final class RSSDelegate: NSObject, XMLParserDelegate {
+    nonisolated final class RSSDelegate: NSObject, XMLParserDelegate, @unchecked Sendable {
         var items: [NewsItem] = []
         private var currentElement = ""
         private var currentTitle = ""
@@ -105,7 +105,7 @@ enum RSSParser {
     }
 
     // Fångar första <img src="..."> ur HTML
-    static func extractFirstImageURL(fromHTML html: String) -> String? {
+    nonisolated static func extractFirstImageURL(fromHTML html: String) -> String? {
         guard let img = html.range(of: "<img", options: [.caseInsensitive]) else { return nil }
         let tail = html[img.lowerBound...]
         if let src = tail.range(of: "src=\"", options: [.caseInsensitive]) {
@@ -116,7 +116,7 @@ enum RSSParser {
     }
 
     // Heuristic classification based on title, URL, categories and HTML content
-    static func inferKind(title: String, source: String, link: String, categories: [String], contentHTML: String) -> NewsKind {
+    nonisolated static func inferKind(title: String, source: String, link: String, categories: [String], contentHTML: String) -> NewsKind {
         let titleLC   = title.lowercased()
         let linkLC    = link.lowercased()
         let sourceLC  = source.lowercased()
@@ -226,8 +226,8 @@ enum RSSParser {
 }
 
 // Datumformat för RSS/Atom
-enum RFC822DateFormatter {
-    static func date(from string: String) -> Date? {
+enum RFC822DateFormatter: Sendable {
+    nonisolated static func date(from string: String) -> Date? {
         let fmts = [
             "EEE, dd MMM yyyy HH:mm:ss Z",
             "dd MMM yyyy HH:mm:ss Z",

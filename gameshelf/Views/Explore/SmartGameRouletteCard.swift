@@ -94,10 +94,9 @@ struct SmartGameRouletteCard: View {
                             .font(.subheadline.bold())
                             .foregroundStyle(.secondary)
                     }
-                    .padding(14)
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 2)
+                    .padding(12)
+                    .background(Color(.tertiarySystemGroupedBackground).opacity(0.6))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .opacity(isRolling ? 0.3 : 1.0)
@@ -109,18 +108,26 @@ struct SmartGameRouletteCard: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                .padding(14)
+                .padding(12)
                 .frame(maxWidth: .infinity)
-                .background(Color(.secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .background(Color(.tertiarySystemGroupedBackground).opacity(0.6))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
         }
+        .padding(14)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
         .onAppear {
             if currentGame == nil {
                 pickSmartGame()
             }
         }
-        .onChange(of: store.games.count) { _ in
+        .onChange(of: store.games.count) { _, _ in
             if currentGame == nil {
                 pickSmartGame()
             }

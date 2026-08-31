@@ -12,8 +12,15 @@ struct ReleaseCountdownBanner: View {
     let releaseYear: Int?
 
     var body: some View {
-        if let targetDate = releaseDate, targetDate > Date() {
-            liveCountdownCard(targetDate: targetDate)
+        if let targetDate = releaseDate {
+            if targetDate > Date() {
+                if targetDate.isYearPlaceholderDate {
+                    let year = releaseYear ?? Calendar.current.component(.year, from: targetDate)
+                    futureYearCard(year: year > 0 ? year : nil)
+                } else {
+                    liveCountdownCard(targetDate: targetDate)
+                }
+            }
         } else if let year = releaseYear, year > Calendar.current.component(.year, from: Date()) {
             futureYearCard(year: year)
         }
@@ -94,8 +101,8 @@ struct ReleaseCountdownBanner: View {
         }
     }
 
-    // MARK: - Future Year Card (Endast År)
-    private func futureYearCard(year: Int) -> some View {
+    // MARK: - Future Year Card (Endast År eller Kommande)
+    private func futureYearCard(year: Int?) -> some View {
         HStack(spacing: 12) {
             Image(systemName: "calendar.badge.clock")
                 .font(.title2)
@@ -105,20 +112,36 @@ struct ReleaseCountdownBanner: View {
                 Text("Kommande lansering")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                Text("Planerat släpp: \(String(year))")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(.primary)
+                if let y = year, y > 0 {
+                    Text("Planerat släpp: \(String(y))")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.primary)
+                } else {
+                    Text("Datum ännu ej fastställt")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.primary)
+                }
             }
 
             Spacer()
 
-            Text("\(year)")
-                .font(.system(.title3, design: .rounded).weight(.black))
-                .foregroundStyle(.red)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 5)
-                .background(Color.red.opacity(0.12))
-                .clipShape(Capsule())
+            if let y = year, y > 0 {
+                Text("\(y)")
+                    .font(.system(.title3, design: .rounded).weight(.black))
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(Color.red.opacity(0.12))
+                    .clipShape(Capsule())
+            } else {
+                Text("Kommande")
+                    .font(.system(.caption, design: .rounded).weight(.bold))
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.red.opacity(0.12))
+                    .clipShape(Capsule())
+            }
         }
         .padding(16)
         .background(Color(.secondarySystemGroupedBackground))

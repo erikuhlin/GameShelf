@@ -57,6 +57,8 @@ final class LibraryStore: ObservableObject {
     private var isLoaded = false
     private let gamesFileName = "library.json"
     private let collectionsFileName = "collections.json"
+    private var checkedGameIDsForDates = Set<UUID>()
+    private var isEnrichingDates = false
 
     init() {
         do {
@@ -69,10 +71,11 @@ final class LibraryStore: ObservableObject {
             isLoaded = true
         }
 
-        // Initiera anonym auth och synk mot Supabase i bakgrunden
+        // Initiera anonym auth, synk och berika saknade releasedatum i bakgrunden
         Task { [weak self] in
             await SupabaseAuthManager.shared.ensureAnonymousAuth()
             await self?.syncWithRemote()
+            await self?.enrichMissingReleaseDates()
         }
     }
 
@@ -123,47 +126,67 @@ final class LibraryStore: ObservableObject {
 
     // MARK: - Release Date Background Enrichment
     private func enrichMissingReleaseDates() async {
-        let gamesNeedingDates = self.games.filter { $0.firstReleaseDate == nil }
-        guard !gamesNeedingDates.isEmpty else { return }
+        guard !isEnrichingDates else { return }
+        isEnrichingDates = true
+        defer { isEnrichingDates = false }
 
-        for game in gamesNeedingDates {
-            do {
-                if let igdbId = game.igdbID {
-                    let detail = try await IGDBService.shared.fetchGameDetails(id: igdbId)
-                    if let date = detail.firstReleaseDate {
-                        await MainActor.run {
-                            if let idx = self.games.firstIndex(where: { $0.id == game.id }) {
-                                self.games[idx].firstReleaseDate = date
-                                if let year = detail.releaseYear {
-                                    self.games[idx].releaseYear = year
-                                }
-                                let updated = self.games[idx]
-                                Task {
-                                    try? await SupabaseSyncService.shared.upsertGame(updated)
-                                }
+        while true {
+            let gamesNeedingDates = self.games.filter { $0.firstReleaseDate == nil && !checkedGameIDsForDates.contains($0.id) }
+            guard !gamesNeedingDates.isEmpty else { break }
+
+            var updatedBatch: [Game] = []
+
+            // Bearbeta max 8 spel per batch med 260ms paus för att respektera IGDB:s rate limit (max 4 req/s)
+            for game in gamesNeedingDates.prefix(8) {
+                checkedGameIDsForDates.insert(game.id)
+                do {
+                    try? await Task.sleep(nanoseconds: 260_000_000)
+
+                    if let igdbId = game.igdbID {
+                        let detail = try await IGDBService.shared.fetchGameDetails(id: igdbId)
+                        if let date = detail.firstReleaseDate {
+                            var updated = game
+                            updated.firstReleaseDate = date
+                            if let year = detail.releaseYear {
+                                updated.releaseYear = year
                             }
+                            updatedBatch.append(updated)
+                        }
+                    } else {
+                        var results = try await IGDBService.shared.searchGames(query: game.title)
+                        if results.isEmpty {
+                            let cleaned = GameAliasResolver.cleanGameTitle(game.title)
+                            if cleaned != game.title && !cleaned.isEmpty {
+                                results = (try? await IGDBService.shared.searchGames(query: cleaned)) ?? []
+                            }
+                        }
+                        if let first = results.first(where: { $0.firstReleaseDate != nil }) {
+                            var updated = game
+                            updated.firstReleaseDate = first.firstReleaseDate
+                            updated.igdbID = first.id
+                            if let year = first.releaseYear {
+                                updated.releaseYear = year
+                            }
+                            updatedBatch.append(updated)
                         }
                     }
-                } else {
-                    let results = try await IGDBService.shared.searchGames(query: game.title)
-                    if let first = results.first(where: { $0.firstReleaseDate != nil }) {
-                        await MainActor.run {
-                            if let idx = self.games.firstIndex(where: { $0.id == game.id }) {
-                                self.games[idx].firstReleaseDate = first.firstReleaseDate
-                                self.games[idx].igdbID = first.id
-                                if let year = first.releaseYear {
-                                    self.games[idx].releaseYear = year
-                                }
-                                let updated = self.games[idx]
-                                Task {
-                                    try? await SupabaseSyncService.shared.upsertGame(updated)
-                                }
-                            }
-                        }
+                } catch {
+                    // Fortsätt tyst till nästa
+                }
+            }
+
+            // Tillämpa alla uppdateringar i batch så listan inte hoppar
+            if !updatedBatch.isEmpty {
+                for updated in updatedBatch {
+                    if let idx = self.games.firstIndex(where: { $0.id == updated.id }) {
+                        self.games[idx] = updated
                     }
                 }
-            } catch {
-                // Fortsätt tyst till nästa
+                for updated in updatedBatch {
+                    Task {
+                        try? await SupabaseSyncService.shared.upsertGame(updated)
+                    }
+                }
             }
         }
     }
@@ -173,6 +196,9 @@ final class LibraryStore: ObservableObject {
         games.insert(game, at: 0)
         Task {
             try? await SupabaseSyncService.shared.upsertGame(game)
+            if game.firstReleaseDate == nil {
+                await enrichMissingReleaseDates()
+            }
         }
     }
 
@@ -199,10 +225,18 @@ final class LibraryStore: ObservableObject {
     }
 
     func update(_ game: Game) {
-        if let idx = games.firstIndex(where: { $0.id == game.id }) {
-            games[idx] = game
+        var updated = game
+        if updated.status == .wishlist {
+            updated.isOwned = false
+        } else {
+            updated.isOwned = true
+        }
+
+        if let idx = games.firstIndex(where: { $0.id == updated.id }) {
+            games[idx] = updated
+            try? saveGames()
             Task {
-                try? await SupabaseSyncService.shared.upsertGame(game)
+                try? await SupabaseSyncService.shared.upsertGame(updated)
             }
         }
     }

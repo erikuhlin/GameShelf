@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct GameCollection: Identifiable, Hashable, Codable {
+struct GameCollection: Identifiable, Hashable, Codable, Sendable {
     var id: UUID = UUID()
     var name: String
     var description: String = ""
@@ -18,7 +18,7 @@ struct GameCollection: Identifiable, Hashable, Codable {
         case id, name, description, gameIDs, createdAt
     }
 
-    init(
+    nonisolated init(
         id: UUID = UUID(),
         name: String,
         description: String = "",

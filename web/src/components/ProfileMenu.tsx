@@ -12,21 +12,28 @@ import {
   Layers,
 } from 'lucide-react';
 
+import { UserProfile } from '@/types/profile';
+import { AVATAR_PRESETS } from '@/lib/profileStore';
+
 interface ProfileMenuProps {
   profileName?: string;
+  profile?: UserProfile;
   isSyncing: boolean;
   totalGames: number;
   totalCollections: number;
   onOpenPairingModal: () => void;
+  onOpenProfileModal?: () => void;
   onLogout: () => void;
 }
 
 export function ProfileMenu({
   profileName,
+  profile,
   isSyncing,
   totalGames,
   totalCollections,
   onOpenPairingModal,
+  onOpenProfileModal,
   onLogout,
 }: ProfileMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -61,7 +68,44 @@ export function ProfileMenu({
     );
   }
 
-  const initial = profileName.charAt(0).toUpperCase();
+  const renderAvatar = (size: 'sm' | 'md' = 'sm') => {
+    if (profile?.avatarType === 'custom' && profile.avatarCustomImage) {
+      return (
+        <img
+          src={profile.avatarCustomImage}
+          alt="Avatar"
+          className={`${size === 'sm' ? 'w-6 h-6' : 'w-10 h-10'} rounded-full object-cover shadow-inner`}
+        />
+      );
+    }
+    if (profile?.avatarType?.startsWith('preset:')) {
+      const preset = AVATAR_PRESETS.find((p) => p.id === profile.avatarType);
+      if (preset) {
+        return (
+          <div
+            style={{
+              background: `linear-gradient(135deg, ${preset.gradientColors[0]}, ${preset.gradientColors[1]})`,
+            }}
+            className={`${
+              size === 'sm' ? 'w-6 h-6 text-xs' : 'w-10 h-10 text-lg'
+            } rounded-full flex items-center justify-center shadow-inner`}
+          >
+            <span>{preset.icon}</span>
+          </div>
+        );
+      }
+    }
+    const initial = (profileName || 'E').charAt(0).toUpperCase();
+    return (
+      <div
+        className={`${
+          size === 'sm' ? 'w-6 h-6 text-xs' : 'w-10 h-10 text-sm'
+        } rounded-full bg-gradient-to-tr from-brand-red to-rose-500 text-white flex items-center justify-center font-bold shadow-inner`}
+      >
+        {initial}
+      </div>
+    );
+  };
 
   return (
     <div className="relative" ref={menuRef}>
@@ -72,9 +116,7 @@ export function ProfileMenu({
       >
         {/* Avatar */}
         <div className="relative">
-          <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-brand-red to-rose-500 text-white flex items-center justify-center font-bold text-xs shadow-inner">
-            {initial}
-          </div>
+          {renderAvatar('sm')}
           <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-zinc-900 animate-pulse" />
         </div>
 
@@ -96,8 +138,8 @@ export function ProfileMenu({
           {/* Header info */}
           <div className="p-3 bg-zinc-950/60 rounded-xl border border-zinc-800/80 mb-2">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-red to-rose-500 text-white flex items-center justify-center font-bold text-sm shadow-md">
-                {initial}
+              <div className="relative shrink-0">
+                {renderAvatar('md')}
               </div>
               <div className="overflow-hidden">
                 <h4 className="text-sm font-bold text-white truncate">{profileName}</h4>
@@ -123,6 +165,17 @@ export function ProfileMenu({
 
           {/* Menu Items */}
           <div className="space-y-1">
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                onOpenProfileModal?.();
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800/80 rounded-xl transition"
+            >
+              <User className="w-4 h-4 text-brand-red" />
+              <span>Min profil & Spel-DNA</span>
+            </button>
+
             <button
               onClick={() => {
                 setIsOpen(false);

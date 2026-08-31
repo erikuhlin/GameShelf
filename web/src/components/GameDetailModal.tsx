@@ -36,6 +36,7 @@ interface GameDetailModalProps {
   onDeleteGame: (id: string) => void;
   collections: GameCollection[];
   onToggleCollection: (gameId: string, collectionId: string) => void;
+  onOpenCompany?: (companyId: number, companyName: string, role: 'developer' | 'publisher') => void;
 }
 
 interface RemoteDetails {
@@ -45,6 +46,8 @@ interface RemoteDetails {
   artworks?: Array<{ id: number; url: string; fullUrl: string }>;
   developers?: string[];
   publishers?: string[];
+  developerCompanies?: Array<{ id: number; name: string }>;
+  publisherCompanies?: Array<{ id: number; name: string }>;
   gameModes?: string[];
   themes?: string[];
   videos?: Array<{ name: string; videoId: string }>;
@@ -70,6 +73,7 @@ export function GameDetailModal({
   onDeleteGame,
   collections,
   onToggleCollection,
+  onOpenCompany,
 }: GameDetailModalProps) {
   if (!isOpen || !game) return null;
 
@@ -626,22 +630,54 @@ export function GameDetailModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {displayDevelopers.length > 0 && (
                   <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-3.5">
-                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
                       Utvecklare
                     </span>
-                    <span className="text-sm font-semibold text-zinc-200">
-                      {displayDevelopers.join(', ')}
-                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {remoteDetails?.developerCompanies && remoteDetails.developerCompanies.length > 0 ? (
+                        remoteDetails.developerCompanies.map((c) => (
+                          <button
+                            key={c.id}
+                            onClick={() => onOpenCompany?.(c.id, c.name, 'developer')}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-brand-red/20 text-sm font-semibold text-zinc-200 hover:text-white border border-zinc-800 hover:border-brand-red/50 transition group"
+                            title={`Visa alla spel från ${c.name}`}
+                          >
+                            <span>{c.name}</span>
+                            <span className="text-[11px] text-zinc-500 group-hover:text-brand-red transition">→</span>
+                          </button>
+                        ))
+                      ) : (
+                        <span className="text-sm font-semibold text-zinc-200">
+                          {displayDevelopers.join(', ')}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
                 {displayPublishers.length > 0 && (
                   <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-3.5">
-                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
                       Utgivare
                     </span>
-                    <span className="text-sm font-semibold text-zinc-200">
-                      {displayPublishers.join(', ')}
-                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {remoteDetails?.publisherCompanies && remoteDetails.publisherCompanies.length > 0 ? (
+                        remoteDetails.publisherCompanies.map((c) => (
+                          <button
+                            key={c.id}
+                            onClick={() => onOpenCompany?.(c.id, c.name, 'publisher')}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-brand-red/20 text-sm font-semibold text-zinc-200 hover:text-white border border-zinc-800 hover:border-brand-red/50 transition group"
+                            title={`Visa alla spel utgivna av ${c.name}`}
+                          >
+                            <span>{c.name}</span>
+                            <span className="text-[11px] text-zinc-500 group-hover:text-brand-red transition">→</span>
+                          </button>
+                        ))
+                      ) : (
+                        <span className="text-sm font-semibold text-zinc-200">
+                          {displayPublishers.join(', ')}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

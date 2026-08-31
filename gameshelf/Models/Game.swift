@@ -7,13 +7,13 @@
 
 import Foundation
 
-struct GameTodoItem: Identifiable, Hashable, Codable {
+struct GameTodoItem: Identifiable, Hashable, Codable, Sendable {
     var id = UUID()
     var title: String
     var isDone: Bool = false
 }
 
-struct Game: Identifiable, Hashable, Codable {
+struct Game: Identifiable, Hashable, Codable, Sendable {
     var id = UUID()
     var title: String
     var platforms: [String]      // changed from String to list
@@ -30,10 +30,20 @@ struct Game: Identifiable, Hashable, Codable {
     var isOwned: Bool = true     // true: I ägo / aktiv samling, false: Spelminne / tidigare spelad
     var notes: String = ""       // personal notes
     var todos: [GameTodoItem] = [] // checklist / to-do items
+    var dateAdded: Date = Date() // tidpunkt då spelet lades till i biblioteket
 
     var releaseDate: Date? {
         guard let timestamp = firstReleaseDate else { return nil }
         return Date(timeIntervalSince1970: TimeInterval(timestamp))
+    }
+
+    /// Sant om spelet har ett spikat, exakt lanseringsdatum (och inte en platshållare såsom 31 dec)
+    var hasExactReleaseDate: Bool {
+        guard let date = releaseDate else { return false }
+        if isUnreleased && date.isYearPlaceholderDate {
+            return false
+        }
+        return true
     }
 
     var isUnreleased: Bool {
@@ -48,10 +58,10 @@ struct Game: Identifiable, Hashable, Codable {
 
     enum CodingKeys: String, CodingKey {
         case id, title, platforms, releaseYear, genres, developers, status, rating
-        case igdbRating, rawgRating, coverURL, igdbID, firstReleaseDate, estimatedHours, isOwned, notes, todos
+        case igdbRating, rawgRating, coverURL, igdbID, firstReleaseDate, estimatedHours, isOwned, notes, todos, dateAdded
     }
 
-    init(
+    nonisolated init(
         id: UUID = UUID(),
         title: String,
         platforms: [String],
@@ -67,7 +77,8 @@ struct Game: Identifiable, Hashable, Codable {
         estimatedHours: Int? = nil,
         isOwned: Bool = true,
         notes: String = "",
-        todos: [GameTodoItem] = []
+        todos: [GameTodoItem] = [],
+        dateAdded: Date = Date()
     ) {
         self.id = id
         self.title = title
@@ -85,6 +96,7 @@ struct Game: Identifiable, Hashable, Codable {
         self.isOwned = isOwned
         self.notes = notes
         self.todos = todos
+        self.dateAdded = dateAdded
     }
 
     init(from decoder: Decoder) throws {
@@ -106,6 +118,7 @@ struct Game: Identifiable, Hashable, Codable {
         isOwned = try container.decodeIfPresent(Bool.self, forKey: .isOwned) ?? true
         notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
         todos = try container.decodeIfPresent([GameTodoItem].self, forKey: .todos) ?? []
+        dateAdded = try container.decodeIfPresent(Date.self, forKey: .dateAdded) ?? Date()
     }
 
     func encode(to encoder: Encoder) throws {
@@ -126,5 +139,22 @@ struct Game: Identifiable, Hashable, Codable {
         try container.encode(isOwned, forKey: .isOwned)
         try container.encode(notes, forKey: .notes)
         try container.encode(todos, forKey: .todos)
+        try container.encode(dateAdded, forKey: .dateAdded)
+    }
+}
+
+// MARK: - Date Helpers
+extension Date {
+    /// Kollar om ett datum är ett platshållardatum (t.ex. 31 december som IGDB sätter för spel med endast känt år eller kvartal)
+    var isYearPlaceholderDate: Bool {
+        var calUTC = Calendar(identifier: .gregorian)
+        calUTC.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+        let compsUTC = calUTC.dateComponents([.month, .day], from: self)
+        if compsUTC.month == 12 && compsUTC.day == 31 {
+            return true
+        }
+
+        let compsLocal = Calendar.current.dateComponents([.month, .day], from: self)
+        return compsLocal.month == 12 && compsLocal.day == 31
     }
 }

@@ -136,7 +136,16 @@ out/
 build/
 dist/
 *.log
+.env
 .env.local
 .env.*.local
+*.local
 combined_migration.sql
 build_error.log
+
+### App Secrets & Credentials ###
+Secrets.plist
+*.secrets.plist
+*.secrets
+*.tsbuildinfo
+

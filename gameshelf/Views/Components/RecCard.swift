@@ -13,10 +13,11 @@ struct RecCard: View {
     let subtitle: String
     let rating: Double
     let imageURL: URL?
+    var badge: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ZStack {
+            ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 14)
                     .fill(.quaternary)
                 if let url = imageURL {
@@ -28,6 +29,17 @@ struct RecCard: View {
                     }
                 } else {
                     Image(systemName: "gamecontroller").imageScale(.large)
+                }
+
+                if let badge = badge {
+                    Text(badge)
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.black.opacity(0.75), in: Capsule())
+                        .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
+                        .padding(6)
                 }
             }
             .frame(width: 160, height: 100)

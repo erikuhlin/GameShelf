@@ -50,14 +50,17 @@ export async function GET(
       fullUrl: `https://images.igdb.com/igdb/image/upload/t_1080p/${a.image_id}.jpg`,
     }));
 
-    // Formatera utvecklare och utgivare
-    const developers = (game.involved_companies || [])
-      .filter((c: any) => c.developer)
-      .map((c: any) => c.company.name);
+    // Formatera utvecklare och utgivare (både strängar och företagsobjekt med ID)
+    const developerCompanies = (game.involved_companies || [])
+      .filter((c: any) => c.developer && c.company)
+      .map((c: any) => ({ id: c.company.id, name: c.company.name }));
 
-    const publishers = (game.involved_companies || [])
-      .filter((c: any) => c.publisher)
-      .map((c: any) => c.company.name);
+    const publisherCompanies = (game.involved_companies || [])
+      .filter((c: any) => c.publisher && c.company)
+      .map((c: any) => ({ id: c.company.id, name: c.company.name }));
+
+    const developers = developerCompanies.map((c: any) => c.name);
+    const publishers = publisherCompanies.map((c: any) => c.name);
 
     // Formatera spellägen och teman
     const gameModes = (game.game_modes || []).map((m: any) => m.name);
@@ -110,6 +113,8 @@ export async function GET(
         artworks,
         developers,
         publishers,
+        developerCompanies,
+        publisherCompanies,
         gameModes,
         themes,
         videos,

@@ -75,6 +75,7 @@ struct PlatformOption: Identifiable {
 
 struct AdvancedSearchFilterSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var profile: ProfileStore
     @Binding var config: SearchFilterConfig
     var onApply: () -> Void
 
@@ -231,6 +232,44 @@ struct AdvancedSearchFilterSheet: View {
 
                 // 3. Plattform
                 Section("Plattform") {
+                    if !profile.platforms.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(Array(profile.platforms), id: \.self) { platName in
+                                    if let match = availablePlatforms.first(where: { platName.localizedCaseInsensitiveContains($0.name) || $0.name.localizedCaseInsensitiveContains(platName) }) {
+                                        let isSelected = localConfig.platformID == match.id
+                                        Button {
+                                            withAnimation {
+                                                if isSelected {
+                                                    localConfig.platformID = nil
+                                                    localConfig.platformName = nil
+                                                } else {
+                                                    localConfig.platformID = match.id
+                                                    localConfig.platformName = match.name
+                                                }
+                                            }
+                                        } label: {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: isSelected ? "checkmark.circle.fill" : "gamecontroller.fill")
+                                                    .font(.system(size: 8))
+                                                    .foregroundStyle(isSelected ? Color.white : Color.red)
+                                                Text(match.name)
+                                                    .font(.caption2.weight(.semibold))
+                                            }
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 6)
+                                            .background(isSelected ? Color.red : Color(.tertiarySystemFill))
+                                            .foregroundStyle(isSelected ? Color.white : Color.primary)
+                                            .clipShape(Capsule())
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+
                     Picker("Välj plattform", selection: $localConfig.platformID) {
                         Text("Alla plattformar").tag(nil as Int?)
                         ForEach(availablePlatforms) { plat in
@@ -286,6 +325,47 @@ struct AdvancedSearchFilterSheet: View {
 
                 // 5. Genre
                 Section("Genre") {
+                    if !profile.favoriteGenres.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(Array(profile.favoriteGenres), id: \.self) { favGenre in
+                                    let match = availableGenres.first(where: {
+                                        $0.name.localizedCaseInsensitiveContains(favGenre) ||
+                                        favGenre.localizedCaseInsensitiveContains($0.name) ||
+                                        $0.queryName.localizedCaseInsensitiveContains(favGenre)
+                                    })
+                                    let queryVal = match?.queryName ?? favGenre
+                                    let isSelected = localConfig.genre?.lowercased() == queryVal.lowercased()
+
+                                    Button {
+                                        withAnimation {
+                                            if isSelected {
+                                                localConfig.genre = nil
+                                            } else {
+                                                localConfig.genre = queryVal
+                                            }
+                                        }
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "heart.fill")
+                                                .font(.system(size: 8))
+                                                .foregroundStyle(isSelected ? Color.white : Color.red)
+                                            Text(favGenre)
+                                                .font(.caption2.weight(.semibold))
+                                        }
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(isSelected ? Color.red : Color(.tertiarySystemFill))
+                                        .foregroundStyle(isSelected ? Color.white : Color.primary)
+                                        .clipShape(Capsule())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+
                     Picker("Välj genre", selection: $localConfig.genre) {
                         Text("Alla genrer").tag(nil as String?)
                         ForEach(availableGenres, id: \.queryName) { g in

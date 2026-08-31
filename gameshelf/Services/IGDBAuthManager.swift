@@ -27,6 +27,11 @@ actor IGDBAuthManager {
     }
     
     private func fetchNewToken() async throws -> String {
+        guard IGDBAuthConfig.isConfigured else {
+            print("⚠️ [IGDBAuthManager] Twitch / IGDB API-nycklar är inte konfigurerade. Lägg till dem i en lokal Secrets.plist eller sätt TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET som miljövariabler.")
+            throw URLError(.userAuthenticationRequired)
+        }
+
         guard let url = URL(string: "https://id.twitch.tv/oauth2/token") else {
             throw URLError(.badURL)
         }
@@ -55,14 +60,14 @@ actor IGDBAuthManager {
         
         return tokenResponse.accessToken
     }
-}
 
-private struct TwitchTokenResponse: Decodable, Sendable {
-    let accessToken: String
-    let expiresIn: Int
-    
-    enum CodingKeys: String, CodingKey {
-        case accessToken = "access_token"
-        case expiresIn = "expires_in"
+    private struct TwitchTokenResponse: Decodable, Sendable {
+        let accessToken: String
+        let expiresIn: Int
+        
+        enum CodingKeys: String, CodingKey {
+            case accessToken = "access_token"
+            case expiresIn = "expires_in"
+        }
     }
 }

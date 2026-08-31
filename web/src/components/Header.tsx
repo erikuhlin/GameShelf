@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { ProfileMenu } from './ProfileMenu';
 
+import { UserProfile } from '@/types/profile';
+
 export type ViewMode = 'shelf' | 'grid' | 'list' | 'discover' | 'collections' | 'stats';
 
 interface HeaderProps {
@@ -22,6 +24,7 @@ interface HeaderProps {
   onOpenAddModal: () => void;
   onOpenCollectionsModal: () => void;
   onOpenPairingModal: () => void;
+  onOpenProfileModal?: () => void;
   onOpenRouletteModal: () => void;
   onOpenSearchModal: () => void;
   onLogout: () => void;
@@ -33,6 +36,7 @@ interface HeaderProps {
   isSyncing: boolean;
   totalGames: number;
   profileName?: string;
+  profile?: UserProfile;
 }
 
 export function Header({
@@ -40,6 +44,7 @@ export function Header({
   onViewModeChange,
   onOpenAddModal,
   onOpenPairingModal,
+  onOpenProfileModal,
   onOpenSearchModal,
   onLogout,
   searchQuery,
@@ -48,6 +53,7 @@ export function Header({
   isSyncing,
   totalGames,
   profileName,
+  profile,
 }: HeaderProps) {
   const isLibraryActive =
     viewMode === 'shelf' || viewMode === 'grid' || viewMode === 'list';
@@ -164,10 +170,12 @@ export function Header({
             {/* Profile Dropdown / Login */}
             <ProfileMenu
               profileName={profileName}
+              profile={profile}
               isSyncing={isSyncing}
               totalGames={totalGames}
               totalCollections={collections.length}
               onOpenPairingModal={onOpenPairingModal}
+              onOpenProfileModal={onOpenProfileModal}
               onLogout={onLogout}
             />
 

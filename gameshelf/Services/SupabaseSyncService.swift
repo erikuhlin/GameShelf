@@ -7,124 +7,132 @@
 
 import Foundation
 
-// MARK: - Supabase DTO Models
-private struct SupabaseGameDTO: Codable {
-    var id: UUID
-    var user_id: UUID?
-    var title: String
-    var platform: String?
-    var platforms: [String]?
-    var release_year: Int?
-    var first_release_date: Int?
-    var genres: [String]?
-    var developers: [String]?
-    var status: String?
-    var rating: Double?
-    var igdb_rating: Double?
-    var cover_url: String?
-    var igdb_id: Int?
-    var estimated_hours: Int?
-    var is_owned: Bool?
-    var notes: String?
-    var todos: [GameTodoItem]?
-
-    init(from game: Game, userId: UUID? = nil) {
-        self.id = game.id
-        self.user_id = userId
-        self.title = game.title
-        self.platform = game.platforms.first
-        self.platforms = game.platforms
-        self.release_year = game.releaseYear
-        self.first_release_date = game.firstReleaseDate
-        self.genres = game.genres
-        self.developers = game.developers
-        self.status = game.status.rawValue
-        self.rating = game.rating.map { Double($0) }
-        self.igdb_rating = game.igdbRating
-        self.cover_url = game.coverURL?.absoluteString
-        self.igdb_id = game.igdbID
-        self.estimated_hours = game.estimatedHours
-        self.is_owned = game.isOwned
-        self.notes = game.notes
-        self.todos = game.todos
-    }
-
-    func toDomainGame() -> Game {
-        let playStatus: PlayStatus
-        let statusString = status?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) ?? "backlog"
-        switch statusString {
-        case "playing", "spelar", "spelar nu", "inprogress", "in_progress", "pågående":
-            playStatus = .playing
-        case "backlog", "unplayed", "ej spelat", "ej påbörjat":
-            playStatus = .backlog
-        case "paused", "pausat":
-            playStatus = .paused
-        case "completed", "klar", "hundredpercent", "100 %", "100%":
-            playStatus = .completed
-        case "abandoned", "avbruten", "avbrutet", "droppat", "dropped":
-            playStatus = .abandoned
-        case "wishlist", "önskelista":
-            playStatus = .wishlist
-        default:
-            playStatus = .backlog
-        }
-
-        var plats = platforms ?? []
-        if plats.isEmpty, let single = platform, !single.isEmpty {
-            plats = [single]
-        }
-
-        let intRating: Int? = rating.map { Int(round($0)) }
-
-        return Game(
-            id: id,
-            title: title,
-            platforms: plats,
-            releaseYear: release_year ?? 0,
-            genres: genres ?? [],
-            developers: developers ?? [],
-            status: playStatus,
-            rating: intRating,
-            igdbRating: igdb_rating,
-            coverURL: cover_url.flatMap { URL(string: $0) },
-            igdbID: igdb_id,
-            firstReleaseDate: first_release_date,
-            estimatedHours: estimated_hours,
-            isOwned: is_owned ?? true,
-            notes: notes ?? "",
-            todos: todos ?? []
-        )
-    }
-}
-
-private struct SupabaseCollectionDTO: Codable {
-    var id: UUID
-    var user_id: UUID?
-    var name: String
-    var description: String?
-    var game_ids: [UUID]?
-
-    init(from col: GameCollection, userId: UUID? = nil) {
-        self.id = col.id
-        self.user_id = userId
-        self.name = col.name
-        self.description = col.description
-        self.game_ids = col.gameIDs
-    }
-
-    func toDomainCollection() -> GameCollection {
-        GameCollection(
-            id: id,
-            name: name,
-            description: description ?? "",
-            gameIDs: game_ids ?? []
-        )
-    }
-}
-
 // MARK: - Supabase Sync Actor Service
 actor SupabaseSyncService {
     static let shared = SupabaseSyncService()
+
+    private struct SupabaseGameDTO: Codable, Sendable {
+        var id: UUID
+        var user_id: UUID?
+        var title: String
+        var platform: String?
+        var platforms: [String]?
+        var release_year: Int?
+        var first_release_date: Int?
+        var genres: [String]?
+        var developers: [String]?
+        var status: String?
+        var rating: Double?
+        var igdb_rating: Double?
+        var cover_url: String?
+        var igdb_id: Int?
+        var estimated_hours: Int?
+        var is_owned: Bool?
+        var notes: String?
+        var todos: [GameTodoItem]?
+        var created_at: String?
+
+        init(from game: Game, userId: UUID? = nil) {
+            self.id = game.id
+            self.user_id = userId
+            self.title = game.title
+            self.platform = game.platforms.first
+            self.platforms = game.platforms
+            self.release_year = game.releaseYear
+            self.first_release_date = game.firstReleaseDate
+            self.genres = game.genres
+            self.developers = game.developers
+            self.status = game.status.rawValue
+            self.rating = game.rating.map { Double($0) }
+            self.igdb_rating = game.igdbRating
+            self.cover_url = game.coverURL?.absoluteString
+            self.igdb_id = game.igdbID
+            self.estimated_hours = game.estimatedHours
+            self.is_owned = game.isOwned
+            self.notes = game.notes
+            self.todos = game.todos
+        }
+
+        func toDomainGame() -> Game {
+            let playStatus: PlayStatus
+            let statusString = status?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) ?? "backlog"
+            switch statusString {
+            case "playing", "spelar", "spelar nu", "inprogress", "in_progress", "pågående":
+                playStatus = .playing
+            case "backlog", "unplayed", "ej spelat", "ej påbörjat":
+                playStatus = .backlog
+            case "paused", "pausat":
+                playStatus = .paused
+            case "completed", "klar", "hundredpercent", "100 %", "100%":
+                playStatus = .completed
+            case "abandoned", "avbruten", "avbrutet", "droppat", "dropped":
+                playStatus = .abandoned
+            case "wishlist", "önskelista":
+                playStatus = .wishlist
+            default:
+                playStatus = .backlog
+            }
+
+            var plats = platforms ?? []
+            if plats.isEmpty, let single = platform, !single.isEmpty {
+                plats = [single]
+            }
+
+            let intRating: Int? = rating.map { Int(round($0)) }
+
+            let parsedDate: Date
+            if let createdStr = created_at {
+                parsedDate = ISO8601DateFormatter().date(from: createdStr) ?? Date()
+            } else {
+                parsedDate = Date()
+            }
+
+            return Game(
+                id: id,
+                title: title,
+                platforms: plats,
+                releaseYear: release_year ?? 0,
+                genres: genres ?? [],
+                developers: developers ?? [],
+                status: playStatus,
+                rating: intRating,
+                igdbRating: igdb_rating,
+                coverURL: cover_url.flatMap { URL(string: $0) },
+                igdbID: igdb_id,
+                firstReleaseDate: first_release_date,
+                estimatedHours: estimated_hours,
+                isOwned: is_owned ?? true,
+                notes: notes ?? "",
+                todos: todos ?? [],
+                dateAdded: parsedDate
+            )
+        }
+    }
+
+    private struct SupabaseCollectionDTO: Codable, Sendable {
+        var id: UUID
+        var user_id: UUID?
+        var name: String
+        var description: String?
+        var game_ids: [UUID]?
+
+        init(from col: GameCollection, userId: UUID? = nil) {
+            self.id = col.id
+            self.user_id = userId
+            self.name = col.name
+            self.description = col.description
+            self.game_ids = col.gameIDs
+        }
+
+        func toDomainCollection() -> GameCollection {
+            GameCollection(
+                id: id,
+                name: name,
+                description: description ?? "",
+                gameIDs: game_ids ?? []
+            )
+        }
+    }
 
     private let session: URLSession
 

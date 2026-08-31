@@ -131,44 +131,38 @@ struct ActivityView: View {
         }
     }
 
-    // MARK: - Body
+    var isEmbedded: Bool = false
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                if games.isEmpty {
-                    emptyStateView
-                } else {
-                    VStack(alignment: .leading, spacing: 22) {
-                        overviewCard
-                        statusDistributionCard
-                        genreDistributionCard
-                        platformDistributionCard
-                        if !releaseYearCounts.isEmpty {
-                            releaseYearsCard
-                        }
-                        if games.contains(where: { ($0.rating ?? 0) > 0 }) {
-                            ratingDistributionCard
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 16)
-                }
+        if isEmbedded {
+            contentView
+        } else {
+            NavigationStack {
+                contentView
+                    .navigationTitle("Aktivitet")
             }
-            .navigationTitle("Aktivitet")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingProfileSheet = true
-                    } label: {
-                        Image(systemName: "person.crop.circle")
-                            .font(.title3)
-                            .foregroundStyle(.primary)
+        }
+    }
+
+    private var contentView: some View {
+        ScrollView {
+            if games.isEmpty {
+                emptyStateView
+            } else {
+                VStack(alignment: .leading, spacing: 22) {
+                    overviewCard
+                    statusDistributionCard
+                    genreDistributionCard
+                    platformDistributionCard
+                    if !releaseYearCounts.isEmpty {
+                        releaseYearsCard
+                    }
+                    if games.contains(where: { ($0.rating ?? 0) > 0 }) {
+                        ratingDistributionCard
                     }
                 }
-            }
-            .sheet(isPresented: $showingProfileSheet) {
-                ProfileView()
+                .padding(.horizontal, 16)
+                .padding(.vertical, 16)
             }
         }
     }

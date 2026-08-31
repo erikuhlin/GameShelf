@@ -141,22 +141,26 @@ struct CoverView: View {
     // MARK: - Placeholder
     private func placeholder(width: CGFloat) -> some View {
         ZStack {
-            cornerShape.fill(Color.ds.surface)
-            VStack(spacing: Spacing.s) {
+            LinearGradient(
+                colors: [Color.ds.surface, Color(.tertiarySystemFill)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            VStack(spacing: 8) {
                 Image(systemName: "gamecontroller.fill")
-                    .font(Typography.h3)
-                    .foregroundStyle(.secondary.opacity(0.6))
+                    .font(.system(size: 26))
+                    .foregroundStyle(.secondary.opacity(0.5))
                 Text(title)
-                    .font(Typography.caption)
-                    .foregroundColor(.ds.textSecondary)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.8)
-                    .padding(.horizontal, 6)
+                    .lineLimit(3)
+                    .padding(.horizontal, 8)
             }
-            .padding(Spacing.s)
+            .padding(8)
         }
         .frame(width: width, height: height)
+        .overlay(cornerShape.stroke(Color.white.opacity(0.08), lineWidth: 1))
         .clipShape(cornerShape)
     }
 }

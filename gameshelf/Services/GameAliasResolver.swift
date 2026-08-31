@@ -9,9 +9,9 @@ import Foundation
 
 /// Smart Alias- och Akronym-ordbok för spel.
 /// Mappar vanliga förkortningar, akronymer och slang till officiella speltitlar för IGDB.
-enum GameAliasResolver {
+enum GameAliasResolver: Sendable {
     
-    private static let exactAliases: [String: String] = [
+    nonisolated private static let exactAliases: [String: String] = [
         // Grand Theft Auto
         "gta 6": "Grand Theft Auto VI",
         "gta vi": "Grand Theft Auto VI",
@@ -182,7 +182,7 @@ enum GameAliasResolver {
     ]
 
     /// Löser upp en sökfras genom att kontrollera akronymer och vanliga prefix.
-    static func resolve(query: String) -> String {
+    nonisolated static func resolve(query: String) -> String {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return query }
 
@@ -203,4 +203,30 @@ enum GameAliasResolver {
 
         return trimmed
     }
+
+    /// Rensar en speltitel från taggar, konsolnamn och utgåve-suffix för bättre sökresultat
+    nonisolated static func cleanGameTitle(_ title: String) -> String {
+        var t = title
+        // 1. Ta bort text inom parenteser (t.ex. "(Xbox Series X|S)", "(2024)", "(Digital)")
+        t = t.replacingOccurrences(of: "\\s*\\([^)]*\\)", with: "", options: .regularExpression)
+        // 2. Ta bort text inom hakparenteser (t.ex. "[PS5]")
+        t = t.replacingOccurrences(of: "\\s*\\[[^]]*\\]", with: "", options: .regularExpression)
+        // 3. Ta bort kända utgåve-suffix om de finns efter ':' eller '-'
+        let patterns = [
+            ":\\s*Vanguard Edition.*",
+            ":\\s*Deluxe Edition.*",
+            ":\\s*Collector's Edition.*",
+            ":\\s*Premium Edition.*",
+            ":\\s*Ultimate Edition.*",
+            ":\\s*Standard Edition.*",
+            ":\\s*Special Edition.*",
+            "-\\s*Deluxe Edition.*",
+            "-\\s*Collector's Edition.*"
+        ]
+        for pattern in patterns {
+            t = t.replacingOccurrences(of: pattern, with: "", options: [.regularExpression, .caseInsensitive])
+        }
+        return t.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }
+

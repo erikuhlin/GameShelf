@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-enum PlayStatus: String, CaseIterable, Codable, Identifiable {
+enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
     case playing = "Spelar nu"
     case backlog = "Backlog"
     case paused = "Pausat"

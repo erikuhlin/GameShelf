@@ -233,7 +233,7 @@ export function CollectionsView({
             </span>
           </div>
           <p className="text-xs text-zinc-400 mt-1">
-            Skapa egna temalistor som Favoriter, Spelminnen, Backlog eller Co-op
+            Skapa egna temalistor som Favoriter, Klassiker, Backlog eller Co-op
           </p>
         </div>
 
@@ -309,7 +309,7 @@ export function CollectionsView({
           </div>
           <h3 className="text-lg font-semibold text-zinc-200 mb-1">Inga samlingar skapade ännu</h3>
           <p className="text-xs text-zinc-400 max-w-sm mb-5">
-            Skapa din första samling för att gruppera dina spel efter genre, minnen eller favoriter.
+            Skapa din första samling för att gruppera dina spel efter genre, teman eller favoriter.
           </p>
           <button
             onClick={() => setIsCreating(true)}

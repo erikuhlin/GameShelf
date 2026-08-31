@@ -74,10 +74,10 @@ export function ShelfView({ games, onSelectGame }: ShelfViewProps) {
                       </div>
                     )}
 
-                    {/* Ownership badge if not owned */}
-                    {!game.is_owned && (
-                      <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-zinc-900/90 text-zinc-400 text-[9px] sm:text-[10px] border border-zinc-700">
-                        Minne
+                    {/* Önskelista-märkning för spel i önskelistan */}
+                    {(game.status === 'Önskelista' || !game.is_owned) && (
+                      <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-purple-950/90 backdrop-blur-md text-purple-300 text-[9px] sm:text-[10px] font-bold border border-purple-500/50 shadow-sm flex items-center gap-1">
+                        <span>Önskelista</span>
                       </div>
                     )}
                   </div>

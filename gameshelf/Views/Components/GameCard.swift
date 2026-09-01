@@ -48,7 +48,7 @@ private struct CoverSection: View {
                 .clipShape(RoundedRectangle(cornerRadius: Radius.m, style: .continuous))
         )
         .overlay(alignment: .bottomLeading) {
-            StatusBadge(status: game.status)
+            StatusBadge(game: game)
                 .padding(.leading, Spacing.s)
                 .padding(.bottom, Spacing.s)
                 .shadow(radius: 1)

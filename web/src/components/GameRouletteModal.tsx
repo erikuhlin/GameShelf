@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Game, PlayStatus } from '@/types/game';
 import { StatusBadge } from './StatusBadge';
+import { inferPlayTypes } from '@/lib/statusHelper';
 import {
   Sparkles,
   Dices,
@@ -36,7 +37,7 @@ export function GameRouletteModal({
   onAddGameToLibrary,
 }: GameRouletteModalProps) {
   const [rouletteMode, setRouletteMode] = useState<'my_games' | 'discover'>('my_games');
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState<'Backlog' | 'Spelar nu' | 'Alla'>('Backlog');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<'Backlog' | 'playing' | 'Alla'>('Backlog');
   const [isSpinning, setIsSpinning] = useState(false);
   const [displayedGame, setDisplayedGame] = useState<Game | null>(null);
   const [selectedWinner, setSelectedWinner] = useState<Game | null>(null);
@@ -50,21 +51,33 @@ export function GameRouletteModal({
   const loadDiscoveryGames = async () => {
     setIsLoadingDiscovery(true);
     try {
-      const existingIgdbIds = games
-        .map((g) => g.igdb_id)
-        .filter(Boolean)
-        .join(',');
-
-      const res = await fetch(`/api/games/discover?exclude_ids=${existingIgdbIds}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.results && data.results.length > 0) {
-          setDiscoveryGames(data.results);
-          return data.results;
-        }
+      const res = await fetch('/api/igdb/trending');
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.results)) {
+        const mapped: Game[] = data.results.slice(0, 25).map((item: any) => ({
+          id: String(item.id),
+          title: item.title,
+          cover_url: item.cover_url || null,
+          platforms: item.platforms || [],
+          release_year: item.release_year || null,
+          genres: item.genres || [],
+          developers: item.developers || [],
+          status: 'notStarted' as PlayStatus,
+          rating: null,
+          igdb_rating: item.igdb_rating || null,
+          igdb_id: item.id,
+          estimated_hours: null,
+          is_owned: false,
+          notes: '',
+          todos: [],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }));
+        setDiscoveryGames(mapped);
+        return mapped;
       }
-    } catch (err) {
-      console.error('Failed to load discovery games:', err);
+    } catch (e) {
+      console.error('Failed to load discovery games for roulette:', e);
     } finally {
       setIsLoadingDiscovery(false);
     }
@@ -77,8 +90,14 @@ export function GameRouletteModal({
       return discoveryGames;
     }
     return games.filter((g) => {
-      if (selectedStatusFilter === 'Backlog' && g.status !== 'Backlog') return false;
-      if (selectedStatusFilter === 'Spelar nu' && g.status !== 'Spelar nu') return false;
+      if (!g.is_owned) return false;
+      if (selectedStatusFilter === 'Backlog' && !g.is_backlog) return false;
+      if (
+        selectedStatusFilter === 'playing' &&
+        g.status !== 'playing' &&
+        (g.status as string) !== 'Spelar nu'
+      )
+        return false;
       return true;
     });
   }, [games, selectedStatusFilter, rouletteMode, discoveryGames]);
@@ -133,17 +152,23 @@ export function GameRouletteModal({
   if (!isOpen) return null;
 
   const handleStartPlaying = (game: Game) => {
-    onUpdateGameStatus(game.id, 'Spelar nu');
+    onUpdateGameStatus(game.id, 'playing');
     onClose();
-    onSelectGame({ ...game, status: 'Spelar nu' });
+    onSelectGame({ ...game, status: 'playing', is_backlog: false });
   };
 
-  const handleAddDiscoveryGame = (game: Game, targetStatus: PlayStatus) => {
+  const handleAddDiscoveryGame = (
+    game: Game,
+    options: { status: PlayStatus; isOwned: boolean; isBacklog: boolean }
+  ) => {
+    const playTypes = game.play_types || inferPlayTypes(game);
     const newGame: Game = {
       ...game,
       id: crypto.randomUUID(),
-      status: targetStatus,
-      is_owned: targetStatus !== 'Önskelista',
+      status: options.status,
+      is_owned: options.isOwned,
+      is_backlog: options.isBacklog,
+      play_types: playTypes,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -226,7 +251,7 @@ export function GameRouletteModal({
           {rouletteMode === 'my_games' ? (
             <div className="flex items-center gap-1.5">
               <span className="text-zinc-500 font-medium mr-1">Pool:</span>
-              {(['Backlog', 'Spelar nu', 'Alla'] as const).map((filter) => (
+              {(['Backlog', 'playing', 'Alla'] as const).map((filter) => (
                 <button
                   key={filter}
                   disabled={isSpinning}
@@ -237,7 +262,11 @@ export function GameRouletteModal({
                       : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
                   }`}
                 >
-                  {filter === 'Alla' ? 'Hela biblioteket' : filter}
+                  {filter === 'Alla'
+                    ? 'Hela biblioteket'
+                    : filter === 'playing'
+                    ? 'Spelar nu'
+                    : 'Backlog'}
                 </button>
               ))}
             </div>
@@ -398,7 +427,13 @@ export function GameRouletteModal({
                   ) : (
                     <>
                       <button
-                        onClick={() => handleAddDiscoveryGame(selectedWinner, 'Önskelista')}
+                        onClick={() =>
+                          handleAddDiscoveryGame(selectedWinner, {
+                            status: 'notStarted',
+                            isOwned: false,
+                            isBacklog: false,
+                          })
+                        }
                         className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700 transition"
                       >
                         <BookmarkPlus className="w-3.5 h-3.5" />
@@ -406,7 +441,13 @@ export function GameRouletteModal({
                       </button>
 
                       <button
-                        onClick={() => handleAddDiscoveryGame(selectedWinner, 'Backlog')}
+                        onClick={() =>
+                          handleAddDiscoveryGame(selectedWinner, {
+                            status: 'notStarted',
+                            isOwned: true,
+                            isBacklog: true,
+                          })
+                        }
                         className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold shadow-lg shadow-amber-500/20 transition transform active:scale-95"
                       >
                         <Plus className="w-3.5 h-3.5" />

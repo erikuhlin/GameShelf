@@ -32,6 +32,51 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
     var todos: [GameTodoItem] = [] // checklist / to-do items
     var dateAdded: Date = Date() // tidpunkt då spelet lades till i biblioteket
 
+    // Nya fält för utökat statussystem och speltyper
+    var playTypes: [GamePlayType] = [.singlePlayer]
+    var isBacklog: Bool = false
+    var priority: PlayPriority = .none
+    var lastPlayedDate: Date? = nil
+
+    // MARK: - Computed Helpers
+    var isMultiplayerOrOngoing: Bool {
+        playTypes.contains(.multiplayer) || playTypes.contains(.ongoing)
+    }
+
+    var isSinglePlayer: Bool {
+        playTypes.contains(.singlePlayer)
+    }
+
+    var statusDisplayTitle: String {
+        status.title(for: playTypes)
+    }
+
+    var statusDisplayIcon: String {
+        status.icon(for: playTypes)
+    }
+
+    var lastPlayedFormatted: String? {
+        guard let date = lastPlayedDate else { return nil }
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) {
+            return "Senast spelat idag"
+        } else if calendar.isDateInYesterday(date) {
+            return "Senast spelat igår"
+        } else {
+            let components = calendar.dateComponents([.day], from: date, to: Date())
+            let days = max(1, components.day ?? 1)
+            if days < 7 {
+                return "Senast spelat för \(days) dagar sedan"
+            } else if days < 30 {
+                let weeks = max(1, days / 7)
+                return weeks == 1 ? "Senast spelat för 1 vecka sedan" : "Senast spelat för \(weeks) veckor sedan"
+            } else {
+                let months = max(1, days / 30)
+                return months == 1 ? "Senast spelat för 1 månad sedan" : "Senast spelat för \(months) månader sedan"
+            }
+        }
+    }
+
     var releaseDate: Date? {
         guard let timestamp = firstReleaseDate else { return nil }
         return Date(timeIntervalSince1970: TimeInterval(timestamp))
@@ -56,9 +101,83 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         return false
     }
 
+    // MARK: - Play Type Inferens
+    static func inferPlayTypes(genres: [String], title: String, gameModes: [String]? = nil) -> [GamePlayType] {
+        var types: Set<GamePlayType> = []
+
+        let allModes = (gameModes ?? []).map { $0.lowercased() }
+        let allGenres = genres.map { $0.lowercased() }
+        let lowerTitle = title.lowercased()
+
+        for mode in allModes {
+            if mode.contains("single player") || mode == "singleplayer" {
+                types.insert(.singlePlayer)
+            }
+            if mode.contains("multiplayer") || mode.contains("battle royale") || mode.contains("mmo") || mode.contains("split screen") {
+                types.insert(.multiplayer)
+            }
+            if mode.contains("co-operative") || mode.contains("cooperative") || mode.contains("coop") || mode.contains("co-op") {
+                types.insert(.coOp)
+            }
+        }
+
+        let combinedText = (lowerTitle + " " + allGenres.joined(separator: " ") + " " + allModes.joined(separator: " "))
+
+        let multiplayerKeywords = [
+            "multiplayer", "online", "co-op", "cooperative", "coop", "samarbete", "split screen",
+            "battle royale", "mmo", "mmorpg", "massively multiplayer", "live service",
+            "hell let loose", "helldivers", "warzone", "apex legends", "fortnite", "destiny",
+            "overwatch", "valorant", "counter-strike", "world of warcraft", "final fantasy xiv",
+            "league of legends", "dota", "rocket league", "rainbow six", "rainbow 6", "genshin impact",
+            "battlefield", "call of duty", "pubg", "dead by daylight", "squad", "rust", "dayz",
+            "sea of thieves", "deep rock galactic", "warframe", "smite", "team fortress",
+            "street fighter", "tekken", "mortal kombat", "smash bros", "overcooked", "it takes two",
+            "among us", "phasmophobia", "lethal company", "enlisted", "insurgency", "arma",
+            "fall guys", "roblox", "hunt: showdown", "the finals", "arc raiders", "escape from tarkov",
+            "tarkov", "chivalry", "mordhau", "payday", "left 4 dead", "back 4 blood", "borderlands",
+            "diablo", "path of exile", "fifa", "fc 24", "fc 25", "ea sports", "nba 2k", "madden", "nhl"
+        ]
+
+        let ongoingKeywords = [
+            "mmo", "mmorpg", "massively multiplayer", "live service", "battle royale",
+            "hell let loose", "helldivers", "warzone", "apex legends", "fortnite", "destiny",
+            "overwatch", "valorant", "counter-strike", "world of warcraft", "final fantasy xiv",
+            "league of legends", "dota", "rocket league", "rainbow six", "rainbow 6",
+            "genshin impact", "pubg", "dead by daylight", "rust", "sea of thieves", "warframe",
+            "the finals", "roblox", "fall guys", "hunt: showdown", "escape from tarkov", "tarkov"
+        ]
+
+        for kw in multiplayerKeywords {
+            if combinedText.contains(kw) {
+                types.insert(.multiplayer)
+                break
+            }
+        }
+
+        for kw in ongoingKeywords {
+            if combinedText.contains(kw) {
+                types.insert(.ongoing)
+                types.insert(.multiplayer)
+                break
+            }
+        }
+
+        if combinedText.contains("co-op") || combinedText.contains("cooperative") || combinedText.contains("coop") || combinedText.contains("samarbete") {
+            types.insert(.coOp)
+        }
+
+        // Standardvärde singlePlayer om inget annat angetts
+        if types.isEmpty {
+            types.insert(.singlePlayer)
+        }
+
+        return GamePlayType.allCases.filter { types.contains($0) }
+    }
+
     enum CodingKeys: String, CodingKey {
         case id, title, platforms, releaseYear, genres, developers, status, rating
         case igdbRating, rawgRating, coverURL, igdbID, firstReleaseDate, estimatedHours, isOwned, notes, todos, dateAdded
+        case playTypes, isBacklog, priority, lastPlayedDate
     }
 
     nonisolated init(
@@ -78,7 +197,11 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         isOwned: Bool = true,
         notes: String = "",
         todos: [GameTodoItem] = [],
-        dateAdded: Date = Date()
+        dateAdded: Date = Date(),
+        playTypes: [GamePlayType]? = nil,
+        isBacklog: Bool = false,
+        priority: PlayPriority = .none,
+        lastPlayedDate: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -97,6 +220,10 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         self.notes = notes
         self.todos = todos
         self.dateAdded = dateAdded
+        self.playTypes = playTypes ?? Game.inferPlayTypes(genres: genres, title: title)
+        self.isBacklog = isBacklog
+        self.priority = priority
+        self.lastPlayedDate = lastPlayedDate
     }
 
     init(from decoder: Decoder) throws {
@@ -107,7 +234,31 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         releaseYear = try container.decode(Int.self, forKey: .releaseYear)
         genres = try container.decode([String].self, forKey: .genres)
         developers = try container.decode([String].self, forKey: .developers)
-        status = try container.decode(PlayStatus.self, forKey: .status)
+
+        // Robust bakåtkompatibel status-migrering
+        var decodedStatus: PlayStatus = .notStarted
+        var legacyWasBacklog = false
+        var legacyWasWishlist = false
+
+        if let rawStatusString = try? container.decode(String.self, forKey: .status) {
+            let lower = rawStatusString.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            if lower == "backlog" {
+                legacyWasBacklog = true
+                decodedStatus = .notStarted
+            } else if lower == "wishlist" || lower == "önskelista" {
+                legacyWasWishlist = true
+                decodedStatus = .notStarted
+            } else {
+                // Skapa en avkodare via sub-container för PlayStatus
+                let statusDecoder = try container.superDecoder(forKey: .status)
+                decodedStatus = (try? PlayStatus(from: statusDecoder)) ?? .notStarted
+            }
+        } else if let st = try? container.decode(PlayStatus.self, forKey: .status) {
+            decodedStatus = st
+        }
+
+        status = decodedStatus
+
         rating = try container.decodeIfPresent(Int.self, forKey: .rating)
         igdbRating = try container.decodeIfPresent(Double.self, forKey: .igdbRating)
             ?? container.decodeIfPresent(Double.self, forKey: .rawgRating)
@@ -115,10 +266,41 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         igdbID = try container.decodeIfPresent(Int.self, forKey: .igdbID)
         firstReleaseDate = try container.decodeIfPresent(Int.self, forKey: .firstReleaseDate)
         estimatedHours = try container.decodeIfPresent(Int.self, forKey: .estimatedHours)
-        isOwned = try container.decodeIfPresent(Bool.self, forKey: .isOwned) ?? true
+
+        var decodedOwned = try container.decodeIfPresent(Bool.self, forKey: .isOwned) ?? true
+        if legacyWasWishlist {
+            decodedOwned = false
+        }
+        isOwned = decodedOwned
+
         notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
         todos = try container.decodeIfPresent([GameTodoItem].self, forKey: .todos) ?? []
         dateAdded = try container.decodeIfPresent(Date.self, forKey: .dateAdded) ?? Date()
+
+        // Nya fält
+        if let storedBacklog = try? container.decode(Bool.self, forKey: .isBacklog) {
+            isBacklog = storedBacklog
+        } else {
+            isBacklog = legacyWasBacklog
+        }
+
+        if let storedTypes = try? container.decode([GamePlayType].self, forKey: .playTypes), !storedTypes.isEmpty {
+            if storedTypes == [.singlePlayer] {
+                let reInferred = Game.inferPlayTypes(genres: genres, title: title)
+                if reInferred.contains(.multiplayer) || reInferred.contains(.ongoing) || reInferred.contains(.coOp) {
+                    playTypes = reInferred
+                } else {
+                    playTypes = storedTypes
+                }
+            } else {
+                playTypes = storedTypes
+            }
+        } else {
+            playTypes = Game.inferPlayTypes(genres: genres, title: title)
+        }
+
+        priority = (try? container.decodeIfPresent(PlayPriority.self, forKey: .priority)) ?? .none
+        lastPlayedDate = try? container.decodeIfPresent(Date.self, forKey: .lastPlayedDate)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -140,6 +322,10 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         try container.encode(notes, forKey: .notes)
         try container.encode(todos, forKey: .todos)
         try container.encode(dateAdded, forKey: .dateAdded)
+        try container.encode(playTypes, forKey: .playTypes)
+        try container.encode(isBacklog, forKey: .isBacklog)
+        try container.encode(priority, forKey: .priority)
+        try container.encodeIfPresent(lastPlayedDate, forKey: .lastPlayedDate)
     }
 }
 

@@ -178,7 +178,7 @@ final class NewsFetcher: ObservableObject {
                 }) {
                     modItem.matchedGameTitle = matchedGame.title
                     modItem.matchedGameCoverURL = matchedGame.coverURL
-                    modItem.matchedGameStatus = matchedGame.status.rawValue
+                    modItem.matchedGameStatus = matchedGame.statusDisplayTitle
                 }
                 return modItem
             }

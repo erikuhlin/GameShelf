@@ -1,4 +1,11 @@
 export type PlayStatus =
+  | 'notStarted'
+  | 'playing'
+  | 'paused'
+  | 'completed'
+  | 'abandoned';
+
+export type LegacyPlayStatus =
   | 'Spelar nu'
   | 'Backlog'
   | 'Pausat'
@@ -6,13 +13,16 @@ export type PlayStatus =
   | 'Avbrutet'
   | 'Önskelista';
 
+export type GamePlayType = 'singlePlayer' | 'multiplayer' | 'coOp' | 'ongoing';
+
+export type PlayPriority = 'none' | 'low' | 'normal' | 'high' | 'nextUp';
+
 export const PLAY_STATUSES: PlayStatus[] = [
-  'Spelar nu',
-  'Backlog',
-  'Pausat',
-  'Klar',
-  'Avbrutet',
-  'Önskelista',
+  'playing',
+  'notStarted',
+  'paused',
+  'completed',
+  'abandoned',
 ];
 
 export interface GameTodoItem {
@@ -42,6 +52,10 @@ export interface Game {
   todos: GameTodoItem[];
   created_at?: string;
   updated_at?: string;
+  is_backlog?: boolean;
+  play_types?: GamePlayType[];
+  priority?: PlayPriority;
+  last_played_date?: string | null;
 }
 
 export interface GameCollection {

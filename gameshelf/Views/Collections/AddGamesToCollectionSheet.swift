@@ -97,7 +97,7 @@ struct AddGamesToCollectionSheet: View {
                                             .foregroundStyle(.primary)
 
                                         HStack(spacing: 6) {
-                                            StatusBadge(status: game.status)
+                                            StatusBadge(game: game)
 
                                             if game.releaseYear > 0 {
                                                 Text(String(game.releaseYear))
@@ -262,13 +262,15 @@ struct AddGamesToCollectionSheet: View {
                 releaseYear: igdbGame.releaseYear ?? 0,
                 genres: genres,
                 developers: igdbGame.developerName.map { [$0] } ?? [],
-                status: .backlog,
+                status: .notStarted,
                 rating: 0,
                 igdbRating: normalizedRating,
                 coverURL: igdbGame.coverURL,
                 igdbID: igdbGame.id,
                 firstReleaseDate: igdbGame.firstReleaseDate,
-                estimatedHours: est
+                estimatedHours: est,
+                isOwned: true,
+                isBacklog: true
             )
 
             store.add(newGame)

@@ -91,7 +91,7 @@ struct ExploreView: View {
         let currentYear = Calendar.current.component(.year, from: now)
         return store.games
             .filter { game in
-                guard game.status == .wishlist else { return false }
+                guard !game.isOwned else { return false }
                 guard game.isUnreleased else { return false }
                 if let releaseDate = game.releaseDate {
                     return releaseDate > now
@@ -234,11 +234,11 @@ struct ExploreView: View {
 
     // MARK: - 1. Välkomsthälsning & Spelmål
     private var greetingHeader: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: 10) {
             Button {
                 showingProfileSheet = true
             } label: {
-                UserAvatarView(size: 42)
+                UserAvatarView(size: 40)
             }
             .buttonStyle(.plain)
 
@@ -247,14 +247,16 @@ struct ExploreView: View {
                     .font(.headline)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                    .minimumScaleFactor(0.75)
                 Text("Redo för dagens spelsession?")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
+            .layoutPriority(1)
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 6)
 
             // Spelmål Badge
             goalBadge
@@ -269,10 +271,11 @@ struct ExploreView: View {
         case 12..<18: prefix = "God eftermiddag"
         default: prefix = "God kväll"
         }
-        if !profile.username.isEmpty {
-            return "\(prefix), \(profile.username) 👋"
+        let firstName = profile.username.split(separator: " ").first.map(String.init) ?? profile.username
+        if !firstName.isEmpty {
+            return "\(prefix), \(firstName)"
         } else {
-            return "\(prefix) 👋"
+            return prefix
         }
     }
 
@@ -284,7 +287,7 @@ struct ExploreView: View {
         return Button {
             showingGamingGoalSheet = true
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 Image(systemName: isGoalReached ? "trophy.fill" : "flag.checkered")
                     .font(.caption2.bold())
                     .foregroundStyle(isGoalReached ? .yellow : .orange)
@@ -293,8 +296,6 @@ struct ExploreView: View {
                     Text("\(completedCount) klara")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.primary)
-                    Text("🎉")
-                        .font(.caption2)
                 } else {
                     Text("\(completedCount)/\(targetGoal) klara")
                         .font(.caption.weight(.bold))
@@ -302,7 +303,7 @@ struct ExploreView: View {
                 }
             }
             .padding(.horizontal, 9)
-            .padding(.vertical, 6)
+            .padding(.vertical, 5)
             .background(Color.yellow.opacity(0.12), in: Capsule())
             .overlay(Capsule().stroke(Color.yellow.opacity(0.35), lineWidth: 0.8))
         }
@@ -478,9 +479,17 @@ struct ExploreView: View {
 
                         Spacer()
 
-                        Text("Aktiv idag")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 3) {
+                            Circle()
+                                .fill(Color.green)
+                                .frame(width: 5, height: 5)
+                            Text(game.isMultiplayerOrOngoing ? "Aktiv" : "Spelar nu")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.green)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.green.opacity(0.12), in: Capsule())
                     }
 
                     Text(game.title)
@@ -489,24 +498,43 @@ struct ExploreView: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
-                    if !game.todos.isEmpty {
-                        let done = game.todos.filter(\.isDone).count
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("\(done) av \(game.todos.count) delmål klara")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.secondary)
-                            ProgressView(value: Double(done), total: Double(game.todos.count))
-                                .tint(.green)
-                                .scaleEffect(y: 0.7, anchor: .center)
+                    if game.isMultiplayerOrOngoing {
+                        VStack(alignment: .leading, spacing: 2) {
+                            if let hours = game.estimatedHours, hours > 0 {
+                                Text("\(hours)h totalt")
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                            }
+                            if let lastPlayed = game.lastPlayedFormatted {
+                                Text(lastPlayed)
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text("Aktiv rotation")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(.secondary)
+                            }
                         }
-                    } else if let hours = game.estimatedHours, hours > 0 {
-                        Text("~ \(hours)h uppskattad speltid")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
                     } else {
-                        Text("Tryck för att logga framsteg ›")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.red)
+                        if !game.todos.isEmpty {
+                            let done = game.todos.filter(\.isDone).count
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("\(done) av \(game.todos.count) delmål klara")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(.secondary)
+                                ProgressView(value: Double(done), total: Double(game.todos.count))
+                                    .tint(.green)
+                                    .scaleEffect(y: 0.7, anchor: .center)
+                            }
+                        } else if let hours = game.estimatedHours, hours > 0 {
+                            Text("~ \(hours)h uppskattad speltid")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Tryck för att logga framsteg ›")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.red)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1177,7 +1205,7 @@ struct ExploreView: View {
                                         }
                                     }
                                     Button {
-                                        addStarterGame(title: game.title, platform: game.plats.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces) ?? "PC", year: game.year, status: .wishlist)
+                                        addStarterGame(title: game.title, platform: game.plats.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces) ?? "PC", year: game.year, status: .notStarted, isOwned: false)
                                     } label: {
                                         HStack {
                                             Image(systemName: "bookmark")
@@ -1243,7 +1271,7 @@ struct ExploreView: View {
         }
     }
 
-    private func addStarterGame(title: String, platform: String, year: Int, status: PlayStatus = .playing) {
+    private func addStarterGame(title: String, platform: String, year: Int, status: PlayStatus = .playing, isOwned: Bool = true) {
         let game = Game(
             title: title,
             platforms: [platform],
@@ -1253,7 +1281,7 @@ struct ExploreView: View {
             status: status,
             rating: status == .completed ? 8 : 0,
             coverURL: nil,
-            isOwned: status != .wishlist
+            isOwned: isOwned
         )
         store.add(game)
     }

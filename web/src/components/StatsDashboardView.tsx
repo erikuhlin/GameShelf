@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Game, PlayStatus, PLAY_STATUSES } from '@/types/game';
+import { getStatusDisplayTitle } from '@/lib/statusHelper';
 import {
   BarChart3,
   Trophy,
@@ -20,11 +21,11 @@ export function StatsDashboardView({ games, onSelectGame }: StatsDashboardViewPr
   // 1. Beräkningar för KPI-kort
   const totalGames = games.length;
   const ownedGames = games.filter((g) => g.is_owned).length;
-  const completedGames = games.filter((g) => g.status === 'Klar').length;
+  const completedGames = games.filter((g) => g.status === 'completed' && g.is_owned).length;
 
   const totalEstimatedHours = games.reduce((acc, g) => acc + (g.estimated_hours || 0), 0);
   const backlogHours = games
-    .filter((g) => g.status === 'Backlog' || g.status === 'Spelar nu')
+    .filter((g) => (g.is_backlog || g.status === 'playing') && g.is_owned)
     .reduce((acc, g) => acc + (g.estimated_hours || 0), 0);
 
   const ratedGames = games.filter((g) => g.rating !== null && g.rating !== undefined && g.rating > 0);
@@ -33,18 +34,31 @@ export function StatsDashboardView({ games, onSelectGame }: StatsDashboardViewPr
       ? (ratedGames.reduce((acc, g) => acc + (g.rating || 0), 0) / ratedGames.length).toFixed(1)
       : null;
 
-  const playedCount = totalGames - games.filter((g) => g.status === 'Önskelista').length;
+  const playedCount = ownedGames;
   const completionRate =
     playedCount > 0 ? Math.round((completedGames / playedCount) * 100) : 0;
 
   // 2. Statusfördelning
   const statusStats = React.useMemo(() => {
-    return PLAY_STATUSES.map((status) => {
-      const count = games.filter((g) => g.status === status).length;
-      const percentage = totalGames > 0 ? Math.round((count / totalGames) * 100) : 0;
-      return { status, count, percentage };
+    const items = PLAY_STATUSES.map((status) => {
+      const count = games.filter((g) => g.status === status && g.is_owned).length;
+      const percentage = ownedGames > 0 ? Math.round((count / ownedGames) * 100) : 0;
+      return {
+        status,
+        label: getStatusDisplayTitle(status, false),
+        count,
+        percentage,
+      };
     });
-  }, [games, totalGames]);
+
+    const backlogCount = games.filter((g) => g.is_backlog && g.is_owned).length;
+    const backlogPct = ownedGames > 0 ? Math.round((backlogCount / ownedGames) * 100) : 0;
+
+    return {
+      statuses: items,
+      backlog: { count: backlogCount, percentage: backlogPct },
+    };
+  }, [games, ownedGames]);
 
   // 3. Plattformsfördelning
   const platformStats = React.useMemo(() => {
@@ -109,18 +123,16 @@ export function StatsDashboardView({ games, onSelectGame }: StatsDashboardViewPr
 
   const getStatusColor = (status: PlayStatus) => {
     switch (status) {
-      case 'Spelar nu':
-        return 'bg-blue-500 text-blue-400 border-blue-500/40';
-      case 'Backlog':
-        return 'bg-amber-500 text-amber-400 border-amber-500/40';
-      case 'Klar':
+      case 'playing':
         return 'bg-emerald-500 text-emerald-400 border-emerald-500/40';
-      case 'Pausat':
-        return 'bg-purple-500 text-purple-400 border-purple-500/40';
-      case 'Avbrutet':
+      case 'notStarted':
+        return 'bg-zinc-500 text-zinc-400 border-zinc-500/40';
+      case 'paused':
+        return 'bg-amber-500 text-amber-400 border-amber-500/40';
+      case 'completed':
+        return 'bg-teal-500 text-teal-400 border-teal-500/40';
+      case 'abandoned':
         return 'bg-zinc-600 text-zinc-400 border-zinc-500/40';
-      case 'Önskelista':
-        return 'bg-rose-500 text-rose-400 border-rose-500/40';
     }
   };
 
@@ -184,24 +196,24 @@ export function StatsDashboardView({ games, onSelectGame }: StatsDashboardViewPr
           <div className="mt-3 sm:mt-4">
             <div className="text-2xl sm:text-3xl font-extrabold text-white">{completionRate}%</div>
             <div className="text-[11px] sm:text-xs text-zinc-400 mt-1">
-              {completedGames} av {playedCount} klara
+              {completedGames} av {playedCount} spel
             </div>
           </div>
         </div>
 
         {/* Average Rating */}
-        <div className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 shadow-md flex flex-col justify-between">
+        <div className="p-3.5 sm:p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 shadow-md flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Snittbetyg</span>
-            <div className="w-8 h-8 rounded-xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-amber-400">
-              <Star className="w-4 h-4 fill-current" />
+            <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-zinc-400">Snittbetyg</span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center text-yellow-400">
+              <Star className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" />
             </div>
           </div>
-          <div className="mt-4">
-            <div className="text-3xl font-extrabold text-white">
+          <div className="mt-3 sm:mt-4">
+            <div className="text-2xl sm:text-3xl font-extrabold text-white">
               {averageRating ? `${averageRating}/10` : '–'}
             </div>
-            <div className="text-xs text-zinc-400 mt-1">
+            <div className="text-[11px] sm:text-xs text-zinc-400 mt-1">
               {ratedGames.length} betygsatta spel
             </div>
           </div>
@@ -217,14 +229,14 @@ export function StatsDashboardView({ games, onSelectGame }: StatsDashboardViewPr
 
         {/* Visual composite progress bar */}
         <div className="w-full h-3.5 rounded-full bg-zinc-950 overflow-hidden flex border border-zinc-800">
-          {statusStats.map((item) => {
+          {statusStats.statuses.map((item) => {
             if (item.count === 0) return null;
             return (
               <div
                 key={item.status}
                 style={{ width: `${item.percentage}%` }}
                 className={`${getStatusColor(item.status).split(' ')[0]} transition-all duration-500`}
-                title={`${item.status}: ${item.count} spel (${item.percentage}%)`}
+                title={`${item.label}: ${item.count} spel (${item.percentage}%)`}
               />
             );
           })}
@@ -232,15 +244,24 @@ export function StatsDashboardView({ games, onSelectGame }: StatsDashboardViewPr
 
         {/* Legend */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 pt-2">
-          {statusStats.map((item) => (
+          {statusStats.statuses.map((item) => (
             <div key={item.status} className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80 flex items-center gap-3">
               <span className={`w-3 h-3 rounded-full ${getStatusColor(item.status).split(' ')[0]}`}></span>
               <div>
-                <div className="text-xs font-semibold text-zinc-200">{item.status}</div>
+                <div className="text-xs font-semibold text-zinc-200">{item.label}</div>
                 <div className="text-[11px] text-zinc-400">{item.count} st ({item.percentage}%)</div>
               </div>
             </div>
           ))}
+
+          {/* Backlog Item */}
+          <div className="p-3 rounded-xl bg-blue-950/30 border border-blue-800/40 flex items-center gap-3">
+            <span className="w-3 h-3 rounded-full bg-blue-500"></span>
+            <div>
+              <div className="text-xs font-semibold text-blue-200">Backlog</div>
+              <div className="text-[11px] text-blue-300/80">{statusStats.backlog.count} st ({statusStats.backlog.percentage}%)</div>
+            </div>
+          </div>
         </div>
       </div>
 

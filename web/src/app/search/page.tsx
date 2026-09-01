@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { PlayStatus, PLAY_STATUSES } from '@/types/game';
+import { PlayStatus } from '@/types/game';
+import { inferPlayTypes } from '@/lib/statusHelper';
 import {
   Search as SearchIcon,
   ArrowLeft,
@@ -28,13 +29,21 @@ interface SearchResult {
   summary: string;
 }
 
+const INITIAL_OPTIONS = [
+  { id: 'backlog', label: 'I min Backlog', status: 'notStarted' as PlayStatus, isBacklog: true, isOwned: true },
+  { id: 'playing', label: 'Spelar nu', status: 'playing' as PlayStatus, isBacklog: false, isOwned: true },
+  { id: 'notStarted', label: 'Inte påbörjat', status: 'notStarted' as PlayStatus, isBacklog: false, isOwned: true },
+  { id: 'completed', label: 'Genomspelat', status: 'completed' as PlayStatus, isBacklog: false, isOwned: true },
+  { id: 'wishlist', label: 'Önskelista', status: 'notStarted' as PlayStatus, isBacklog: false, isOwned: false },
+] as const;
+
 export default function SearchPage() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [addedIds, setAddedIds] = useState<number[]>([]);
   const [addingId, setAddingId] = useState<number | null>(null);
-  const [selectedStatus, setSelectedStatus] = useState<PlayStatus>('Backlog');
+  const [initialChoice, setInitialChoice] = useState<string>('backlog');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Fetch already added games to mark them
@@ -81,6 +90,9 @@ export default function SearchPage() {
   const handleAddGame = async (game: SearchResult) => {
     setAddingId(game.id);
     try {
+      const choice = INITIAL_OPTIONS.find((o) => o.id === initialChoice) || INITIAL_OPTIONS[0];
+      const playTypes = inferPlayTypes({ title: game.title, genres: game.genres });
+
       const payload = {
         id: crypto.randomUUID(),
         title: game.title,
@@ -89,12 +101,14 @@ export default function SearchPage() {
         release_year: game.release_year,
         genres: game.genres,
         developers: game.developers,
-        status: selectedStatus,
+        status: choice.status,
         rating: null,
         igdb_rating: game.igdb_rating,
         cover_url: game.cover_url,
         igdb_id: game.id,
-        is_owned: selectedStatus !== 'Önskelista',
+        is_owned: choice.isOwned,
+        is_backlog: choice.isBacklog,
+        play_types: playTypes,
         notes: '',
         todos: [],
         created_at: new Date().toISOString(),
@@ -135,15 +149,15 @@ export default function SearchPage() {
           </Link>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs text-zinc-400 hidden sm:inline">Status för nya spel:</span>
+            <span className="text-xs text-zinc-400 hidden sm:inline">Lägg till som:</span>
             <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value as PlayStatus)}
+              value={initialChoice}
+              onChange={(e) => setInitialChoice(e.target.value)}
               className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-brand-red"
             >
-              {PLAY_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {status}
+              {INITIAL_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
                 </option>
               ))}
             </select>
@@ -264,7 +278,11 @@ export default function SearchPage() {
                         ) : (
                           <Plus className="w-3.5 h-3.5" />
                         )}
-                        <span>Lägg till ({selectedStatus})</span>
+                        <span>
+                          Lägg till (
+                          {INITIAL_OPTIONS.find((o) => o.id === initialChoice)?.label}
+                          )
+                        </span>
                       </button>
                     )}
                   </div>

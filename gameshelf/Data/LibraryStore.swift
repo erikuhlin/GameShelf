@@ -226,10 +226,11 @@ final class LibraryStore: ObservableObject {
 
     func update(_ game: Game) {
         var updated = game
-        if updated.status == .wishlist {
-            updated.isOwned = false
-        } else {
-            updated.isOwned = true
+        if updated.status == .playing {
+            updated.isBacklog = false
+            if updated.lastPlayedDate == nil {
+                updated.lastPlayedDate = Date()
+            }
         }
 
         if let idx = games.firstIndex(where: { $0.id == updated.id }) {

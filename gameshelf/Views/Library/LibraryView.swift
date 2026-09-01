@@ -30,12 +30,11 @@ enum SortOption: String, CaseIterable, Identifiable {
 // MARK: - Filteralternativ (Kompakta namn)
 enum PlayStatusFilter: String, CaseIterable, Identifiable {
     case all = "Alla"
-    case playing = "Aktiv"
-    case backlog = "Backlog"
-    case paused = "Paus"
-    case completed = "Klar"
+    case playing = "Spelar nu"
+    case notStarted = "Inte påbörjat"
+    case paused = "Pausat"
+    case completed = "Genomspelat"
     case abandoned = "Avbrutet"
-    case wishlist = "Önskelista"
 
     var id: String { rawValue }
 
@@ -43,11 +42,10 @@ enum PlayStatusFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all: return nil
         case .playing: return .playing
-        case .backlog: return .backlog
+        case .notStarted: return .notStarted
         case .paused: return .paused
         case .completed: return .completed
         case .abandoned: return .abandoned
-        case .wishlist: return .wishlist
         }
     }
 }
@@ -114,9 +112,9 @@ struct LibraryView: View {
         let currentPool: [Game] = {
             switch selectedTab {
             case .owned:
-                return store.games.filter { $0.isOwned && $0.status != .wishlist }
+                return store.games.filter { $0.isOwned }
             case .wishlist:
-                return store.games.filter { $0.status == .wishlist || !$0.isOwned }
+                return store.games.filter { !$0.isOwned }
             case .collections:
                 return []
             }
@@ -233,8 +231,8 @@ struct LibraryView: View {
         let resolvedQuery = GameAliasResolver.resolve(query: searchText.trimmingCharacters(in: .whitespacesAndNewlines)).lowercased()
 
         return store.games.filter { game in
-            // I ägo: Exkludera wishlist och ej ägda
-            guard game.isOwned && game.status != .wishlist else { return false }
+            // I ägo: Endast ägda spel
+            guard game.isOwned else { return false }
 
             let matchesStatus = (selectedStatusFilter.status == nil) || (game.status == selectedStatusFilter.status)
             let matchesPlatform = gameMatchesSelectedPlatform(game)
@@ -255,7 +253,7 @@ struct LibraryView: View {
         let resolvedQuery = GameAliasResolver.resolve(query: searchText.trimmingCharacters(in: .whitespacesAndNewlines)).lowercased()
 
         return store.games.filter { game in
-            guard game.status == .wishlist || !game.isOwned else { return false }
+            guard !game.isOwned else { return false }
 
             let matchesPlatform = gameMatchesSelectedPlatform(game)
             let matchesSearch = query.isEmpty ||
@@ -387,7 +385,7 @@ struct LibraryView: View {
                 if selectedTab == .owned {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
-                            ForEach(PlayStatusFilter.allCases.filter { $0 != .wishlist }) { filter in
+                            ForEach(PlayStatusFilter.allCases) { filter in
                                 let isSelected = selectedStatusFilter == filter
                                 let count = countForStatus(filter)
                                 Button {
@@ -403,7 +401,19 @@ struct LibraryView: View {
                                         } else if filter == .completed {
                                             Image(systemName: "checkmark")
                                                 .font(.system(size: 7, weight: .bold))
-                                                .foregroundStyle(isSelected ? Color.white : Color.yellow)
+                                                .foregroundStyle(isSelected ? Color.white : Color.teal)
+                                        } else if filter == .paused {
+                                            Image(systemName: "pause.fill")
+                                                .font(.system(size: 7, weight: .bold))
+                                                .foregroundStyle(isSelected ? Color.white : Color.orange)
+                                        } else if filter == .notStarted {
+                                            Circle()
+                                                .strokeBorder(isSelected ? Color.white : Color.secondary, lineWidth: 1.2)
+                                                .frame(width: 6, height: 6)
+                                        } else if filter == .abandoned {
+                                            Image(systemName: "xmark")
+                                                .font(.system(size: 7, weight: .bold))
+                                                .foregroundStyle(isSelected ? Color.white : Color.secondary)
                                         }
                                         Text(filter == .all ? "Alla" : filter.rawValue)
                                             .font(.caption2.weight(isSelected ? .bold : .medium))
@@ -578,12 +588,11 @@ struct LibraryView: View {
                             let titleText: String = {
                                 switch selectedStatusFilter {
                                 case .all: return "Alla (\(ownedGames.count))"
-                                case .playing: return "Spelar (\(ownedGames.count))"
-                                case .backlog: return "Backlog (\(ownedGames.count))"
+                                case .playing: return "Spelar nu (\(ownedGames.count))"
+                                case .notStarted: return "Inte påbörjat (\(ownedGames.count))"
                                 case .paused: return "Pausat (\(ownedGames.count))"
-                                case .completed: return "Klart (\(ownedGames.count))"
+                                case .completed: return "Genomspelat (\(ownedGames.count))"
                                 case .abandoned: return "Avbrutet (\(ownedGames.count))"
-                                case .wishlist: return "Önskelista (\(ownedGames.count))"
                                 }
                             }()
 
@@ -1090,11 +1099,28 @@ struct LibraryView: View {
                 Button {
                     var copy = game
                     copy.status = status
+                    if status == .playing {
+                        copy.isBacklog = false
+                        if copy.lastPlayedDate == nil {
+                            copy.lastPlayedDate = Date()
+                        }
+                    }
                     store.update(copy)
                 } label: {
-                    Label(status.rawValue, systemImage: status.icon)
+                    Label(status.title(for: game.playTypes), systemImage: status.icon(for: game.playTypes))
                 }
             }
+        }
+
+        Button {
+            var copy = game
+            copy.isBacklog.toggle()
+            store.update(copy)
+        } label: {
+            Label(
+                game.isBacklog ? "Ta bort från Backlog" : "Lägg till i Backlog",
+                systemImage: game.isBacklog ? "archivebox.fill" : "archivebox"
+            )
         }
 
         Menu("Samlingar") {
@@ -1174,16 +1200,14 @@ struct LibraryView: View {
             return base.count
         case .playing:
             return base.filter { $0.status == .playing }.count
-        case .backlog:
-            return base.filter { $0.status == .backlog }.count
+        case .notStarted:
+            return base.filter { $0.status == .notStarted }.count
         case .paused:
             return base.filter { $0.status == .paused }.count
         case .completed:
             return base.filter { $0.status == .completed }.count
         case .abandoned:
             return base.filter { $0.status == .abandoned }.count
-        case .wishlist:
-            return store.games.filter { $0.status == .wishlist }.count
         }
     }
 
@@ -1191,21 +1215,20 @@ struct LibraryView: View {
         switch filter {
         case .all: return "circle.grid.2x2"
         case .playing: return "circle.fill"
-        case .backlog: return "clock"
+        case .notStarted: return "circle"
         case .paused: return "pause.fill"
         case .completed: return "checkmark"
         case .abandoned: return "xmark"
-        case .wishlist: return "bookmark"
         }
     }
 
     private func colorForStatus(_ filter: PlayStatusFilter) -> Color {
         switch filter {
         case .playing: return .green
-        case .completed: return .yellow
-        case .backlog: return .blue
+        case .completed: return .teal
         case .paused: return .orange
         case .abandoned: return .gray
+        case .notStarted: return Color(.systemGray)
         default: return .secondary
         }
     }
@@ -1285,6 +1308,11 @@ struct PlayingNowCard: View {
         return (done, game.todos.count)
     }
 
+    private var progressPercent: Int? {
+        guard let p = todoProgress, p.total > 0 else { return nil }
+        return Int(round(Double(p.completed) / Double(p.total) * 100))
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             CoverView(title: game.title, url: game.coverURL, corner: 8, height: 80)
@@ -1293,14 +1321,22 @@ struct PlayingNowCard: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
+                    HStack(spacing: 3) {
+                        Image(systemName: game.isMultiplayerOrOngoing ? "circle.fill" : "play.fill")
+                            .font(.system(size: 7, weight: .bold))
+                        Text(game.isMultiplayerOrOngoing ? "Aktiv" : "Spelar nu")
+                            .font(.system(size: 9, weight: .bold))
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1.5)
+                    .background(Color.green.opacity(0.15))
+                    .foregroundStyle(Color.green)
+                    .clipShape(Capsule())
+
                     if let platform = game.platforms.first {
                         Text(platform)
-                            .font(.system(size: 9, weight: .bold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1.5)
-                            .background(Color.green.opacity(0.15))
-                            .foregroundStyle(Color.green)
-                            .clipShape(Capsule())
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.secondary)
                     }
 
                     Spacer()
@@ -1323,24 +1359,55 @@ struct PlayingNowCard: View {
                     .multilineTextAlignment(.leading)
                     .foregroundStyle(.primary)
 
-                if let progress = todoProgress {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(progress.completed) av \(progress.total) delmål")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.secondary)
+                if game.isMultiplayerOrOngoing {
+                    // Multiplayer / Ongoing vy
+                    VStack(alignment: .leading, spacing: 1) {
+                        if let hours = game.estimatedHours, hours > 0 {
+                            Text("\(hours)h totalt")
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Aktiv multiplayer")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
 
-                        ProgressView(value: Double(progress.completed), total: Double(progress.total))
-                            .tint(.green)
-                            .scaleEffect(x: 1, y: 0.7, anchor: .center)
+                        if let lastPlayed = game.lastPlayedFormatted {
+                            Text(lastPlayed)
+                                .font(.system(size: 9))
+                                .foregroundStyle(.secondary.opacity(0.85))
+                        }
                     }
-                } else if let hours = game.estimatedHours, hours > 0 {
-                    Text("~ \(hours)h uppskattat")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
                 } else {
-                    Text("I din aktiva rotation")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    // Singleplayer vy: Framsteg & speltid
+                    if let progress = todoProgress {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 4) {
+                                if let pct = progressPercent {
+                                    Text("\(pct)% framsteg")
+                                        .font(.system(size: 9, weight: .semibold))
+                                        .foregroundStyle(.primary)
+                                }
+                                if let hours = game.estimatedHours, hours > 0 {
+                                    Text("• \(hours)h spelat")
+                                        .font(.system(size: 9))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+
+                            ProgressView(value: Double(progress.completed), total: Double(progress.total))
+                                .tint(.green)
+                                .scaleEffect(x: 1, y: 0.7, anchor: .center)
+                        }
+                    } else if let hours = game.estimatedHours, hours > 0 {
+                        Text("\(hours)h spelat")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("I din aktiva rotation")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Spacer(minLength: 0)

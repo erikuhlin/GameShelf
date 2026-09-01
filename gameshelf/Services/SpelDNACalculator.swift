@@ -13,8 +13,8 @@ enum SpelDNACalculator {
         games: [Game],
         playFor: Set<String> = []
     ) -> SpelDNAProfile? {
-        let ownedGames = games.filter { $0.isOwned && $0.status != .wishlist }
-        let wishlistGames = games.filter { $0.status == .wishlist }
+        let ownedGames = games.filter { $0.isOwned }
+        let wishlistGames = games.filter { !$0.isOwned }
 
         // Minimikrav: minst 5 ägda spel i biblioteket
         guard ownedGames.count >= 5 else {

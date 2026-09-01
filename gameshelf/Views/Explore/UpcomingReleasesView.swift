@@ -769,7 +769,7 @@ struct UpcomingReleasesView: View {
             $0.title.lowercased() == game.name.lowercased()
         }) {
             var updated = existing
-            updated.status = .wishlist
+            updated.isOwned = false
             store.update(updated)
             return
         }
@@ -785,7 +785,7 @@ struct UpcomingReleasesView: View {
             releaseYear: game.releaseYear ?? 0,
             genres: genres,
             developers: game.developerName.map { [$0] } ?? [],
-            status: .wishlist,
+            status: .notStarted,
             rating: 0,
             igdbRating: normalizedRating,
             coverURL: game.coverURL,

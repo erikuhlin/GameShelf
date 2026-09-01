@@ -125,10 +125,10 @@ struct GameShareCardView: View {
                 if let st = status {
                     VStack(spacing: 3) {
                         HStack(spacing: 4) {
-                            Image(systemName: st.icon)
+                            Image(systemName: st.defaultIcon)
                                 .font(.system(size: 12))
                                 .foregroundStyle(st.color)
-                            Text(st.rawValue)
+                            Text(st.defaultTitle)
                                 .font(.system(size: 13, weight: .bold))
                                 .foregroundStyle(.white)
                         }

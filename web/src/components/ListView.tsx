@@ -102,7 +102,7 @@ export function ListView({ games, onSelectGame }: ListViewProps) {
 
               {/* Status */}
               <td className="py-2.5 px-4">
-                <StatusBadge status={game.status} size="sm" />
+                <StatusBadge game={game} size="sm" />
               </td>
 
               {/* Rating */}

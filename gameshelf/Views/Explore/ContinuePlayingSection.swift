@@ -56,7 +56,7 @@ struct ContinuePlayingSection: View {
                                             .foregroundStyle(.primary)
                                             .lineLimit(1)
 
-                                        StatusBadge(status: game.status)
+                                        StatusBadge(game: game)
                                     }
                                     .frame(width: 105, alignment: .leading)
                                 }

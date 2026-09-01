@@ -55,7 +55,7 @@ struct SmartGameRouletteCard: View {
                                 .multilineTextAlignment(.leading)
 
                             HStack(spacing: 8) {
-                                StatusBadge(status: game.status)
+                                StatusBadge(game: game)
 
                                 if let est = game.estimatedHours, est > 0 {
                                     HStack(spacing: 3) {
@@ -151,7 +151,7 @@ struct SmartGameRouletteCard: View {
     }
 
     private func pickSmartGame() {
-        let games = store.games.filter { $0.status != .wishlist && $0.isOwned }
+        let games = store.games.filter { $0.isOwned }
         guard !games.isEmpty else {
             currentGame = nil
             reason = ""
@@ -160,7 +160,7 @@ struct SmartGameRouletteCard: View {
 
         // Prioritet 1: Pågående eller pausade spel
         let activeGames = games.filter { $0.status == .playing || $0.status == .paused }
-        let backlogGames = games.filter { $0.status == .backlog }
+        let backlogGames = games.filter { $0.isBacklog }
         let completedGames = games.filter { $0.status == .completed }
 
         var pool: [Game] = []

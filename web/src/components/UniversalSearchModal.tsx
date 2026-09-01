@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Game, IGDBSearchResult, PlayStatus } from '@/types/game';
 import { resolveGameAlias } from '@/lib/aliasResolver';
 import { StatusBadge } from './StatusBadge';
+import { inferPlayTypes } from '@/lib/statusHelper';
 import {
   Search,
   X,
@@ -203,12 +204,14 @@ export function UniversalSearchModal({
       first_release_date: igdbGame.first_release_date || null,
       genres,
       developers,
-      status: 'Önskelista',
+      status: 'notStarted',
       rating: null,
       igdb_rating: igdbRating,
       igdb_id: igdbGame.id,
       estimated_hours: null,
       is_owned: false,
+      is_backlog: false,
+      play_types: inferPlayTypes({ title: igdbGame.name, genres }),
       notes: '',
       todos: [],
       created_at: new Date().toISOString(),
@@ -415,7 +418,7 @@ export function UniversalSearchModal({
                               {game.title}
                             </h4>
                             <div className="flex items-center gap-2 mt-1">
-                              <StatusBadge status={game.status} />
+                              <StatusBadge game={game} />
                               {game.rating && (
                                 <span className="text-[11px] text-amber-400 font-semibold">
                                   ⭐ {game.rating}/10

@@ -55,22 +55,28 @@ actor SupabaseSyncService {
 
         func toDomainGame() -> Game {
             let playStatus: PlayStatus
-            let statusString = status?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) ?? "backlog"
+            var isBacklog = false
+            var isOwnedGame = is_owned ?? true
+            let statusString = status?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) ?? "notstarted"
             switch statusString {
-            case "playing", "spelar", "spelar nu", "inprogress", "in_progress", "pågående":
+            case "playing", "spelar", "spelar nu", "inprogress", "in_progress", "pågående", "aktiv":
                 playStatus = .playing
-            case "backlog", "unplayed", "ej spelat", "ej påbörjat":
-                playStatus = .backlog
-            case "paused", "pausat":
+            case "backlog":
+                playStatus = .notStarted
+                isBacklog = true
+            case "unplayed", "ej spelat", "ej påbörjat", "inte påbörjat", "inte spelat", "notstarted", "not_started":
+                playStatus = .notStarted
+            case "paused", "pausat", "tar paus":
                 playStatus = .paused
-            case "completed", "klar", "hundredpercent", "100 %", "100%":
+            case "completed", "klar", "klart", "genomspelat", "inte aktiv längre", "hundredpercent", "100 %", "100%":
                 playStatus = .completed
-            case "abandoned", "avbruten", "avbrutet", "droppat", "dropped":
+            case "abandoned", "avbruten", "avbrutet", "droppat", "dropped", "slutat spela":
                 playStatus = .abandoned
             case "wishlist", "önskelista":
-                playStatus = .wishlist
+                playStatus = .notStarted
+                isOwnedGame = false
             default:
-                playStatus = .backlog
+                playStatus = .notStarted
             }
 
             var plats = platforms ?? []
@@ -101,10 +107,11 @@ actor SupabaseSyncService {
                 igdbID: igdb_id,
                 firstReleaseDate: first_release_date,
                 estimatedHours: estimated_hours,
-                isOwned: is_owned ?? true,
+                isOwned: isOwnedGame,
                 notes: notes ?? "",
                 todos: todos ?? [],
-                dateAdded: parsedDate
+                dateAdded: parsedDate,
+                isBacklog: isBacklog
             )
         }
     }

@@ -489,16 +489,65 @@ struct GameDetailView: View {
         HStack(spacing: 0) {
             // 1. Statusväljare
             Menu {
-                Picker("Status", selection: Binding<PlayStatus>(
-                    get: { g.status },
-                    set: { newStatus in
-                        var copy = g
-                        copy.status = newStatus
-                        updateLocal(copy)
-                    }
-                )) {
+                Section("Status") {
                     ForEach(PlayStatus.allCases) { st in
-                        Label(st.rawValue, systemImage: st.icon).tag(st)
+                        Button {
+                            var copy = g
+                            copy.status = st
+                            if st == .playing {
+                                copy.isBacklog = false
+                                if copy.lastPlayedDate == nil {
+                                    copy.lastPlayedDate = Date()
+                                }
+                            }
+                            updateLocal(copy)
+                        } label: {
+                            HStack {
+                                if g.status == st {
+                                    Image(systemName: "checkmark")
+                                }
+                                Label(
+                                    st.title(for: g.playTypes),
+                                    systemImage: st.icon(for: g.playTypes)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Section("Planering & Backlog") {
+                    Button {
+                        var copy = g
+                        copy.isBacklog.toggle()
+                        updateLocal(copy)
+                    } label: {
+                        Label(
+                            g.isBacklog ? "Ta bort från Backlog" : "Lägg till i Backlog",
+                            systemImage: g.isBacklog ? "archivebox.fill" : "archivebox"
+                        )
+                    }
+                }
+
+                Section("Speltyp") {
+                    ForEach(GamePlayType.allCases) { pt in
+                        Button {
+                            var copy = g
+                            if copy.playTypes.contains(pt) {
+                                if copy.playTypes.count > 1 {
+                                    copy.playTypes.removeAll(where: { $0 == pt })
+                                }
+                            } else {
+                                copy.playTypes.append(pt)
+                            }
+                            updateLocal(copy)
+                        } label: {
+                            HStack {
+                                if g.playTypes.contains(pt) {
+                                    Image(systemName: "checkmark")
+                                }
+                                Label(pt.title, systemImage: pt.icon)
+                            }
+                        }
                     }
                 }
             } label: {
@@ -508,15 +557,23 @@ struct GameDetailView: View {
                             .fill(g.status.color)
                             .frame(width: 8, height: 8)
                             .shadow(color: g.status.color.opacity(0.6), radius: 3)
-                        Text(g.status.rawValue)
+                        Text(g.statusDisplayTitle)
                             .font(.subheadline.weight(.bold))
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                     }
-                    Text("STATUS")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Color(.secondaryLabel))
-                        .tracking(0.6)
+                    HStack(spacing: 3) {
+                        Text("STATUS")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Color(.secondaryLabel))
+                            .tracking(0.6)
+                        if g.isBacklog {
+                            Text("• BACKLOG")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(Color.blue)
+                                .tracking(0.6)
+                        }
+                    }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
@@ -765,13 +822,14 @@ struct GameDetailView: View {
             releaseYear: r.releaseYear ?? 0,
             genres: genres,
             developers: r.developerName.map { [$0] } ?? [],
-            status: .wishlist,
+            status: .notStarted,
             rating: nil,
             igdbRating: normalizedRating,
             coverURL: r.coverURL,
             igdbID: r.id,
             firstReleaseDate: r.firstReleaseDate,
-            estimatedHours: est
+            estimatedHours: est,
+            isOwned: false
         )
         store.add(newGame)
         mode = .local(newGame)
@@ -800,7 +858,11 @@ struct GameDetailView: View {
     @ViewBuilder
     private func myPlayTabContent(_ g: Game) -> some View {
         VStack(spacing: 16) {
-            playtimeProgressCard(g)
+            if !g.isMultiplayerOrOngoing {
+                playtimeProgressCard(g)
+            } else {
+                multiplayerPlaytimeCard(g)
+            }
             guidesSection
             notesCard(g)
             collectionsCard(g)
@@ -955,6 +1017,78 @@ struct GameDetailView: View {
                     .background(percent == 100 ? Color.green.opacity(0.25) : Color.green.opacity(0.12))
                     .foregroundStyle(Color.green)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+            }
+        }
+    }
+
+    private func multiplayerPlaytimeCard(_ g: Game) -> some View {
+        let loggedHours = g.estimatedHours ?? 0
+
+        return detailCard(title: "Speltid & Aktivitet") {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(loggedHours > 0 ? "\(loggedHours) timmar" : "Ingen tid loggad")
+                            .font(.system(size: 26, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.primary)
+
+                        if let lastPlayed = g.lastPlayedFormatted {
+                            Text(lastPlayed)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Aktiv rotation")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Spacer()
+
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(g.status.color)
+                            .frame(width: 7, height: 7)
+                        Text(g.statusDisplayTitle)
+                            .font(.caption.bold())
+                            .foregroundStyle(g.status.color)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(g.status.color.opacity(0.12), in: Capsule())
+                }
+
+                // Snabba loggknappar för speltid
+                HStack(spacing: 8) {
+                    ForEach([1, 2, 5], id: \.self) { delta in
+                        Button("+\(delta)h") {
+                            var copy = g
+                            let current = copy.estimatedHours ?? 0
+                            copy.estimatedHours = current + delta
+                            copy.lastPlayedDate = Date()
+                            updateLocal(copy)
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }
+                        .font(.caption.bold())
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Color(.tertiarySystemFill))
+                        .foregroundStyle(Color.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+
+                    if loggedHours > 0 {
+                        Button("-1h") {
+                            adjustPlaytime(by: -1, for: g)
+                        }
+                        .font(.caption.bold())
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Color(.tertiarySystemFill))
+                        .foregroundStyle(.secondary)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
                 }
             }
         }
@@ -2419,10 +2553,11 @@ struct GameDetailView: View {
     private func updateStatus(_ status: PlayStatus, for g: Game) {
         var copy = g
         copy.status = status
-        if status == .wishlist {
-            copy.isOwned = false
-        } else {
-            copy.isOwned = true
+        if status == .playing {
+            copy.isBacklog = false
+            if copy.lastPlayedDate == nil {
+                copy.lastPlayedDate = Date()
+            }
         }
         store.update(copy)
     }
@@ -2433,6 +2568,11 @@ struct GameDetailView: View {
         let platforms = PlatformMatcher.resolvePlatforms(availableIGDBPlatforms: available, userProfilePlatforms: profile.platforms)
         let normalizedRating = (d.totalRating ?? 0.0) / 20.0
         let est = d.timeToBeat?.mainStoryHours ?? d.timeToBeat?.mainExtraHours
+        let inferredTypes = Game.inferPlayTypes(
+            genres: genres,
+            title: d.name,
+            gameModes: d.gameModes?.map(\.name)
+        )
 
         let new = Game(
             title: d.name,
@@ -2440,13 +2580,15 @@ struct GameDetailView: View {
             releaseYear: d.releaseYear ?? 0,
             genres: genres,
             developers: d.developerName.map { [$0] } ?? [],
-            status: .wishlist,
+            status: .notStarted,
             rating: 0,
             igdbRating: normalizedRating,
             coverURL: d.coverURL,
             igdbID: d.id,
             firstReleaseDate: d.firstReleaseDate,
-            estimatedHours: est
+            estimatedHours: est,
+            isOwned: false,
+            playTypes: inferredTypes
         )
         store.add(new)
     }

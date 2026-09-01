@@ -394,8 +394,8 @@ struct AddGameView: View {
                         IGDBSearchRow(
                             igdbGame: game,
                             localGame: localGame,
-                            onQuickAdd: { status in
-                                quickAdd(game: game, status: status)
+                            onQuickAdd: { option in
+                                quickAdd(game: game, option: option)
                             }
                         )
                     }
@@ -550,8 +550,8 @@ struct AddGameView: View {
                                         IGDBSearchRow(
                                             igdbGame: game,
                                             localGame: localGame,
-                                            onQuickAdd: { status in
-                                                quickAdd(game: game, status: status)
+                                            onQuickAdd: { option in
+                                                quickAdd(game: game, option: option)
                                             }
                                         )
                                     }
@@ -582,8 +582,8 @@ struct AddGameView: View {
                                         IGDBSearchRow(
                                             igdbGame: game,
                                             localGame: localGame,
-                                            onQuickAdd: { status in
-                                                quickAdd(game: game, status: status)
+                                            onQuickAdd: { option in
+                                                quickAdd(game: game, option: option)
                                             }
                                         )
                                     }
@@ -622,8 +622,8 @@ struct AddGameView: View {
                                         IGDBSearchRow(
                                             igdbGame: game,
                                             localGame: localGame,
-                                            onQuickAdd: { status in
-                                                quickAdd(game: game, status: status)
+                                            onQuickAdd: { option in
+                                                quickAdd(game: game, option: option)
                                             }
                                         )
                                     }
@@ -642,7 +642,14 @@ struct AddGameView: View {
     }
 
     // MARK: - Snabb-lägg till i biblioteket
-    private func quickAdd(game: IGDBGame, status: PlayStatus) {
+    enum QuickAddOption {
+        case backlog
+        case playing
+        case completed
+        case wishlist
+    }
+
+    private func quickAdd(game: IGDBGame, option: QuickAddOption) {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
 
@@ -651,6 +658,34 @@ struct AddGameView: View {
         let genres = game.genres?.map(\.name) ?? []
         let normalizedRating = (game.totalRating ?? 0.0) / 20.0
         let est = game.timeToBeat?.mainStoryHours ?? game.timeToBeat?.mainExtraHours
+        let inferredTypes = Game.inferPlayTypes(
+            genres: genres,
+            title: game.name,
+            gameModes: game.gameModes?.map(\.name)
+        )
+
+        let status: PlayStatus
+        let isBacklog: Bool
+        let isOwned: Bool
+
+        switch option {
+        case .backlog:
+            status = .notStarted
+            isBacklog = true
+            isOwned = true
+        case .playing:
+            status = .playing
+            isBacklog = false
+            isOwned = true
+        case .completed:
+            status = .completed
+            isBacklog = false
+            isOwned = true
+        case .wishlist:
+            status = .notStarted
+            isBacklog = false
+            isOwned = false
+        }
 
         let newGame = Game(
             title: game.name,
@@ -664,7 +699,11 @@ struct AddGameView: View {
             coverURL: game.coverURL,
             igdbID: game.id,
             firstReleaseDate: game.firstReleaseDate,
-            estimatedHours: est
+            estimatedHours: est,
+            isOwned: isOwned,
+            playTypes: inferredTypes,
+            isBacklog: isBacklog,
+            lastPlayedDate: status == .playing ? Date() : nil
         )
 
         store.add(newGame)
@@ -797,7 +836,7 @@ private struct IGDBSearchRow: View {
     @EnvironmentObject var store: LibraryStore
     let igdbGame: IGDBGame
     let localGame: Game?
-    var onQuickAdd: (PlayStatus) -> Void
+    var onQuickAdd: (AddGameView.QuickAddOption) -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -840,20 +879,38 @@ private struct IGDBSearchRow: View {
             // 1-Trycks Snabb-knapp eller Statusbadge
             if let local = localGame {
                 Menu {
-                    ForEach(PlayStatus.allCases) { st in
-                        Button {
-                            updateStatus(st, for: local)
-                        } label: {
-                            HStack {
-                                if local.status == st {
-                                    Image(systemName: "checkmark")
+                    Section("Status") {
+                        ForEach(PlayStatus.allCases) { st in
+                            Button {
+                                updateStatus(st, for: local)
+                            } label: {
+                                HStack {
+                                    if local.status == st {
+                                        Image(systemName: "checkmark")
+                                    }
+                                    Label(
+                                        st.title(for: local.playTypes),
+                                        systemImage: st.icon(for: local.playTypes)
+                                    )
                                 }
-                                Label(st.rawValue, systemImage: st.icon)
                             }
                         }
                     }
+
+                    Section("Backlog") {
+                        Button {
+                            var copy = local
+                            copy.isBacklog.toggle()
+                            store.update(copy)
+                        } label: {
+                            Label(
+                                local.isBacklog ? "Ta bort från Backlog" : "Lägg till i Backlog",
+                                systemImage: local.isBacklog ? "archivebox.fill" : "archivebox"
+                            )
+                        }
+                    }
                 } label: {
-                    StatusBadge(status: local.status)
+                    StatusBadge(game: local)
                 }
                 .buttonStyle(.plain)
             } else {
@@ -873,7 +930,7 @@ private struct IGDBSearchRow: View {
                     Button {
                         onQuickAdd(.completed)
                     } label: {
-                        Label("Lägg till som Klar", systemImage: "checkmark.seal.fill")
+                        Label("Lägg till som Genomspelat", systemImage: "checkmark.seal.fill")
                     }
 
                     Button {
@@ -907,6 +964,12 @@ private struct IGDBSearchRow: View {
     private func updateStatus(_ status: PlayStatus, for g: Game) {
         var updated = g
         updated.status = status
+        if status == .playing {
+            updated.isBacklog = false
+            if updated.lastPlayedDate == nil {
+                updated.lastPlayedDate = Date()
+            }
+        }
         store.update(updated)
     }
 }

@@ -11,7 +11,7 @@ struct BacklogSpotlightSection: View {
     @EnvironmentObject var store: LibraryStore
 
     private var backlogGames: [Game] {
-        store.games.filter { $0.status == .backlog && $0.isOwned }
+        store.games.filter { $0.isBacklog && $0.isOwned }
     }
 
     var body: some View {

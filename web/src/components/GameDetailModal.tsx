@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Game, GameCollection, PlayStatus, PLAY_STATUSES, GameTodoItem } from '@/types/game';
+import { Game, GameCollection, PlayStatus, PLAY_STATUSES, GameTodoItem, GamePlayType } from '@/types/game';
 import { supabase } from '@/lib/supabase';
 import { StatusBadge } from './StatusBadge';
 import { ReleaseCountdown } from './ReleaseCountdown';
+import { getStatusDisplayTitle, inferPlayTypes } from '@/lib/statusHelper';
 import {
   X,
   Star,
@@ -82,6 +83,12 @@ export function GameDetailModal({
   if (!isOpen || !game) return null;
 
   const [status, setStatus] = useState<PlayStatus>(game.status);
+  const [isBacklog, setIsBacklog] = useState<boolean>(game.is_backlog ?? false);
+  const [playTypes, setPlayTypes] = useState<GamePlayType[]>(
+    game.play_types && game.play_types.length > 0
+      ? game.play_types
+      : inferPlayTypes({ title: game.title, genres: game.genres })
+  );
   const [rating, setRating] = useState<number | null>(game.rating || null);
   const [isOwned, setIsOwned] = useState<boolean>(game.is_owned);
   const [estimatedHours, setEstimatedHours] = useState<number | string>(
@@ -109,6 +116,12 @@ export function GameDetailModal({
   useEffect(() => {
     if (game) {
       setStatus(game.status);
+      setIsBacklog(game.is_backlog ?? false);
+      setPlayTypes(
+        game.play_types && game.play_types.length > 0
+          ? game.play_types
+          : inferPlayTypes({ title: game.title, genres: game.genres })
+      );
       setRating(game.rating || null);
       setIsOwned(game.is_owned);
       setEstimatedHours(game.estimated_hours ?? '');
@@ -318,6 +331,13 @@ export function GameDetailModal({
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      const shouldClearBacklog = status === 'playing';
+      const finalBacklog = shouldClearBacklog ? false : isBacklog;
+      const lastPlayed =
+        status === 'playing'
+          ? game.last_played_date || new Date().toISOString()
+          : game.last_played_date;
+
       const updatedData = {
         status,
         rating: rating || null,
@@ -325,6 +345,9 @@ export function GameDetailModal({
         estimated_hours: estimatedHours !== '' ? Number(estimatedHours) : null,
         notes,
         todos,
+        is_backlog: finalBacklog,
+        play_types: playTypes,
+        last_played_date: lastPlayed,
       };
 
       const { error } = await supabase
@@ -398,7 +421,16 @@ export function GameDetailModal({
             {/* Title & basic meta */}
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                <StatusBadge status={status} size="sm" />
+                <StatusBadge
+                  status={status}
+                  isMultiplayer={
+                    playTypes.includes('multiplayer') ||
+                    playTypes.includes('ongoing') ||
+                    playTypes.includes('coOp')
+                  }
+                  game={{ ...game, is_backlog: isBacklog }}
+                  size="sm"
+                />
                 {game.igdb_rating && (
                   <span className="text-xs px-2 py-0.5 rounded-md bg-zinc-800/90 text-amber-300 border border-zinc-700/80 flex items-center gap-1 font-semibold">
                     <Sparkles className="w-3 h-3 text-amber-400" />
@@ -497,22 +529,53 @@ export function GameDetailModal({
 
           {/* 2. Controls: Status & Rating */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Status Picker */}
-            <div className="bg-zinc-900/70 border border-zinc-800 p-4 rounded-xl">
-              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
-                Spelstatus
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as PlayStatus)}
-                className="w-full bg-zinc-950 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-500 font-medium"
-              >
-                {PLAY_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+            {/* Status Picker & Backlog */}
+            <div className="bg-zinc-900/70 border border-zinc-800 p-4 rounded-xl flex flex-col justify-between">
+              <div>
+                <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
+                  Spelstatus
+                </label>
+                <select
+                  value={status}
+                  onChange={(e) => {
+                    const newStatus = e.target.value as PlayStatus;
+                    setStatus(newStatus);
+                    if (newStatus === 'playing') {
+                      setIsBacklog(false);
+                    }
+                  }}
+                  className="w-full bg-zinc-950 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-500 font-medium"
+                >
+                  {PLAY_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {getStatusDisplayTitle(
+                        s,
+                        playTypes.includes('multiplayer') ||
+                          playTypes.includes('ongoing') ||
+                          playTypes.includes('coOp')
+                      )}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Backlog Toggle */}
+              <div className="mt-3 pt-3 border-t border-zinc-800 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold text-zinc-200 block">
+                    Planerar att spela (Backlog)
+                  </span>
+                  <span className="text-[11px] text-zinc-500">
+                    Markerar spelet som del av din backlog
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={isBacklog}
+                  onChange={(e) => setIsBacklog(e.target.checked)}
+                  className="w-4 h-4 rounded accent-blue-600 bg-zinc-950 border-zinc-700 cursor-pointer"
+                />
+              </div>
             </div>
 
             {/* Rating Selector (1-10) */}
@@ -581,6 +644,53 @@ export function GameDetailModal({
                 />
                 <Clock className="w-4 h-4 text-zinc-500 absolute left-2.5 top-2.5" />
               </div>
+            </div>
+          </div>
+
+          {/* 3b. Speltyper */}
+          <div className="bg-zinc-900/70 border border-zinc-800 p-4 rounded-xl">
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                Speltyp
+              </label>
+              <span className="text-[11px] text-zinc-500">
+                Styr dynamiska statustitlar och framsteg
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  { id: 'singlePlayer', label: 'Singleplayer' },
+                  { id: 'multiplayer', label: 'Multiplayer' },
+                  { id: 'coOp', label: 'Co-op' },
+                  { id: 'ongoing', label: 'Ongoing / Live-service' },
+                ] as const
+              ).map((item) => {
+                const active = playTypes.includes(item.id);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      if (active) {
+                        if (playTypes.length > 1) {
+                          setPlayTypes(playTypes.filter((t) => t !== item.id));
+                        }
+                      } else {
+                        setPlayTypes([...playTypes, item.id]);
+                      }
+                    }}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition ${
+                      active
+                        ? 'bg-red-500/20 border-red-500 text-red-300'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                    }`}
+                  >
+                    {active ? '✓ ' : ''}
+                    {item.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

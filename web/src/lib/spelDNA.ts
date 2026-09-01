@@ -6,8 +6,8 @@ export function calculateSpelDNA(
   games: Game[],
   playFor: string[] = []
 ): SpelDNAProfile | null {
-  const ownedGames = games.filter((g) => g.is_owned && g.status !== 'Önskelista');
-  const wishlistGames = games.filter((g) => g.status === 'Önskelista');
+  const ownedGames = games.filter((g) => g.is_owned);
+  const wishlistGames = games.filter((g) => !g.is_owned);
 
   // Minimikrav: minst 5 ägda spel i samlingen
   if (ownedGames.length < 5) {
@@ -15,7 +15,9 @@ export function calculateSpelDNA(
   }
 
   const totalOwned = ownedGames.length;
-  const completedCount = ownedGames.filter((g) => g.status === 'Klar').length;
+  const completedCount = ownedGames.filter(
+    (g) => g.status === 'completed' || (g.status as string) === 'Klar'
+  ).length;
   const completionRate = completedCount / totalOwned;
 
   // 1. Räkna genrefördelning

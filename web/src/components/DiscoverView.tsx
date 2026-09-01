@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Game, PlayStatus } from '@/types/game';
 import { StatusBadge } from './StatusBadge';
+import { getStatusDisplayTitle, isMultiplayerOrOngoing } from '@/lib/statusHelper';
 import {
   Sparkles,
   Dices,
@@ -217,7 +218,11 @@ export function DiscoverView({
 
   // Spel som användaren för tillfället spelar
   const currentlyPlaying = useMemo(() => {
-    return games.filter((g) => g.status === 'Spelar nu');
+    return games.filter(
+      (g) =>
+        (g.status === 'playing' || (g.status as string) === 'Spelar nu') &&
+        g.is_owned
+    );
   }, [games]);
 
   // Nästa släpp i din önskelista (identiskt med regeln i iOS-appen)
@@ -226,7 +231,7 @@ export function DiscoverView({
     const currentYear = new Date().getFullYear();
 
     const candidates = games.filter((g) => {
-      if (g.status !== 'Önskelista') return false;
+      if (g.is_owned) return false;
       if (g.first_release_date) {
         const ms =
           Number(g.first_release_date) < 10000000000
@@ -271,7 +276,11 @@ export function DiscoverView({
 
   // Spelmål 2026 beräkning (räknar endast aktiva ägda spel, exkluderar gamla spelminnen)
   const completedGamesCount = useMemo(() => {
-    return games.filter((g) => g.status === 'Klar' && g.is_owned).length;
+    return games.filter(
+      (g) =>
+        (g.status === 'completed' || (g.status as string) === 'Klar') &&
+        g.is_owned
+    ).length;
   }, [games]);
 
   const annualGoal = userProfile?.annualGamingGoal || 12;
@@ -459,11 +468,15 @@ export function DiscoverView({
     let candidates: Game[] = [];
     if (rouletteMode === 'library') {
       if (rouletteFilter === 'backlog') {
-        candidates = games.filter((g) => g.status === 'Backlog');
+        candidates = games.filter((g) => g.is_backlog && g.is_owned);
       } else if (rouletteFilter === 'playing') {
-        candidates = games.filter((g) => g.status === 'Spelar nu');
+        candidates = games.filter(
+          (g) =>
+            (g.status === 'playing' || (g.status as string) === 'Spelar nu') &&
+            g.is_owned
+        );
       } else {
-        candidates = games.length > 0 ? games : [];
+        candidates = games.length > 0 ? games.filter((g) => g.is_owned) : [];
       }
     } else {
       candidates = trendingGames;
@@ -1110,7 +1123,9 @@ export function DiscoverView({
                       </span>
 
                       <button
-                        onClick={() => onAddGame({ ...game, status: 'Önskelista' })}
+                        onClick={() =>
+                          onAddGame({ ...game, status: 'notStarted', is_owned: false })
+                        }
                         disabled={inLibrary}
                         className={`mt-2.5 w-full py-1.5 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 transition ${
                           inLibrary
@@ -1700,7 +1715,14 @@ export function DiscoverView({
                               className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold mb-3 cursor-pointer hover:bg-emerald-500/20 transition"
                             >
                               <Gamepad className="w-3.5 h-3.5" />
-                              <span>Finns i ditt bibliotek ({matched.status})</span>
+                              <span>
+                                Finns i ditt bibliotek (
+                                {getStatusDisplayTitle(
+                                  matched.status,
+                                  isMultiplayerOrOngoing(matched)
+                                )}
+                                )
+                              </span>
                             </div>
                           );
                         })()}
@@ -1830,7 +1852,14 @@ export function DiscoverView({
                               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] font-semibold mb-2 cursor-pointer hover:bg-emerald-500/20 transition"
                             >
                               <Gamepad className="w-3 h-3" />
-                              <span className="truncate">I ditt bibliotek ({matchedLibraryGame.status})</span>
+                              <span className="truncate">
+                                I ditt bibliotek (
+                                {getStatusDisplayTitle(
+                                  matchedLibraryGame.status,
+                                  isMultiplayerOrOngoing(matchedLibraryGame)
+                                )}
+                                )
+                              </span>
                             </div>
                           )}
 

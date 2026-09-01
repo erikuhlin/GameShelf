@@ -76,7 +76,7 @@ struct CreateOrEditCollectionSheet: View {
                                         .foregroundStyle(.primary)
 
                                     HStack(spacing: 6) {
-                                        StatusBadge(status: game.status)
+                                        StatusBadge(game: game)
 
                                         if game.releaseYear > 0 {
                                             Text(String(game.releaseYear))

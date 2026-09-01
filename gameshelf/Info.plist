@@ -11,5 +11,7 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Kameran används för att scanna QR-koden när du kopplar appen till webben.</string>
+	<key>UIUserInterfaceStyle</key>
+	<string>Dark</string>
 </dict>
 </plist>

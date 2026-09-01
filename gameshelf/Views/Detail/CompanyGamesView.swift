@@ -225,13 +225,13 @@ struct CompanyGamesView: View {
         case .completed:
             Image(systemName: "checkmark").font(.system(size: 7, weight: .black)).foregroundStyle(Color.yellow)
                 .padding(4).background(Color.black.opacity(0.7), in: Circle())
-        case .backlog:
-            Image(systemName: "clock").font(.system(size: 7, weight: .bold)).foregroundStyle(Color.blue)
+        case .paused:
+            Image(systemName: "pause.fill").font(.system(size: 7, weight: .bold)).foregroundStyle(Color.orange)
                 .padding(4).background(Color.black.opacity(0.7), in: Circle())
-        case .wishlist:
-            Image(systemName: "bookmark.fill").font(.system(size: 7, weight: .bold)).foregroundStyle(Color.red)
+        case .abandoned:
+            Image(systemName: "xmark").font(.system(size: 7, weight: .bold)).foregroundStyle(Color.gray)
                 .padding(4).background(Color.black.opacity(0.7), in: Circle())
-        case .paused, .abandoned:
+        case .notStarted:
             EmptyView()
         }
     }

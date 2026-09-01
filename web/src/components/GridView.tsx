@@ -3,6 +3,7 @@
 import React from 'react';
 import { Game } from '@/types/game';
 import { StatusBadge } from './StatusBadge';
+import { isMultiplayerOrOngoing } from '@/lib/statusHelper';
 import { Star, Gamepad, Clock, CheckSquare } from 'lucide-react';
 
 interface GridViewProps {
@@ -75,7 +76,7 @@ export function GridView({ games, onSelectGame, groupByYear = false }: GridViewP
 
           {/* Status Badge in Corner */}
           <div className="absolute top-2 left-2">
-            <StatusBadge status={game.status} size="sm" />
+            <StatusBadge game={game} size="sm" />
           </div>
 
           {/* Rating badge */}
@@ -86,8 +87,8 @@ export function GridView({ games, onSelectGame, groupByYear = false }: GridViewP
             </div>
           )}
 
-          {/* Todos progress badge if has todos */}
-          {totalTodos > 0 && (
+          {/* Todos progress badge if has todos (singleplayer only) */}
+          {!isMultiplayerOrOngoing(game) && totalTodos > 0 && (
             <div className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded bg-black/75 backdrop-blur-md text-zinc-300 text-xs border border-zinc-700">
               <CheckSquare className="w-3 h-3 text-emerald-400" />
               <span>

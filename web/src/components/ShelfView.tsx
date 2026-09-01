@@ -74,12 +74,16 @@ export function ShelfView({ games, onSelectGame }: ShelfViewProps) {
                       </div>
                     )}
 
-                    {/* Önskelista-märkning för spel i önskelistan */}
-                    {(game.status === 'Önskelista' || !game.is_owned) && (
+                    {/* Önskelista / Backlog märkning */}
+                    {!game.is_owned ? (
                       <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-purple-950/90 backdrop-blur-md text-purple-300 text-[9px] sm:text-[10px] font-bold border border-purple-500/50 shadow-sm flex items-center gap-1">
                         <span>Önskelista</span>
                       </div>
-                    )}
+                    ) : game.is_backlog ? (
+                      <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-blue-950/90 backdrop-blur-md text-blue-300 text-[9px] sm:text-[10px] font-bold border border-blue-500/50 shadow-sm flex items-center gap-1">
+                        <span>Backlog</span>
+                      </div>
+                    ) : null}
                   </div>
 
                   {/* Title & Platform label */}

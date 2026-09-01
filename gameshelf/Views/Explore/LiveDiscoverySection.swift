@@ -119,31 +119,12 @@ struct LiveDiscoverySection: View {
     private var forYouSubSection: some View {
         if !curatedRecommendations.isEmpty || isLoadingRecommended {
             VStack(alignment: .leading, spacing: 10) {
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "sparkles")
-                            .foregroundStyle(Color.ds.brandRed)
-                        Text("För dig")
-                            .font(.title3.bold())
-                            .foregroundStyle(.primary)
-                    }
-
-                    let activeGames = store.games.filter { $0.status == .playing }
-                    if !activeGames.isEmpty {
-                        let titles = activeGames.map(\.title).prefix(3).joined(separator: ", ")
-                        Text("Kurerat efter alla dina aktiva spel: \(titles)")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    } else if let fav = store.games.filter({ ($0.rating ?? 0) >= 7 }).first {
-                        Text("Kurerat efter ditt favoritspel \(fav.title) (\(fav.rating ?? 9)/10)")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("Kurerat efter dina plattformar och favoritgenrer.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(Color.ds.brandRed)
+                    Text("För dig")
+                        .font(.title3.bold())
+                        .foregroundStyle(.primary)
                 }
 
                 if isLoadingRecommended {
@@ -560,12 +541,13 @@ struct LiveDiscoverySection: View {
                                                     releaseYear: game.releaseYear ?? 0,
                                                     genres: game.genres?.map(\.name) ?? [],
                                                     developers: game.developerName.map { [$0] } ?? [],
-                                                    status: .wishlist,
+                                                    status: .notStarted,
                                                     rating: 0,
                                                     igdbRating: game.totalRating.map { $0 / 10 },
                                                     coverURL: game.coverURL,
                                                     igdbID: game.id,
-                                                    firstReleaseDate: game.firstReleaseDate
+                                                    firstReleaseDate: game.firstReleaseDate,
+                                                    isOwned: false
                                                 )
                                                 store.add(newGame)
                                             }

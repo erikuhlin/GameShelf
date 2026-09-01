@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Game, GameCollection, PlayStatus, PLAY_STATUSES } from '@/types/game';
 import { supabase, mapSupabaseGame, mapSupabaseCollection } from '@/lib/supabase';
+import { getStatusDisplayTitle, inferPlayTypes } from '@/lib/statusHelper';
 import { Header, ViewMode } from '@/components/Header';
 import { ShelfView } from '@/components/ShelfView';
 import { GridView } from '@/components/GridView';
@@ -52,7 +53,7 @@ export default function HomePage() {
   const [games, setGames] = useState<Game[]>([]);
   const [collections, setCollections] = useState<GameCollection[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('shelf');
-  const [selectedStatus, setSelectedStatus] = useState<PlayStatus | 'Alla'>('Alla');
+  const [selectedStatus, setSelectedStatus] = useState<PlayStatus | 'Alla' | 'Backlog'>('Alla');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [profileName, setProfileName] = useState<string>('');
@@ -635,22 +636,28 @@ export default function HomePage() {
 
   // Aktiva spel som spelas just nu
   const playingNowGames = useMemo(() => {
-    return games.filter((g) => g.status === 'Spelar nu' && g.is_owned);
+    return games.filter(
+      (g) =>
+        (g.status === 'playing' || (g.status as string) === 'Spelar nu') &&
+        g.is_owned
+    );
   }, [games]);
 
   // Filtrerade och sorterade spel
   const filteredGames = useMemo(() => {
     let result = games.filter((game) => {
       // 1. Spelstatus filter
-      if (selectedStatus !== 'Alla' && game.status !== selectedStatus) {
+      if (selectedStatus === 'Backlog') {
+        if (!game.is_backlog) return false;
+      } else if (selectedStatus !== 'Alla' && game.status !== selectedStatus) {
         return false;
       }
 
       // 2. Ägarskapsfilter / Önskelista
-      if (libraryOwnershipFilter === 'owned' && (!game.is_owned || game.status === 'Önskelista')) {
+      if (libraryOwnershipFilter === 'owned' && !game.is_owned) {
         return false;
       }
-      if (libraryOwnershipFilter === 'wishlist' && (game.is_owned && game.status !== 'Önskelista')) {
+      if (libraryOwnershipFilter === 'wishlist' && game.is_owned) {
         return false;
       }
 
@@ -776,12 +783,20 @@ export default function HomePage() {
 
   // Status counts for tab pills
   const statusCounts = useMemo(() => {
-    const counts: { [k: string]: number } = { Alla: games.length };
+    const relevant = games.filter((g) =>
+      libraryOwnershipFilter === 'owned'
+        ? g.is_owned
+        : libraryOwnershipFilter === 'wishlist'
+        ? !g.is_owned
+        : true
+    );
+    const counts: { [k: string]: number } = { Alla: relevant.length };
     PLAY_STATUSES.forEach((s) => {
-      counts[s] = games.filter((g) => g.status === s).length;
+      counts[s] = relevant.filter((g) => g.status === s).length;
     });
+    counts['Backlog'] = relevant.filter((g) => g.is_backlog).length;
     return counts;
-  }, [games]);
+  }, [games, libraryOwnershipFilter]);
 
   // Handlers for game changes
   const handleGameAdded = (newGame: Game) => {
@@ -806,8 +821,20 @@ export default function HomePage() {
   };
 
   const handleUpdateGameStatus = async (gameId: string, newStatus: PlayStatus) => {
+    const isPlaying = newStatus === 'playing';
     setGames((prev) => {
-      const next = prev.map((g) => (g.id === gameId ? { ...g, status: newStatus } : g));
+      const next = prev.map((g) =>
+        g.id === gameId
+          ? {
+              ...g,
+              status: newStatus,
+              is_backlog: isPlaying ? false : g.is_backlog,
+              last_played_date: isPlaying
+                ? g.last_played_date || new Date().toISOString()
+                : g.last_played_date,
+            }
+          : g
+      );
       if (typeof window !== 'undefined') {
         localStorage.setItem('gameshelf_local_games', JSON.stringify(next));
       }
@@ -815,7 +842,13 @@ export default function HomePage() {
     });
 
     try {
-      await supabase.from('user_games').update({ status: newStatus }).eq('id', gameId);
+      await supabase
+        .from('user_games')
+        .update({
+          status: newStatus,
+          ...(isPlaying ? { is_backlog: false } : {}),
+        })
+        .eq('id', gameId);
     } catch (err) {
       console.error('Failed to update game status:', err);
     }
@@ -827,6 +860,7 @@ export default function HomePage() {
       pairedUserId = localStorage.getItem('gameshelf_paired_user_id');
     }
 
+    const playTypes = game.play_types || inferPlayTypes(game);
     const payload = {
       user_id: pairedUserId,
       title: game.title,
@@ -835,8 +869,10 @@ export default function HomePage() {
       release_year: game.release_year || null,
       genres: game.genres || [],
       developers: game.developers || [],
-      status: game.status || 'Önskelista',
-      is_owned: game.is_owned || false,
+      status: game.status || 'notStarted',
+      is_owned: game.is_owned ?? false,
+      is_backlog: game.is_backlog ?? false,
+      play_types: playTypes,
       rating: null,
       igdb_rating: game.igdb_rating || null,
       estimated_hours: null,
@@ -1005,6 +1041,7 @@ export default function HomePage() {
   };
 
   const handleAddFromDiscover = async (gameToAdd: Game) => {
+    const playTypes = gameToAdd.play_types || inferPlayTypes(gameToAdd);
     const newGamePayload = {
       id: crypto.randomUUID(),
       user_id: pairedUserId || undefined,
@@ -1015,12 +1052,14 @@ export default function HomePage() {
       first_release_date: gameToAdd.first_release_date || null,
       genres: gameToAdd.genres || [],
       developers: gameToAdd.developers || [],
-      status: 'Önskelista' as PlayStatus,
+      status: (gameToAdd.status || 'notStarted') as PlayStatus,
       rating: null,
       igdb_rating: gameToAdd.igdb_rating || null,
       igdb_id: gameToAdd.igdb_id || null,
       estimated_hours: null,
       is_owned: false,
+      is_backlog: false,
+      play_types: playTypes,
       notes: '',
       todos: [],
     };
@@ -1167,13 +1206,37 @@ export default function HomePage() {
                     selectedStatus === 'Alla' ? 'bg-zinc-300 text-zinc-900' : 'bg-zinc-800 text-zinc-400'
                   }`}
                 >
-                  {statusCounts['Alla']}
+                  {statusCounts['Alla'] || 0}
                 </span>
               </button>
+
+              {/* Backlog Tab */}
+              {libraryOwnershipFilter !== 'wishlist' && (
+                <button
+                  onClick={() => setSelectedStatus('Backlog')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
+                    selectedStatus === 'Backlog'
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-zinc-900/80 text-blue-300 hover:text-blue-200 border border-blue-900/40'
+                  }`}
+                >
+                  <span>Backlog</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                      selectedStatus === 'Backlog'
+                        ? 'bg-blue-800 text-white'
+                        : 'bg-blue-950 text-blue-300'
+                    }`}
+                  >
+                    {statusCounts['Backlog'] || 0}
+                  </span>
+                </button>
+              )}
 
               {PLAY_STATUSES.map((status) => {
                 const isSelected = selectedStatus === status;
                 const count = statusCounts[status] || 0;
+                const label = getStatusDisplayTitle(status, false);
                 return (
                   <button
                     key={status}
@@ -1184,7 +1247,7 @@ export default function HomePage() {
                         : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
                     }`}
                   >
-                    <span>{status}</span>
+                    <span>{label}</span>
                     <span
                       className={`px-1.5 py-0.2 rounded-full text-[10px] ${
                         isSelected ? 'bg-zinc-300 text-zinc-900' : 'bg-zinc-800 text-zinc-400'
@@ -1300,7 +1363,7 @@ export default function HomePage() {
                 }`}
                 title="Endast spel du äger i ditt bibliotek"
               >
-                I ägo 🎮 ({games.filter((g) => g.is_owned && g.status !== 'Önskelista').length})
+                I ägo 🎮 ({games.filter((g) => g.is_owned).length})
               </button>
               <button
                 onClick={() => handleOwnershipChange('wishlist')}
@@ -1311,7 +1374,7 @@ export default function HomePage() {
                 }`}
                 title="Spel på din önskelista"
               >
-                Önskelista 🎁 ({games.filter((g) => !g.is_owned || g.status === 'Önskelista').length})
+                Önskelista 🎁 ({games.filter((g) => !g.is_owned).length})
               </button>
             </div>
           </div>
@@ -1551,8 +1614,10 @@ export default function HomePage() {
               genres: newGame.genres,
               developers: newGame.developers,
               platforms: newGame.platforms,
-              status: 'Önskelista',
+              status: 'notStarted',
               is_owned: false,
+              is_backlog: false,
+              play_types: inferPlayTypes({ title: newGame.title, genres: newGame.genres }),
               notes: '',
               todos: [],
             };

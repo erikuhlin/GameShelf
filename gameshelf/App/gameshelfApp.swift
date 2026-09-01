@@ -19,6 +19,7 @@ struct gameshelfApp: App {
     var body: some Scene {
         WindowGroup {
             RootTabView()
+                .preferredColorScheme(.dark)
                 .tint(.ds.brandRed)
                 .background(Color.ds.background)
                 .environmentObject(store)

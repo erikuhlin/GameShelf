@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Game, IGDBSearchResult, PlayStatus, PLAY_STATUSES } from '@/types/game';
+import { Game, IGDBSearchResult, PlayStatus } from '@/types/game';
 import { supabase } from '@/lib/supabase';
+import { inferPlayTypes } from '@/lib/statusHelper';
 import { Search, X, Loader2, Plus, Check, Star, Gamepad, Calendar } from 'lucide-react';
 
 interface AddGameModalProps {
@@ -11,6 +12,14 @@ interface AddGameModalProps {
   onGameAdded: (newGame: Game) => void;
   existingGames: Game[];
 }
+
+const INITIAL_OPTIONS = [
+  { id: 'backlog', label: 'I min Backlog', status: 'notStarted' as PlayStatus, isBacklog: true, isOwned: true },
+  { id: 'playing', label: 'Spelar nu', status: 'playing' as PlayStatus, isBacklog: false, isOwned: true },
+  { id: 'notStarted', label: 'Inte påbörjat', status: 'notStarted' as PlayStatus, isBacklog: false, isOwned: true },
+  { id: 'completed', label: 'Genomspelat', status: 'completed' as PlayStatus, isBacklog: false, isOwned: true },
+  { id: 'wishlist', label: 'Önskelista', status: 'notStarted' as PlayStatus, isBacklog: false, isOwned: false },
+] as const;
 
 export function AddGameModal({
   isOpen,
@@ -22,7 +31,7 @@ export function AddGameModal({
   const [results, setResults] = useState<IGDBSearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [addingId, setAddingId] = useState<number | null>(null);
-  const [selectedStatus, setSelectedStatus] = useState<PlayStatus>('Backlog');
+  const [initialChoice, setInitialChoice] = useState<string>('backlog');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Debounced IGDB search
@@ -73,6 +82,8 @@ export function AddGameModal({
       const igdbRating = ratingScore ? Math.round((ratingScore / 10) * 10) / 10 : null;
 
       const pairedUserId = typeof window !== 'undefined' ? localStorage.getItem('gameshelf_paired_user_id') : null;
+      const choice = INITIAL_OPTIONS.find((o) => o.id === initialChoice) || INITIAL_OPTIONS[0];
+      const playTypes = inferPlayTypes({ title: igdbGame.name, genres });
 
       const newGamePayload = {
         user_id: pairedUserId,
@@ -81,14 +92,16 @@ export function AddGameModal({
         release_year: releaseYear,
         genres,
         developers: developers.length > 0 ? developers : [],
-        status: selectedStatus,
+        status: choice.status,
         rating: null,
         igdb_rating: igdbRating,
         cover_url: igdbGame.cover?.url || null,
         igdb_id: igdbGame.id,
         first_release_date: igdbGame.first_release_date || null,
         estimated_hours: null,
-        is_owned: selectedStatus !== 'Önskelista',
+        is_owned: choice.isOwned,
+        is_backlog: choice.isBacklog,
+        play_types: playTypes,
         notes: '',
         todos: [],
       };
@@ -107,26 +120,33 @@ export function AddGameModal({
           ...newGamePayload,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        };
+        } as any;
         onGameAdded(fallbackGame);
       } else if (data) {
         onGameAdded(data as Game);
       }
     } catch (err: any) {
-      console.error('Failed to add game:', err);
+      console.error('Error in handleAddGame:', err);
+      setErrorMessage('Kunde inte lägga till spelet');
     } finally {
       setAddingId(null);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-[#16181f] border border-zinc-800 rounded-2xl w-full max-w-3xl max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
-        {/* Header */}
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-3xl bg-[#111216] border border-zinc-800/90 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Modal Header */}
         <div className="p-4 sm:p-6 border-b border-zinc-800 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <span>Lägg till spel</span>
+              <span>Lägg till spel i samlingen</span>
               <span className="text-xs px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 font-normal border border-zinc-700">
                 IGDB API
               </span>
@@ -161,15 +181,15 @@ export function AddGameModal({
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <span className="text-xs text-zinc-400 whitespace-nowrap">Initial status:</span>
+            <span className="text-xs text-zinc-400 whitespace-nowrap">Lägg till som:</span>
             <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value as PlayStatus)}
+              value={initialChoice}
+              onChange={(e) => setInitialChoice(e.target.value)}
               className="bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-brand-red flex-1 sm:flex-none"
             >
-              {PLAY_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {status}
+              {INITIAL_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
                 </option>
               ))}
             </select>

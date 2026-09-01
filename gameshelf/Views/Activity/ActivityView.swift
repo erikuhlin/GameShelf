@@ -17,19 +17,44 @@ struct ActivityView: View {
 
     // MARK: - Beräknad statistik
 
-    /// Spel som faktiskt ägs/spelas (exklusive enbart önskelista)
+    /// Spel som faktiskt ägs (exklusive önskelista)
     private var libraryGames: [Game] {
-        games.filter { $0.status != .wishlist }
+        games.filter { $0.isOwned }
     }
 
     /// Totalt antal spel
     private var totalGamesCount: Int {
-        games.count
+        libraryGames.count
     }
 
-    /// Klara spel
+    /// Spelar nu
+    private var playingGamesCount: Int {
+        libraryGames.filter { $0.status == .playing }.count
+    }
+
+    /// Genomspelade
     private var completedGamesCount: Int {
-        games.filter { $0.status == .completed }.count
+        libraryGames.filter { $0.status == .completed }.count
+    }
+
+    /// Pausade
+    private var pausedGamesCount: Int {
+        libraryGames.filter { $0.status == .paused }.count
+    }
+
+    /// Avbrutna
+    private var abandonedGamesCount: Int {
+        libraryGames.filter { $0.status == .abandoned }.count
+    }
+
+    /// Inte påbörjade
+    private var notStartedGamesCount: Int {
+        libraryGames.filter { $0.status == .notStarted }.count
+    }
+
+    /// Backlog (räknas separat baserat på isBacklog == true)
+    private var backlogGamesCount: Int {
+        libraryGames.filter { $0.isBacklog }.count
     }
 
     /// Avklaringsgrad i procent
@@ -41,8 +66,8 @@ struct ActivityView: View {
 
     /// Beräknad total speltid (timmar) från avklarade och pågående spel
     private var totalEstimatedHours: Int {
-        games.reduce(0) { total, game in
-            guard game.status != .wishlist && game.status != .backlog else { return total }
+        libraryGames.reduce(0) { total, game in
+            guard game.status != .notStarted else { return total }
             return total + (game.estimatedHours ?? 0)
         }
     }
@@ -58,7 +83,7 @@ struct ActivityView: View {
     /// Antal spel per status
     private var statusCounts: [(status: PlayStatus, count: Int)] {
         PlayStatus.allCases.map { st in
-            (status: st, count: games.filter { $0.status == st }.count)
+            (status: st, count: libraryGames.filter { $0.status == st }.count)
         }
     }
 
@@ -237,16 +262,16 @@ struct ActivityView: View {
                 .frame(height: 10)
             }
 
-            // Grid med alla 8 statusar
+            // Grid med alla statusar samt Backlog
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                 ForEach(statusCounts, id: \.status) { item in
                     HStack(spacing: 8) {
-                        Image(systemName: item.status.icon)
+                        Image(systemName: item.status.defaultIcon)
                             .font(.caption.bold())
                             .foregroundStyle(item.status.color)
                             .frame(width: 18)
 
-                        Text(item.status.rawValue)
+                        Text(item.status.defaultTitle)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -260,6 +285,27 @@ struct ActivityView: View {
                     .padding(.vertical, 4)
                     .padding(.horizontal, 6)
                 }
+
+                // Egen mätare för Backlog
+                HStack(spacing: 8) {
+                    Image(systemName: "archivebox.fill")
+                        .font(.caption.bold())
+                        .foregroundStyle(Color.blue)
+                        .frame(width: 18)
+
+                    Text("Backlog")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    Text("\(backlogGamesCount)")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.primary)
+                }
+                .padding(.vertical, 4)
+                .padding(.horizontal, 6)
             }
         }
         .padding(16)

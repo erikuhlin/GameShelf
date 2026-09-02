@@ -287,9 +287,9 @@ export function DiscoverView({
   }, [games, currentYear]);
 
   const targetGames = useMemo(() => {
-    const ids = new Set(userProfile?.targetGameIDs || []);
+    const ids = new Set((userProfile?.targetGameIDs || []).map((id) => id.toLowerCase()));
     if (ids.size === 0) return [];
-    return games.filter((g) => ids.has(g.id));
+    return games.filter((g) => ids.has(g.id.toLowerCase()));
   }, [games, userProfile?.targetGameIDs]);
 
   const annualGoal = userProfile?.annualGamingGoal || 12;

@@ -250,12 +250,13 @@ final class ProfileStore: ObservableObject {
     }
 
     func isTargetGoal(gameID: UUID) -> Bool {
-        targetGameIDs.contains(gameID.uuidString)
+        let str = gameID.uuidString.lowercased()
+        return targetGameIDs.contains(where: { $0.lowercased() == str })
     }
 
     func toggleTargetGoal(gameID: UUID) {
-        let str = gameID.uuidString
-        if let idx = targetGameIDs.firstIndex(of: str) {
+        let str = gameID.uuidString.lowercased()
+        if let idx = targetGameIDs.firstIndex(where: { $0.lowercased() == str }) {
             targetGameIDs.remove(at: idx)
         } else {
             // Begränsa till max 3 aktiva fokusmål

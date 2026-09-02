@@ -928,11 +928,12 @@ export default function HomePage() {
   const handleToggleTargetGoal = (gameId: string) => {
     if (!userProfile) return;
     const current = userProfile.targetGameIDs || [];
+    const lowerId = gameId.toLowerCase();
     let next: string[];
-    if (current.includes(gameId)) {
-      next = current.filter((id) => id !== gameId);
+    if (current.some((id) => id.toLowerCase() === lowerId)) {
+      next = current.filter((id) => id.toLowerCase() !== lowerId);
     } else {
-      next = current.length >= 3 ? [...current.slice(1), gameId] : [...current, gameId];
+      next = current.length >= 3 ? [...current.slice(1), lowerId] : [...current, lowerId];
     }
     handleUpdateProfile({
       ...userProfile,
@@ -1567,7 +1568,7 @@ export default function HomePage() {
         onOpenCompany={(companyId, companyName, role) => {
           setActiveCompanyModal({ id: companyId, name: companyName, role });
         }}
-        isTargetGoal={Boolean(selectedGame && userProfile?.targetGameIDs?.includes(selectedGame.id))}
+        isTargetGoal={Boolean(selectedGame && userProfile?.targetGameIDs?.some((id) => id.toLowerCase() === selectedGame.id.toLowerCase()))}
         onToggleTargetGoal={handleToggleTargetGoal}
       />
 

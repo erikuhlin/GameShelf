@@ -324,8 +324,8 @@ struct ExploreView: View {
     }
 
     private var activeFocusGames: [Game] {
-        let set = Set(profile.targetGameIDs)
-        return store.games.filter { set.contains($0.id.uuidString) }
+        let set = Set(profile.targetGameIDs.map { $0.lowercased() })
+        return store.games.filter { set.contains($0.id.uuidString.lowercased()) }
     }
 
     @ViewBuilder

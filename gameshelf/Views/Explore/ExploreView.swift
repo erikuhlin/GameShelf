@@ -367,6 +367,40 @@ struct ExploreView: View {
                             }
                             .buttonStyle(.plain)
                         }
+
+                        if activeFocusGames.count < 3 {
+                            Button {
+                                showingGamingGoalSheet = true
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "plus")
+                                        .font(.headline)
+                                        .foregroundStyle(.yellow)
+                                        .frame(width: 48, height: 64)
+                                        .background(Color.yellow.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text("Lägg till fokusmål")
+                                            .font(.subheadline.bold())
+                                            .foregroundStyle(.primary)
+                                        Text("\(3 - activeFocusGames.count) kvar att välja")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer(minLength: 4)
+                                }
+                                .padding(10)
+                                .frame(width: 250)
+                                .background(Color(.tertiarySystemGroupedBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                                        .foregroundStyle(Color.yellow.opacity(0.35))
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                     .padding(.vertical, 2)
                 }
@@ -482,38 +516,78 @@ struct ExploreView: View {
                     }
                     .padding(.top, 16)
 
-                    // Årsmål
-                    VStack(spacing: 10) {
-                        ForEach([12, 25, 50, 75, 100], id: \.self) { goal in
-                            let isSelected = profile.annualGamingGoal == goal
+                    // Årsmål Stepper + Snabbval
+                    VStack(spacing: 12) {
+                        HStack {
+                            Text("Antal spel att klara")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(profile.annualGamingGoal) spel")
+                                .font(.headline.bold())
+                                .foregroundStyle(.yellow)
+                        }
+
+                        // Stepper (- och +)
+                        HStack(spacing: 12) {
                             Button {
-                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                    profile.annualGamingGoal = goal
-                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                }
-                            } label: {
-                                HStack {
-                                    Text("\(goal) spel")
-                                        .font(.body.weight(isSelected ? .bold : .regular))
-                                        .foregroundStyle(.primary)
-
-                                    Spacer()
-
-                                    if isSelected {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(.yellow)
-                                            .font(.headline)
+                                if profile.annualGamingGoal > 1 {
+                                    withAnimation {
+                                        profile.annualGamingGoal -= 1
+                                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                     }
                                 }
-                                .padding(14)
-                                .background(Color(.secondarySystemGroupedBackground))
-                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .stroke(isSelected ? Color.yellow : Color.primary.opacity(0.08), lineWidth: isSelected ? 1.5 : 1)
-                                )
+                            } label: {
+                                Image(systemName: "minus")
+                                    .font(.headline.bold())
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(Color(.secondarySystemGroupedBackground))
+                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
                             .buttonStyle(.plain)
+
+                            Text("\(profile.annualGamingGoal)")
+                                .font(.system(size: 26, weight: .bold, design: .rounded))
+                                .frame(minWidth: 60)
+                                .multilineTextAlignment(.center)
+
+                            Button {
+                                withAnimation {
+                                    profile.annualGamingGoal += 1
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                }
+                            } label: {
+                                Image(systemName: "plus")
+                                    .font(.headline.bold())
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(Color(.secondarySystemGroupedBackground))
+                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        // Snabbval
+                        HStack(spacing: 6) {
+                            ForEach([3, 5, 10, 12, 15, 20, 25, 50], id: \.self) { goal in
+                                let isSelected = profile.annualGamingGoal == goal
+                                Button {
+                                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                        profile.annualGamingGoal = goal
+                                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    }
+                                } label: {
+                                    Text("\(goal)")
+                                        .font(.caption.bold())
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 8)
+                                        .background(isSelected ? Color.yellow : Color(.secondarySystemGroupedBackground))
+                                        .foregroundStyle(isSelected ? Color.black : Color.primary)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                     }
                     .padding(.horizontal, 20)
@@ -529,7 +603,7 @@ struct ExploreView: View {
                         }
 
                         if activeFocusGames.isEmpty {
-                            Text("Du har inga aktiva fokusmål just nu. Gå till ett spel i ditt bibliotek och tryck på 🎯 för att sätta det som fokusmål!")
+                            Text("Du har inga aktiva fokusmål just nu. Välj upp till 3 spel från ditt bibliotek nedan.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .padding(14)
@@ -580,6 +654,28 @@ struct ExploreView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 }
                             }
+                        }
+
+                        if activeFocusGames.count < 3 {
+                            NavigationLink(destination: SelectFocusGameView(games: store.games)) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.subheadline.bold())
+                                    Text("Välj spel från biblioteket (\(3 - activeFocusGames.count) kvar)")
+                                        .font(.subheadline.weight(.semibold))
+                                }
+                                .foregroundStyle(.yellow)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.yellow.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                                        .foregroundStyle(Color.yellow.opacity(0.35))
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 4)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -1570,4 +1666,95 @@ private struct SafariSheet: UIViewControllerRepresentable {
         SFSafariViewController(url: url)
     }
     func updateUIViewController(_ vc: SFSafariViewController, context: Context) {}
+}
+
+// MARK: - Select Focus Game View
+struct SelectFocusGameView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var profile: ProfileStore
+    let games: [Game]
+    @State private var search: String = ""
+
+    private var availableGames: [Game] {
+        let lowerTargets = Set(profile.targetGameIDs.map { $0.lowercased() })
+        let owned = games.filter { $0.isOwned && !lowerTargets.contains($0.id.uuidString.lowercased()) }
+        let q = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if q.isEmpty { return owned }
+        return owned.filter {
+            $0.title.lowercased().contains(q) || $0.platforms.contains(where: { $0.lowercased().contains(q) })
+        }
+    }
+
+    var body: some View {
+        List {
+            if availableGames.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "gamecontroller")
+                        .font(.largeTitle)
+                        .foregroundStyle(.secondary)
+                    Text(search.isEmpty ? "Inga fler tillgängliga spel i biblioteket" : "Inga spel matchade '\(search)'")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+                .listRowBackground(Color.clear)
+            } else {
+                ForEach(availableGames) { game in
+                    Button {
+                        profile.toggleTargetGoal(gameID: game.id)
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        if profile.targetGameIDs.count >= 3 {
+                            dismiss()
+                        }
+                    } label: {
+                        HStack(spacing: 12) {
+                            if let url = game.coverURL {
+                                AsyncImage(url: url) { phase in
+                                    if let img = phase.image {
+                                        img.resizable().aspectRatio(contentMode: .fill)
+                                    } else {
+                                        Color.gray.opacity(0.3)
+                                    }
+                                }
+                                .frame(width: 38, height: 50)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            } else {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.gray.opacity(0.2))
+                                    .frame(width: 38, height: 50)
+                                    .overlay(
+                                        Image(systemName: "gamecontroller.fill")
+                                            .foregroundStyle(.secondary)
+                                            .font(.caption)
+                                    )
+                            }
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(game.title)
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                Text(game.platforms.joined(separator: ", "))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(.yellow)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .searchable(text: $search, prompt: "Sök spel i biblioteket...")
+        .navigationTitle("Välj Fokusmål")
+        .navigationBarTitleDisplayMode(.inline)
+    }
 }

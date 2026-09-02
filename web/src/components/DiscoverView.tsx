@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '@/types/profile';
 import { AVATAR_PRESETS } from '@/lib/profileStore';
+import { GamingGoalModal } from './GamingGoalModal';
 
 interface DiscoverViewProps {
   games: Game[];
@@ -39,6 +40,7 @@ interface DiscoverViewProps {
   userProfile?: UserProfile;
   onOpenProfileModal?: () => void;
   onUpdateProfile?: (updated: UserProfile) => void;
+  onToggleTargetGoal?: (gameId: string) => void;
 }
 
 interface NewsItem {
@@ -155,12 +157,12 @@ export function DiscoverView({
   userProfile,
   onOpenProfileModal,
   onUpdateProfile,
+  onToggleTargetGoal,
 }: DiscoverViewProps) {
   const [activeTab, setActiveTab] = useState<'discover' | 'news'>('discover');
 
-  // Spelmål editing state
-  const [isEditingGoal, setIsEditingGoal] = useState(false);
-  const [goalInput, setGoalInput] = useState<number>(userProfile?.annualGamingGoal || 12);
+  // Spelmål modal state
+  const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
 
   // --- Discover State ---
   const [trendingGames, setTrendingGames] = useState<Game[]>([]);
@@ -684,95 +686,59 @@ export function DiscoverView({
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setGoalInput(userProfile?.annualGamingGoal || 12);
-                    setIsEditingGoal(!isEditingGoal);
-                  }}
+                  onClick={() => setIsGoalModalOpen(true)}
                   className="text-[11px] font-semibold text-zinc-400 hover:text-white transition cursor-pointer"
                 >
-                  {isEditingGoal ? 'Stäng ✕' : 'Ändra mål →'}
+                  Ändra mål →
                 </button>
               </div>
 
-              {isEditingGoal ? (
-                <div className="my-2.5 space-y-2.5 p-3 bg-zinc-950/80 rounded-2xl border border-zinc-800">
-                  <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium">
-                    <span>Välj mål för 2026:</span>
-                    <span className="font-bold text-amber-400">{goalInput} spel</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {[12, 25, 50, 75, 100].map((preset) => (
-                      <button
-                        key={preset}
-                        type="button"
-                        onClick={() => {
-                          setGoalInput(preset);
-                          if (userProfile && onUpdateProfile) {
-                            onUpdateProfile({ ...userProfile, annualGamingGoal: preset });
-                          }
-                          setIsEditingGoal(false);
-                        }}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                          annualGoal === preset
-                            ? 'bg-amber-500 text-zinc-950 shadow-sm'
-                            : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800 border border-zinc-800'
-                        }`}
-                      >
-                        {preset}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="my-2">
-                    <div className="flex items-baseline justify-between mb-1.5">
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-xl font-black text-white font-mono">
-                          {completedGamesCount >= annualGoal
-                            ? `${completedGamesCount} klara`
-                            : `${completedGamesCount} / ${annualGoal}`}
-                        </span>
-                        {completedGamesCount >= annualGoal && (
-                          <span className="text-[11px] font-bold text-emerald-400 font-mono">
-                            (Mål: {annualGoal})
-                          </span>
-                        )}
-                      </div>
-                      <span
-                        className={`text-xs font-bold font-mono ${
-                          completedGamesCount >= annualGoal ? 'text-emerald-400' : 'text-zinc-400'
-                        }`}
-                      >
-                        {completedGamesCount >= annualGoal ? '100% 🏆' : `${goalProgressPct}%`}
-                      </span>
-                    </div>
-                    <div className="w-full h-2.5 rounded-full bg-zinc-950 border border-zinc-800 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          completedGamesCount >= annualGoal
-                            ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
-                            : 'bg-gradient-to-r from-amber-500 to-emerald-400'
-                        }`}
-                        style={{ width: `${goalProgressPct}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium">
-                    <span>
+              <div className="my-2">
+                <div className="flex items-baseline justify-between mb-1.5">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xl font-black text-white font-mono">
                       {completedGamesCount >= annualGoal
-                        ? 'Målet uppnått! Fantastiskt spelår! 🎉'
-                        : `${Math.max(0, annualGoal - completedGamesCount)} spel kvar till målet`}
+                        ? `${completedGamesCount} klara`
+                        : `${completedGamesCount} / ${annualGoal}`}
                     </span>
-                    {targetGames.length > 0 && (
-                      <span className="text-amber-400 font-semibold">
-                        🎯 {targetGames.filter((g) => g.status === 'completed').length}/{targetGames.length} fokusmål
+                    {completedGamesCount >= annualGoal && (
+                      <span className="text-[11px] font-bold text-emerald-400 font-mono">
+                        (Mål: {annualGoal})
                       </span>
                     )}
                   </div>
-                </>
-              )}
+                  <span
+                    className={`text-xs font-bold font-mono ${
+                      completedGamesCount >= annualGoal ? 'text-emerald-400' : 'text-zinc-400'
+                    }`}
+                  >
+                    {completedGamesCount >= annualGoal ? '100% 🏆' : `${goalProgressPct}%`}
+                  </span>
+                </div>
+                <div className="w-full h-2.5 rounded-full bg-zinc-950 border border-zinc-800 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      completedGamesCount >= annualGoal
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                        : 'bg-gradient-to-r from-amber-500 to-emerald-400'
+                    }`}
+                    style={{ width: `${goalProgressPct}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium">
+                <span>
+                  {completedGamesCount >= annualGoal
+                    ? 'Målet uppnått! Fantastiskt spelår! 🎉'
+                    : `${Math.max(0, annualGoal - completedGamesCount)} spel kvar till målet`}
+                </span>
+                {targetGames.length > 0 && (
+                  <span className="text-amber-400 font-semibold">
+                    🎯 {targetGames.filter((g) => g.status === 'completed').length}/{targetGames.length} fokusmål
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -784,9 +750,13 @@ export function DiscoverView({
                   <Target className="w-4 h-4 text-amber-400" />
                   <span>Aktiva Fokusmål ({targetGames.length}/3)</span>
                 </div>
-                <span className="text-xs text-zinc-500">
-                  Spel du prioriterar att klara under {currentYear}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsGoalModalOpen(true)}
+                  className="text-xs font-semibold text-zinc-400 hover:text-amber-400 transition cursor-pointer"
+                >
+                  Hantera mål →
+                </button>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -866,6 +836,26 @@ export function DiscoverView({
                     </div>
                   );
                 })}
+
+                {/* Lägg till fokusmål kort om < 3 */}
+                {targetGames.length < 3 && (
+                  <div
+                    onClick={() => setIsGoalModalOpen(true)}
+                    className="group relative rounded-2xl p-4 flex gap-3.5 items-center justify-center cursor-pointer transition-all border border-dashed border-zinc-800 hover:border-amber-500/50 hover:bg-zinc-900/60 min-h-[110px]"
+                  >
+                    <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform flex-shrink-0">
+                      <Plus className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-white group-hover:text-amber-400 transition-colors block">
+                        Lägg till fokusmål
+                      </span>
+                      <span className="text-[11px] text-zinc-500 block">
+                        Välj ur biblioteket ({3 - targetGames.length} kvar)
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -2017,6 +2007,24 @@ export function DiscoverView({
           )}
         </div>
       )}
+      <GamingGoalModal
+        isOpen={isGoalModalOpen}
+        onClose={() => setIsGoalModalOpen(false)}
+        annualGoal={userProfile?.annualGamingGoal || 12}
+        onUpdateAnnualGoal={(newGoal) => {
+          if (userProfile && onUpdateProfile) {
+            onUpdateProfile({ ...userProfile, annualGamingGoal: newGoal });
+          }
+        }}
+        targetGameIds={userProfile?.targetGameIDs || []}
+        onToggleTargetGoal={(id) => {
+          if (onToggleTargetGoal) {
+            onToggleTargetGoal(id);
+          }
+        }}
+        libraryGames={games}
+        completedGamesCount={completedGamesCount}
+      />
     </div>
   );
 }

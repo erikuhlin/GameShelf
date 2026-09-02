@@ -1420,6 +1420,7 @@ export default function HomePage() {
             userProfile={userProfile}
             onOpenProfileModal={() => setIsProfileModalOpen(true)}
             onUpdateProfile={handleUpdateProfile}
+            onToggleTargetGoal={handleToggleTargetGoal}
           />
         ) : viewMode === 'collections' ? (
           <CollectionsView

@@ -274,14 +274,23 @@ export function DiscoverView({
     return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
   }, [nextWishlistRelease]);
 
-  // Spelmål 2026 beräkning (räknar endast aktiva ägda spel, exkluderar gamla spelminnen)
+  const currentYear = new Date().getFullYear();
+
+  // Spelmål beräkning (räknar endast aktiva ägda spel som klarats under innevarande år)
   const completedGamesCount = useMemo(() => {
     return games.filter(
       (g) =>
         (g.status === 'completed' || (g.status as string) === 'Klar') &&
-        g.is_owned
+        g.is_owned &&
+        (g.completed_year === currentYear || (g.completed_date && new Date(g.completed_date).getFullYear() === currentYear))
     ).length;
-  }, [games]);
+  }, [games, currentYear]);
+
+  const targetGames = useMemo(() => {
+    const ids = new Set(userProfile?.targetGameIDs || []);
+    if (ids.size === 0) return [];
+    return games.filter((g) => ids.has(g.id));
+  }, [games, userProfile?.targetGameIDs]);
 
   const annualGoal = userProfile?.annualGamingGoal || 12;
   const goalProgressPct = Math.min(100, Math.round((completedGamesCount / annualGoal) * 100));
@@ -750,15 +759,116 @@ export function DiscoverView({
                     </div>
                   </div>
 
-                  <span className="text-[11px] text-zinc-400 font-medium">
-                    {completedGamesCount >= annualGoal
-                      ? 'Målet uppnått! Fantastiskt spelår! 🎉'
-                      : `${Math.max(0, annualGoal - completedGamesCount)} spel kvar till målet`}
-                  </span>
+                  <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium">
+                    <span>
+                      {completedGamesCount >= annualGoal
+                        ? 'Målet uppnått! Fantastiskt spelår! 🎉'
+                        : `${Math.max(0, annualGoal - completedGamesCount)} spel kvar till målet`}
+                    </span>
+                    {targetGames.length > 0 && (
+                      <span className="text-amber-400 font-semibold">
+                        🎯 {targetGames.filter((g) => g.status === 'completed').length}/{targetGames.length} fokusmål
+                      </span>
+                    )}
+                  </div>
                 </>
               )}
             </div>
           </div>
+
+          {/* Fokusmål Spotlight */}
+          {targetGames.length > 0 && (
+            <div className="space-y-3.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-amber-400 uppercase tracking-wider">
+                  <Target className="w-4 h-4 text-amber-400" />
+                  <span>Aktiva Fokusmål ({targetGames.length}/3)</span>
+                </div>
+                <span className="text-xs text-zinc-500">
+                  Spel du prioriterar att klara under {currentYear}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {targetGames.map((game) => {
+                  const isDone = game.status === 'completed' || (game.status as string) === 'Klar';
+                  const totalTodos = game.todos?.length || 0;
+                  const doneTodos = game.todos?.filter((t) => t.isDone).length || 0;
+
+                  return (
+                    <div
+                      key={game.id}
+                      onClick={() => onSelectGame(game)}
+                      className={`group relative rounded-2xl p-4 flex gap-3.5 items-center cursor-pointer transition-all border shadow-lg ${
+                        isDone
+                          ? 'bg-emerald-950/20 border-emerald-500/40 hover:border-emerald-500/70'
+                          : 'bg-zinc-900/90 border-zinc-800 hover:border-amber-500/50 hover:bg-zinc-850'
+                      }`}
+                    >
+                      <div className="w-14 h-20 rounded-xl overflow-hidden bg-zinc-800 flex-shrink-0 relative shadow">
+                        {game.cover_url ? (
+                          <img
+                            src={game.cover_url}
+                            alt={game.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-zinc-600">
+                            <Gamepad className="w-6 h-6" />
+                          </div>
+                        )}
+                        {isDone && (
+                          <div className="absolute inset-0 bg-emerald-950/70 flex items-center justify-center">
+                            <Trophy className="w-5 h-5 text-yellow-400 animate-bounce" />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 uppercase tracking-wider">
+                            🎯 Mål
+                          </span>
+                          {isDone ? (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                              Klarat! 🏆
+                            </span>
+                          ) : (
+                            <StatusBadge status={game.status} />
+                          )}
+                        </div>
+
+                        <h3 className="text-sm font-bold text-white truncate group-hover:text-amber-400 transition-colors">
+                          {game.title}
+                        </h3>
+
+                        {totalTodos > 0 ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                              <span>Delmål:</span>
+                              <span className="font-semibold text-zinc-200">
+                                {doneTodos}/{totalTodos} klara
+                              </span>
+                            </div>
+                            <div className="w-full h-1.5 rounded-full bg-zinc-950 border border-zinc-800 overflow-hidden">
+                              <div
+                                className="h-full bg-amber-500 rounded-full transition-all duration-300"
+                                style={{ width: `${Math.round((doneTodos / totalTodos) * 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-zinc-400 truncate">
+                            {game.platforms?.join(', ') || 'Inget format angivet'}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* 2. Zon 1: Ditt Spelande (Fortsätt spela) - Ligger alltid överst när man har aktiva spel */}
           {currentlyPlaying.length > 0 && (

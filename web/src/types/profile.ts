@@ -39,4 +39,5 @@ export interface UserProfile {
   avatarType: string; // 'initial' | 'preset:...' | 'custom'
   avatarCustomImage?: string; // Base64 data URL
   annualGamingGoal: number;
+  targetGameIDs?: string[];
 }

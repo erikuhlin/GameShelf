@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS public.games (
     is_owned BOOLEAN NOT NULL DEFAULT TRUE,
     notes TEXT NOT NULL DEFAULT '',
     todos JSONB NOT NULL DEFAULT '[]'::JSONB,
+    completed_year INTEGER,
+    completed_date TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -68,6 +70,8 @@ CREATE TABLE IF NOT EXISTS public.user_games (
     is_owned BOOLEAN NOT NULL DEFAULT TRUE,
     notes TEXT NOT NULL DEFAULT '',
     todos JSONB NOT NULL DEFAULT '[]'::JSONB,
+    completed_year INTEGER,
+    completed_date TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

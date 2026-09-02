@@ -56,6 +56,8 @@ export function mapSupabaseGame(row: any): Game {
     is_backlog: row.is_backlog !== undefined ? Boolean(row.is_backlog) : normalized.is_backlog,
     play_types: playTypes,
     last_played_date: row.last_played_date || null,
+    completed_year: row.completed_year !== undefined && row.completed_year !== null ? Number(row.completed_year) : null,
+    completed_date: row.completed_date || null,
   };
 }
 

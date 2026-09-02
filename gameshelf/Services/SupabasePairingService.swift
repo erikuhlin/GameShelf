@@ -42,9 +42,9 @@ public actor SupabasePairingService {
         let currentEmail = await MainActor.run { SupabaseAuthManager.shared.currentUser?.email }
         let currentToken = await MainActor.run { SupabaseAuthManager.shared.session?.accessToken }
 
-        let (storedName, aType, aAge, pPlatforms, fGenres, pPlayFor, fGameIDs, gGoal) = await MainActor.run {
+        let (storedName, aType, aAge, pPlatforms, fGenres, pPlayFor, fGameIDs, gGoal, tGameIDs) = await MainActor.run {
             let store = ProfileStore()
-            return (store.username, store.avatarType, store.age, Array(store.platforms), Array(store.favoriteGenres), Array(store.playFor), store.favoriteGameIDs, store.annualGamingGoal)
+            return (store.username, store.avatarType, store.age, Array(store.platforms), Array(store.favoriteGenres), Array(store.playFor), store.favoriteGameIDs, store.annualGamingGoal, store.targetGameIDs)
         }
 
         let effectiveUsername = (username != nil && !username!.isEmpty) ? username! : storedName
@@ -55,7 +55,8 @@ public actor SupabasePairingService {
             playFor: pPlayFor,
             favoriteGameIDs: fGameIDs,
             annualGamingGoal: gGoal,
-            avatarType: aType
+            avatarType: aType,
+            targetGameIDs: tGameIDs
         )
 
         try? await SupabaseSyncService.shared.upsertProfile(

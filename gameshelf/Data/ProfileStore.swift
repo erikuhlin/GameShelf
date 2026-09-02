@@ -19,6 +19,7 @@ final class ProfileStore: ObservableObject {
         static let favoriteGenres = "profile.favoriteGenres"
         static let playFor = "profile.playFor"
         static let favoriteGameIDs = "profile.favoriteGameIDs"
+        static let targetGameIDs = "profile.targetGameIDs"
         static let avatarType = "profile.avatarType"
         static let avatarCustomImageData = "profile.avatarCustomImageData"
     }
@@ -123,6 +124,15 @@ final class ProfileStore: ObservableObject {
         }
     }
 
+    @Published var targetGameIDs: [String] {
+        didSet {
+            if targetGameIDs != oldValue {
+                UserDefaults.standard.set(targetGameIDs, forKey: Keys.targetGameIDs)
+                syncToRemote()
+            }
+        }
+    }
+
     init() {
         let savedName = UserDefaults.standard.string(forKey: Keys.username)
         self.username = (savedName != nil && !savedName!.isEmpty) ? savedName! : Self.defaultUsername
@@ -165,6 +175,12 @@ final class ProfileStore: ObservableObject {
             self.favoriteGameIDs = []
         }
 
+        if let arr = UserDefaults.standard.array(forKey: Keys.targetGameIDs) as? [String] {
+            self.targetGameIDs = arr
+        } else {
+            self.targetGameIDs = []
+        }
+
         self.avatarType = UserDefaults.standard.string(forKey: Keys.avatarType) ?? Self.defaultAvatarType
         self.avatarCustomImageData = UserDefaults.standard.data(forKey: Keys.avatarCustomImageData)
 
@@ -179,8 +195,8 @@ final class ProfileStore: ObservableObject {
         Task { [weak self] in
             guard let self = self else { return }
             let userId = await MainActor.run { SupabaseAuthManager.shared.persistentUserId }
-            let (uName, aType, aAge, pPlatforms, fGenres, pPlayFor, fGameIDs, gGoal) = await MainActor.run {
-                (self.username, self.avatarType, self.age, Array(self.platforms), Array(self.favoriteGenres), Array(self.playFor), self.favoriteGameIDs, self.annualGamingGoal)
+            let (uName, aType, aAge, pPlatforms, fGenres, pPlayFor, fGameIDs, gGoal, tGameIDs) = await MainActor.run {
+                (self.username, self.avatarType, self.age, Array(self.platforms), Array(self.favoriteGenres), Array(self.playFor), self.favoriteGameIDs, self.annualGamingGoal, self.targetGameIDs)
             }
             let prefs = SupabaseSyncService.ProfilePreferencesData(
                 age: aAge,
@@ -189,7 +205,8 @@ final class ProfileStore: ObservableObject {
                 playFor: pPlayFor,
                 favoriteGameIDs: fGameIDs,
                 annualGamingGoal: gGoal,
-                avatarType: aType
+                avatarType: aType,
+                targetGameIDs: tGameIDs
             )
             try? await SupabaseSyncService.shared.upsertProfile(
                 userId: userId,
@@ -221,6 +238,7 @@ final class ProfileStore: ObservableObject {
                         if let favs = prefs.favoriteGameIDs { self.favoriteGameIDs = favs }
                         if let goal = prefs.annualGamingGoal, goal > 0 { self.annualGamingGoal = goal }
                         if let at = prefs.avatarType, !at.isEmpty { self.avatarType = at }
+                        if let tg = prefs.targetGameIDs { self.targetGameIDs = tg }
                     }
                 }
             } else {
@@ -228,6 +246,23 @@ final class ProfileStore: ObservableObject {
             }
         } catch {
             print("⚠️ ProfileStore syncWithRemote error: \(error)")
+        }
+    }
+
+    func isTargetGoal(gameID: UUID) -> Bool {
+        targetGameIDs.contains(gameID.uuidString)
+    }
+
+    func toggleTargetGoal(gameID: UUID) {
+        let str = gameID.uuidString
+        if let idx = targetGameIDs.firstIndex(of: str) {
+            targetGameIDs.remove(at: idx)
+        } else {
+            // Begränsa till max 3 aktiva fokusmål
+            if targetGameIDs.count >= 3 {
+                targetGameIDs.removeFirst()
+            }
+            targetGameIDs.append(str)
         }
     }
 

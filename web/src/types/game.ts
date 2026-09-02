@@ -56,6 +56,8 @@ export interface Game {
   play_types?: GamePlayType[];
   priority?: PlayPriority;
   last_played_date?: string | null;
+  completed_year?: number | null;
+  completed_date?: string | null;
 }
 
 export interface GameCollection {

@@ -166,6 +166,7 @@ export default function HomePage() {
           favoriteGenres: Array.isArray(prefs.favoriteGenres) ? prefs.favoriteGenres : ['RPG', 'Action', 'Skräck'],
           playFor: Array.isArray(prefs.playFor) ? prefs.playFor : ['Story', 'Utforskning'],
           favoriteGameIDs: Array.isArray(prefs.favoriteGameIDs) ? prefs.favoriteGameIDs : [],
+          targetGameIDs: Array.isArray(prefs.targetGameIDs) ? prefs.targetGameIDs : [],
           annualGamingGoal: prefs.annualGamingGoal || 12,
           avatarType: data.avatar_url || prefs.avatarType || 'initial',
           avatarCustomImage: data.avatar_url?.startsWith('data:') ? data.avatar_url : undefined,
@@ -191,6 +192,7 @@ export default function HomePage() {
         favoriteGenres: updated.favoriteGenres,
         playFor: updated.playFor,
         favoriteGameIDs: updated.favoriteGameIDs,
+        targetGameIDs: updated.targetGameIDs || [],
         annualGamingGoal: updated.annualGamingGoal,
         avatarType: updated.avatarType,
       };
@@ -240,6 +242,7 @@ export default function HomePage() {
               favoriteGenres: Array.isArray(prefs.favoriteGenres) ? prefs.favoriteGenres : ['RPG', 'Action', 'Skräck'],
               playFor: Array.isArray(prefs.playFor) ? prefs.playFor : ['Story', 'Utforskning'],
               favoriteGameIDs: Array.isArray(prefs.favoriteGameIDs) ? prefs.favoriteGameIDs : [],
+              targetGameIDs: Array.isArray(prefs.targetGameIDs) ? prefs.targetGameIDs : [],
               annualGamingGoal: prefs.annualGamingGoal || 12,
               avatarType: data.avatar_url || prefs.avatarType || 'initial',
               avatarCustomImage: data.avatar_url?.startsWith('data:') ? data.avatar_url : undefined,
@@ -822,6 +825,9 @@ export default function HomePage() {
 
   const handleUpdateGameStatus = async (gameId: string, newStatus: PlayStatus) => {
     const isPlaying = newStatus === 'playing';
+    const isCompleted = newStatus === 'completed';
+    const currentYear = new Date().getFullYear();
+
     setGames((prev) => {
       const next = prev.map((g) =>
         g.id === gameId
@@ -832,6 +838,8 @@ export default function HomePage() {
               last_played_date: isPlaying
                 ? g.last_played_date || new Date().toISOString()
                 : g.last_played_date,
+              completed_year: isCompleted ? (g.completed_year || currentYear) : g.completed_year,
+              completed_date: isCompleted ? (g.completed_date || new Date().toISOString()) : g.completed_date,
             }
           : g
       );
@@ -842,12 +850,17 @@ export default function HomePage() {
     });
 
     try {
+      const updatePayload: any = {
+        status: newStatus,
+        ...(isPlaying ? { is_backlog: false } : {}),
+      };
+      if (isCompleted) {
+        updatePayload.completed_year = currentYear;
+        updatePayload.completed_date = new Date().toISOString();
+      }
       await supabase
         .from('user_games')
-        .update({
-          status: newStatus,
-          ...(isPlaying ? { is_backlog: false } : {}),
-        })
+        .update(updatePayload)
         .eq('id', gameId);
     } catch (err) {
       console.error('Failed to update game status:', err);
@@ -909,6 +922,21 @@ export default function HomePage() {
         localStorage.setItem('gameshelf_local_games', JSON.stringify(next));
       }
       return next;
+    });
+  };
+
+  const handleToggleTargetGoal = (gameId: string) => {
+    if (!userProfile) return;
+    const current = userProfile.targetGameIDs || [];
+    let next: string[];
+    if (current.includes(gameId)) {
+      next = current.filter((id) => id !== gameId);
+    } else {
+      next = current.length >= 3 ? [...current.slice(1), gameId] : [...current, gameId];
+    }
+    handleUpdateProfile({
+      ...userProfile,
+      targetGameIDs: next,
     });
   };
 
@@ -1539,6 +1567,8 @@ export default function HomePage() {
         onOpenCompany={(companyId, companyName, role) => {
           setActiveCompanyModal({ id: companyId, name: companyName, role });
         }}
+        isTargetGoal={Boolean(selectedGame && userProfile?.targetGameIDs?.includes(selectedGame.id))}
+        onToggleTargetGoal={handleToggleTargetGoal}
       />
 
       <CollectionsModal

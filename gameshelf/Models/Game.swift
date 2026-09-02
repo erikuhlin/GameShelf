@@ -37,6 +37,8 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
     var isBacklog: Bool = false
     var priority: PlayPriority = .none
     var lastPlayedDate: Date? = nil
+    var completedYear: Int? = nil
+    var completedDate: Date? = nil
 
     // MARK: - Computed Helpers
     var isMultiplayerOrOngoing: Bool {
@@ -178,6 +180,7 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         case id, title, platforms, releaseYear, genres, developers, status, rating
         case igdbRating, rawgRating, coverURL, igdbID, firstReleaseDate, estimatedHours, isOwned, notes, todos, dateAdded
         case playTypes, isBacklog, priority, lastPlayedDate
+        case completedYear, completedDate
     }
 
     nonisolated init(
@@ -201,7 +204,9 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         playTypes: [GamePlayType]? = nil,
         isBacklog: Bool = false,
         priority: PlayPriority = .none,
-        lastPlayedDate: Date? = nil
+        lastPlayedDate: Date? = nil,
+        completedYear: Int? = nil,
+        completedDate: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -224,6 +229,8 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         self.isBacklog = isBacklog
         self.priority = priority
         self.lastPlayedDate = lastPlayedDate
+        self.completedYear = completedYear
+        self.completedDate = completedDate
     }
 
     init(from decoder: Decoder) throws {
@@ -301,6 +308,8 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
 
         priority = (try? container.decodeIfPresent(PlayPriority.self, forKey: .priority)) ?? .none
         lastPlayedDate = try? container.decodeIfPresent(Date.self, forKey: .lastPlayedDate)
+        completedYear = try? container.decodeIfPresent(Int.self, forKey: .completedYear)
+        completedDate = try? container.decodeIfPresent(Date.self, forKey: .completedDate)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -326,6 +335,8 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         try container.encode(isBacklog, forKey: .isBacklog)
         try container.encode(priority, forKey: .priority)
         try container.encodeIfPresent(lastPlayedDate, forKey: .lastPlayedDate)
+        try container.encodeIfPresent(completedYear, forKey: .completedYear)
+        try container.encodeIfPresent(completedDate, forKey: .completedDate)
     }
 }
 

@@ -28,6 +28,7 @@ import {
   ChevronRight,
   ShieldCheck,
   Share2,
+  Target,
 } from 'lucide-react';
 import { GameShareModal } from './GameShareModal';
 
@@ -41,6 +42,8 @@ interface GameDetailModalProps {
   onToggleCollection: (gameId: string, collectionId: string) => void;
   onCreateCollection?: (name: string, gameId: string) => Promise<void> | void;
   onOpenCompany?: (companyId: number, companyName: string, role: 'developer' | 'publisher') => void;
+  isTargetGoal?: boolean;
+  onToggleTargetGoal?: (gameId: string) => void;
 }
 
 interface RemoteDetails {
@@ -79,11 +82,14 @@ export function GameDetailModal({
   onToggleCollection,
   onCreateCollection,
   onOpenCompany,
+  isTargetGoal,
+  onToggleTargetGoal,
 }: GameDetailModalProps) {
   if (!isOpen || !game) return null;
 
   const [status, setStatus] = useState<PlayStatus>(game.status);
   const [isBacklog, setIsBacklog] = useState<boolean>(game.is_backlog ?? false);
+  const [completedYear, setCompletedYear] = useState<number | null>(game.completed_year ?? null);
   const [playTypes, setPlayTypes] = useState<GamePlayType[]>(
     game.play_types && game.play_types.length > 0
       ? game.play_types
@@ -117,6 +123,7 @@ export function GameDetailModal({
     if (game) {
       setStatus(game.status);
       setIsBacklog(game.is_backlog ?? false);
+      setCompletedYear(game.completed_year ?? null);
       setPlayTypes(
         game.play_types && game.play_types.length > 0
           ? game.play_types
@@ -337,6 +344,11 @@ export function GameDetailModal({
         status === 'playing'
           ? game.last_played_date || new Date().toISOString()
           : game.last_played_date;
+      const isCompleted = status === 'completed';
+      const finalCompletedYear = isCompleted ? completedYear : null;
+      const finalCompletedDate = isCompleted
+        ? (completedYear ? (game.completed_date || new Date().toISOString()) : null)
+        : null;
 
       const updatedData = {
         status,
@@ -348,6 +360,8 @@ export function GameDetailModal({
         is_backlog: finalBacklog,
         play_types: playTypes,
         last_played_date: lastPlayed,
+        completed_year: finalCompletedYear,
+        completed_date: finalCompletedDate,
       };
 
       const { error } = await supabase
@@ -501,6 +515,21 @@ export function GameDetailModal({
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+            {onToggleTargetGoal && (
+              <button
+                type="button"
+                onClick={() => onToggleTargetGoal(game.id)}
+                className={`p-2 rounded-xl transition flex items-center gap-1.5 text-xs font-bold border shadow-sm cursor-pointer ${
+                  isTargetGoal
+                    ? 'bg-amber-500/20 border-amber-500/80 text-amber-400 hover:bg-amber-500/30'
+                    : 'bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white border-zinc-700/60'
+                }`}
+                title={isTargetGoal ? 'Ta bort som spelmål' : 'Sätt som aktivt fokusmål'}
+              >
+                <Target className={`w-4 h-4 ${isTargetGoal ? 'text-amber-400 fill-amber-400/20' : 'text-zinc-400'}`} />
+                <span className="hidden sm:inline">{isTargetGoal ? 'Aktivt Mål 🎯' : 'Spelmål 🎯'}</span>
+              </button>
+            )}
             <button
               onClick={() => setIsShareModalOpen(true)}
               className="p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 hover:text-white transition flex items-center gap-1.5 text-xs font-bold border border-zinc-700/60 shadow-sm cursor-pointer"
@@ -543,6 +572,9 @@ export function GameDetailModal({
                     if (newStatus === 'playing') {
                       setIsBacklog(false);
                     }
+                    if (newStatus === 'completed' && completedYear === null) {
+                      setCompletedYear(new Date().getFullYear());
+                    }
                   }}
                   className="w-full bg-zinc-950 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-500 font-medium"
                 >
@@ -576,6 +608,34 @@ export function GameDetailModal({
                   className="w-4 h-4 rounded accent-blue-600 bg-zinc-950 border-zinc-700 cursor-pointer"
                 />
               </div>
+
+              {/* Klarat år (Spelmål) */}
+              {status === 'completed' && (
+                <div className="mt-3 pt-3 border-t border-zinc-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-semibold text-zinc-200 block">
+                      Klarat år (Spelmål)
+                    </span>
+                    <span className="text-[11px] text-zinc-500">
+                      Endast aktuellt år räknas till årets mål
+                    </span>
+                  </div>
+                  <select
+                    value={completedYear ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCompletedYear(val === '' ? null : Number(val));
+                    }}
+                    className="bg-zinc-950 border border-zinc-700 text-zinc-100 rounded-lg px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:border-amber-500 cursor-pointer"
+                  >
+                    <option value="">Ej angivet (Lämna tomt)</option>
+                    <option value={new Date().getFullYear()}>{new Date().getFullYear()} (I år)</option>
+                    {Array.from({ length: 15 }, (_, i) => new Date().getFullYear() - 1 - i).map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             {/* Rating Selector (1-10) */}

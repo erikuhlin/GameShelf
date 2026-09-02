@@ -32,6 +32,7 @@ export function AddGameModal({
   const [isLoading, setIsLoading] = useState(false);
   const [addingId, setAddingId] = useState<number | null>(null);
   const [initialChoice, setInitialChoice] = useState<string>('backlog');
+  const [completedYear, setCompletedYear] = useState<number | null>(new Date().getFullYear());
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Debounced IGDB search
@@ -54,11 +55,11 @@ export function AddGameModal({
           setErrorMessage(data.error || 'Kunde inte söka i IGDB');
         }
       } catch (err: any) {
-        setErrorMessage(err.message || 'Nätverksfel vid sökning');
+        setErrorMessage('Nätverksfel vid sökning');
       } finally {
         setIsLoading(false);
       }
-    }, 350);
+    }, 400);
 
     return () => clearTimeout(timer);
   }, [query]);
@@ -67,11 +68,9 @@ export function AddGameModal({
 
   const handleAddGame = async (igdbGame: IGDBSearchResult) => {
     setAddingId(igdbGame.id);
+    setErrorMessage(null);
     try {
-      const releaseYear = igdbGame.first_release_date
-        ? new Date(igdbGame.first_release_date * 1000).getFullYear()
-        : null;
-
+      const releaseYear = (igdbGame as any).releaseYear || (igdbGame.first_release_date ? new Date(igdbGame.first_release_date * 1000).getFullYear() : null);
       const platforms = (igdbGame.platforms || []).map((p) => p.name);
       const genres = (igdbGame.genres || []).map((g) => g.name);
       const developers = (igdbGame.involved_companies || [])
@@ -104,6 +103,8 @@ export function AddGameModal({
         play_types: playTypes,
         notes: '',
         todos: [],
+        completed_year: choice.status === 'completed' ? completedYear : null,
+        completed_date: choice.status === 'completed' && completedYear ? new Date().toISOString() : null,
       };
 
       const { data, error } = await supabase
@@ -193,6 +194,21 @@ export function AddGameModal({
                 </option>
               ))}
             </select>
+
+            {initialChoice === 'completed' && (
+              <select
+                value={completedYear ?? ''}
+                onChange={(e) => setCompletedYear(e.target.value === '' ? null : Number(e.target.value))}
+                className="bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs rounded-xl px-2.5 py-2.5 focus:outline-none focus:border-brand-red cursor-pointer"
+                title="Klarat år (lämna tomt om du är osäker, endast i år räknas mot årets spelmål)"
+              >
+                <option value="">År: Ej angivet</option>
+                <option value={new Date().getFullYear()}>{new Date().getFullYear()} (I år)</option>
+                {Array.from({ length: 15 }, (_, i) => new Date().getFullYear() - 1 - i).map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 

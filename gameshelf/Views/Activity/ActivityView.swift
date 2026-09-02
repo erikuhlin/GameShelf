@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ActivityView: View {
     @EnvironmentObject var store: LibraryStore
+    @EnvironmentObject var profile: ProfileStore
     @State private var showingProfileSheet = false
 
     private var games: [Game] {
@@ -35,6 +36,17 @@ struct ActivityView: View {
     /// Genomspelade
     private var completedGamesCount: Int {
         libraryGames.filter { $0.status == .completed }.count
+    }
+
+    private var currentYear: Int {
+        Calendar.current.component(.year, from: Date())
+    }
+
+    /// Spel klarade under innevarande år
+    private var thisYearCompletedCount: Int {
+        libraryGames.filter {
+            $0.status == .completed && ($0.completedYear == currentYear || ($0.completedDate != nil && Calendar.current.component(.year, from: $0.completedDate!) == currentYear))
+        }.count
     }
 
     /// Pausade
@@ -176,6 +188,7 @@ struct ActivityView: View {
             } else {
                 VStack(alignment: .leading, spacing: 22) {
                     overviewCard
+                    gamingGoalCard
                     statusDistributionCard
                     genreDistributionCard
                     platformDistributionCard
@@ -233,6 +246,57 @@ struct ActivityView: View {
                     value: averageRating.map { String(format: "%.1f", $0) } ?? "—",
                     subtitle: "Ditt personliga snitt"
                 )
+            }
+        }
+        .padding(16)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    /// 1b. Spelmål
+    private var gamingGoalCard: some View {
+        let goal = max(1, profile.annualGamingGoal)
+        let count = thisYearCompletedCount
+        let percent = min(100, Int(round(Double(count) / Double(goal) * 100.0)))
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                HStack(spacing: 6) {
+                    Image(systemName: "trophy.fill")
+                        .foregroundStyle(.yellow)
+                    Text("Spelmål \(String(currentYear))")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                }
+
+                Spacer()
+
+                Text("\(count) / \(goal) klara")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color(.tertiarySystemFill))
+                        .frame(height: 10)
+
+                    Capsule()
+                        .fill(count >= goal ? Color.green : Color.yellow)
+                        .frame(width: max(8, geo.size.width * CGFloat(percent) / 100.0), height: 10)
+                }
+            }
+            .frame(height: 10)
+
+            HStack {
+                Text(count >= goal ? "Målet uppnått! 🏆" : "\(max(0, goal - count)) spel kvar till målet")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(percent) %")
+                    .font(.caption.bold())
+                    .foregroundStyle(count >= goal ? .green : .yellow)
             }
         }
         .padding(16)

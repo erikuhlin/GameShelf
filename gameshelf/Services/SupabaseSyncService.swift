@@ -31,6 +31,8 @@ actor SupabaseSyncService {
         var notes: String?
         var todos: [GameTodoItem]?
         var created_at: String?
+        var completed_year: Int?
+        var completed_date: String?
 
         init(from game: Game, userId: UUID? = nil) {
             self.id = game.id
@@ -51,6 +53,8 @@ actor SupabaseSyncService {
             self.is_owned = game.isOwned
             self.notes = game.notes
             self.todos = game.todos
+            self.completed_year = game.completedYear
+            self.completed_date = game.completedDate.map { ISO8601DateFormatter().string(from: $0) }
         }
 
         func toDomainGame() -> Game {
@@ -93,6 +97,13 @@ actor SupabaseSyncService {
                 parsedDate = Date()
             }
 
+            let parsedCompletedDate: Date?
+            if let compStr = completed_date {
+                parsedCompletedDate = ISO8601DateFormatter().date(from: compStr)
+            } else {
+                parsedCompletedDate = nil
+            }
+
             return Game(
                 id: id,
                 title: title,
@@ -111,7 +122,9 @@ actor SupabaseSyncService {
                 notes: notes ?? "",
                 todos: todos ?? [],
                 dateAdded: parsedDate,
-                isBacklog: isBacklog
+                isBacklog: isBacklog,
+                completedYear: completed_year,
+                completedDate: parsedCompletedDate
             )
         }
     }
@@ -348,6 +361,7 @@ actor SupabaseSyncService {
         var favoriteGameIDs: [String]?
         var annualGamingGoal: Int?
         var avatarType: String?
+        var targetGameIDs: [String]?
     }
 
     func fetchProfile(userId: UUID) async throws -> (username: String?, avatarUrl: String?, preferences: ProfilePreferencesData?)? {

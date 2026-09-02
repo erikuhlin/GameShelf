@@ -137,6 +137,9 @@ struct ExploreView: View {
                         // 1. Välkomsthälsning & Spelmål 2026
                         greetingHeader
 
+                        // Fokusmål Spotlight
+                        focusGoalsSection
+
                         // 2. Zon 1: Ditt Spel (Hero / Multi-game switcher ELLER Spelslumpare om noll aktiva)
                         heroSection
 
@@ -279,8 +282,18 @@ struct ExploreView: View {
         }
     }
 
+    private var currentYear: Int {
+        Calendar.current.component(.year, from: Date())
+    }
+
+    private var currentYearCompletedCount: Int {
+        store.games.filter {
+            $0.status == .completed && $0.isOwned && ($0.completedYear == currentYear || ($0.completedDate != nil && Calendar.current.component(.year, from: $0.completedDate!) == currentYear))
+        }.count
+    }
+
     private var goalBadge: some View {
-        let completedCount = store.games.filter { $0.status == .completed && $0.isOwned }.count
+        let completedCount = currentYearCompletedCount
         let targetGoal = max(1, profile.annualGamingGoal)
         let isGoalReached = completedCount >= targetGoal
 
@@ -310,68 +323,270 @@ struct ExploreView: View {
         .buttonStyle(.plain)
     }
 
-    private var gamingGoalSheet: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                VStack(spacing: 8) {
-                    Circle()
-                        .fill(Color.yellow.opacity(0.15))
-                        .frame(width: 64, height: 64)
-                        .overlay(
-                            Image(systemName: "trophy.fill")
-                                .font(.title)
-                                .foregroundStyle(.yellow)
-                        )
+    private var activeFocusGames: [Game] {
+        let set = Set(profile.targetGameIDs)
+        return store.games.filter { set.contains($0.id.uuidString) }
+    }
 
-                    Text("Ditt Spelmål för \(String(Calendar.current.component(.year, from: Date())))")
-                        .font(.title3.bold())
-                        .foregroundStyle(.primary)
+    @ViewBuilder
+    private var focusGoalsSection: some View {
+        if !activeFocusGames.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    HStack(spacing: 6) {
+                        Image(systemName: "target")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.yellow)
+                        Text("Aktiva Fokusmål")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        Text("\(activeFocusGames.count)/3")
+                            .font(.caption.bold())
+                            .foregroundStyle(.yellow)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2)
+                            .background(Color.yellow.opacity(0.12), in: Capsule())
+                    }
 
-                    let completedCount = store.games.filter { $0.status == .completed && $0.isOwned }.count
-                    Text("Du har klarat \(completedCount) spel i ditt aktiva bibliotek! Välj ett årsmål som motiverar dig.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 20)
-                }
-                .padding(.top, 16)
+                    Spacer()
 
-                VStack(spacing: 10) {
-                    ForEach([12, 25, 50, 75, 100], id: \.self) { goal in
-                        let isSelected = profile.annualGamingGoal == goal
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                profile.annualGamingGoal = goal
-                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            }
-                        } label: {
-                            HStack {
-                                Text("\(goal) spel")
-                                    .font(.body.weight(isSelected ? .bold : .regular))
-                                    .foregroundStyle(.primary)
-
-                                Spacer()
-
-                                if isSelected {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.yellow)
-                                        .font(.headline)
-                                }
-                            }
-                            .padding(14)
-                            .background(Color(.secondarySystemGroupedBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(isSelected ? Color.yellow : Color.primary.opacity(0.08), lineWidth: isSelected ? 1.5 : 1)
-                            )
-                        }
-                        .buttonStyle(.plain)
+                    Button {
+                        showingGamingGoalSheet = true
+                    } label: {
+                        Text("Hantera")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
                     }
                 }
-                .padding(.horizontal, 20)
 
-                Spacer()
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(activeFocusGames) { game in
+                            NavigationLink(destination: GameDetailView(game: game)) {
+                                focusGameCard(game)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+            .padding(14)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color.yellow.opacity(0.15), lineWidth: 1)
+            )
+        }
+    }
+
+    private func focusGameCard(_ game: Game) -> some View {
+        let isDone = game.status == .completed
+        let totalTodos = game.todos.count
+        let doneTodos = game.todos.filter { $0.isDone }.count
+
+        return HStack(spacing: 12) {
+            if let url = game.coverURL {
+                AsyncImage(url: url) { phase in
+                    if let image = phase.image {
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        Color.gray.opacity(0.2)
+                    }
+                }
+                .frame(width: 48, height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                )
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text("MÅL")
+                        .font(.system(size: 9, weight: .black))
+                        .foregroundStyle(.yellow)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Color.yellow.opacity(0.15), in: Capsule())
+
+                    if isDone {
+                        Text("Klarat! 🏆")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.green)
+                    } else {
+                        Text(game.statusDisplayTitle)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(game.status.color)
+                    }
+                }
+
+                Text(game.title)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                if totalTodos > 0 {
+                    Text("\(doneTodos)/\(totalTodos) delmål klara")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                } else if !game.platforms.isEmpty {
+                    Text(game.platforms.prefix(2).joined(separator: ", "))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer(minLength: 4)
+
+            Image(systemName: "chevron.right")
+                .font(.caption2.bold())
+                .foregroundStyle(Color(.tertiaryLabel))
+        }
+        .padding(10)
+        .frame(width: 250)
+        .background(Color(.tertiarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(isDone ? Color.green.opacity(0.3) : Color.yellow.opacity(0.25), lineWidth: 1)
+        )
+    }
+
+    private var gamingGoalSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 24) {
+                    VStack(spacing: 8) {
+                        Circle()
+                            .fill(Color.yellow.opacity(0.15))
+                            .frame(width: 64, height: 64)
+                            .overlay(
+                                Image(systemName: "trophy.fill")
+                                    .font(.title)
+                                    .foregroundStyle(.yellow)
+                            )
+
+                        Text("Ditt Spelmål för \(String(currentYear))")
+                            .font(.title3.bold())
+                            .foregroundStyle(.primary)
+
+                        let completedCount = currentYearCompletedCount
+                        Text("Du har klarat \(completedCount) av \(profile.annualGamingGoal) spel i år! Välj ett årsmål som motiverar dig.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 20)
+                    }
+                    .padding(.top, 16)
+
+                    // Årsmål
+                    VStack(spacing: 10) {
+                        ForEach([12, 25, 50, 75, 100], id: \.self) { goal in
+                            let isSelected = profile.annualGamingGoal == goal
+                            Button {
+                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                    profile.annualGamingGoal = goal
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                }
+                            } label: {
+                                HStack {
+                                    Text("\(goal) spel")
+                                        .font(.body.weight(isSelected ? .bold : .regular))
+                                        .foregroundStyle(.primary)
+
+                                    Spacer()
+
+                                    if isSelected {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(.yellow)
+                                            .font(.headline)
+                                    }
+                                }
+                                .padding(14)
+                                .background(Color(.secondarySystemGroupedBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(isSelected ? Color.yellow : Color.primary.opacity(0.08), lineWidth: isSelected ? 1.5 : 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+
+                    // Fokusmål lista i sheet
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Image(systemName: "target")
+                                .foregroundStyle(.yellow)
+                            Text("Dina Fokusmål (\(activeFocusGames.count)/3)")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                        }
+
+                        if activeFocusGames.isEmpty {
+                            Text("Du har inga aktiva fokusmål just nu. Gå till ett spel i ditt bibliotek och tryck på 🎯 för att sätta det som fokusmål!")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .padding(14)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color(.secondarySystemGroupedBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        } else {
+                            VStack(spacing: 8) {
+                                ForEach(activeFocusGames) { game in
+                                    HStack(spacing: 12) {
+                                        if let url = game.coverURL {
+                                            AsyncImage(url: url) { phase in
+                                                if let img = phase.image {
+                                                    img.resizable().aspectRatio(contentMode: .fill)
+                                                } else {
+                                                    Color.gray.opacity(0.3)
+                                                }
+                                            }
+                                            .frame(width: 36, height: 48)
+                                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                                        }
+
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(game.title)
+                                                .font(.subheadline.bold())
+                                                .foregroundStyle(.primary)
+                                                .lineLimit(1)
+                                            Text(game.status == .completed ? "Klarat! 🏆" : game.statusDisplayTitle)
+                                                .font(.caption)
+                                                .foregroundStyle(game.status == .completed ? .green : .secondary)
+                                        }
+
+                                        Spacer()
+
+                                        Button {
+                                            withAnimation {
+                                                profile.toggleTargetGoal(gameID: game.id)
+                                            }
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundStyle(.secondary)
+                                                .font(.title3)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                    .padding(12)
+                                    .background(Color(.secondarySystemGroupedBackground))
+                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+
+                    Spacer(minLength: 20)
+                }
             }
             .navigationTitle("Spelmål")
             .navigationBarTitleDisplayMode(.inline)
@@ -384,7 +599,7 @@ struct ExploreView: View {
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.large])
     }
 
     // MARK: - 2. Zon 1: Ditt Spel (Spelar just nu)

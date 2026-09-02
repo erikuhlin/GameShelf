@@ -181,6 +181,68 @@ struct GameDetailView: View {
                     // Ägt spel: Permanent 3-kolumns statuskort
                     libraryGameHeaderBar(g)
 
+                    if profile.isTargetGoal(gameID: g.id) || g.status == .completed {
+                        HStack(spacing: 8) {
+                            if profile.isTargetGoal(gameID: g.id) {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "target")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.yellow)
+                                    Text("Fokusmål 🎯")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.yellow)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Color.yellow.opacity(0.12), in: Capsule())
+                                .overlay(Capsule().stroke(Color.yellow.opacity(0.35), lineWidth: 0.8))
+                            }
+
+                            if g.status == .completed {
+                                Menu {
+                                    Button("Ej angivet (Räkna inte i årets mål)") {
+                                        var copy = g
+                                        copy.completedYear = nil
+                                        updateLocal(copy)
+                                    }
+                                    let currentY = Calendar.current.component(.year, from: Date())
+                                    Button("\(String(currentY)) (I år)") {
+                                        var copy = g
+                                        copy.completedYear = currentY
+                                        if copy.completedDate == nil { copy.completedDate = Date() }
+                                        updateLocal(copy)
+                                    }
+                                    ForEach((currentY - 10..<currentY).reversed(), id: \.self) { y in
+                                        Button(String(y)) {
+                                            var copy = g
+                                            copy.completedYear = y
+                                            updateLocal(copy)
+                                        }
+                                    }
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "flag.checkered")
+                                            .font(.caption2.bold())
+                                            .foregroundStyle(.teal)
+                                        Text(g.completedYear != nil ? "Klarat \(String(g.completedYear!))" : "Klarat (år ej valt)")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.primary)
+                                        Image(systemName: "chevron.down")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.teal.opacity(0.12), in: Capsule())
+                                    .overlay(Capsule().stroke(Color.teal.opacity(0.35), lineWidth: 0.8))
+                                }
+                                .buttonStyle(.plain)
+                            }
+
+                            Spacer()
+                        }
+                    }
+
                     // Två-delad segmenterad flikväljare
                     libraryTabsBar
 
@@ -499,6 +561,11 @@ struct GameDetailView: View {
                                 if copy.lastPlayedDate == nil {
                                     copy.lastPlayedDate = Date()
                                 }
+                            } else if st == .completed {
+                                if copy.completedYear == nil {
+                                    copy.completedYear = Calendar.current.component(.year, from: Date())
+                                    copy.completedDate = Date()
+                                }
                             }
                             updateLocal(copy)
                         } label: {
@@ -515,7 +582,61 @@ struct GameDetailView: View {
                     }
                 }
 
-                Section("Planering & Backlog") {
+                if g.status == .completed {
+                    Section("Klarat år (Spelmål)") {
+                        Button {
+                            var copy = g
+                            copy.completedYear = nil
+                            updateLocal(copy)
+                        } label: {
+                            HStack {
+                                if g.completedYear == nil { Image(systemName: "checkmark") }
+                                Text("Ej angivet (Räkna inte i årets mål)")
+                            }
+                        }
+
+                        let currentY = Calendar.current.component(.year, from: Date())
+                        Button {
+                            var copy = g
+                            copy.completedYear = currentY
+                            if copy.completedDate == nil { copy.completedDate = Date() }
+                            updateLocal(copy)
+                        } label: {
+                            HStack {
+                                if g.completedYear == currentY { Image(systemName: "checkmark") }
+                                Text("\(String(currentY)) (I år)")
+                            }
+                        }
+
+                        ForEach((currentY - 10..<currentY).reversed(), id: \.self) { y in
+                            Button {
+                                var copy = g
+                                copy.completedYear = y
+                                updateLocal(copy)
+                            } label: {
+                                HStack {
+                                    if g.completedYear == y { Image(systemName: "checkmark") }
+                                    Text(String(y))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Section("Spelmål & Planering") {
+                    let isTarget = profile.isTargetGoal(gameID: g.id)
+                    Button {
+                        withAnimation {
+                            profile.toggleTargetGoal(gameID: g.id)
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        }
+                    } label: {
+                        Label(
+                            isTarget ? "Ta bort som Fokusmål" : "Sätt som Fokusmål 🎯",
+                            systemImage: isTarget ? "target" : "target"
+                        )
+                    }
+
                     Button {
                         var copy = g
                         copy.isBacklog.toggle()
@@ -956,6 +1077,10 @@ struct GameDetailView: View {
                                 copy.estimatedHours = calculatedHours
                                 if newVal >= 0.99 && copy.status != .completed {
                                     copy.status = .completed
+                                    if copy.completedYear == nil {
+                                        copy.completedYear = Calendar.current.component(.year, from: Date())
+                                        copy.completedDate = Date()
+                                    }
                                     UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
                                 } else {
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -1008,6 +1133,10 @@ struct GameDetailView: View {
                         var copy = g
                         copy.estimatedHours = targetH
                         copy.status = .completed
+                        if copy.completedYear == nil {
+                            copy.completedYear = Calendar.current.component(.year, from: Date())
+                            copy.completedDate = Date()
+                        }
                         updateLocal(copy)
                         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
                     }
@@ -2336,7 +2465,22 @@ struct GameDetailView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            if let g = currentGame {
+                let isTarget = profile.isTargetGoal(gameID: g.id)
+                Button {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
+                        profile.toggleTargetGoal(gameID: g.id)
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    }
+                } label: {
+                    Image(systemName: isTarget ? "target" : "target")
+                        .symbolVariant(isTarget ? .fill : .none)
+                        .foregroundStyle(isTarget ? .yellow : .primary)
+                }
+                .accessibilityLabel(isTarget ? "Ta bort som fokusmål" : "Sätt som fokusmål")
+            }
+
             Button {
                 showingShareSheet = true
             } label: {

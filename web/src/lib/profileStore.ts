@@ -65,6 +65,7 @@ export const DEFAULT_PROFILE: UserProfile = {
   favoriteGameIDs: [],
   avatarType: 'initial',
   annualGamingGoal: 12,
+  targetGameIDs: [],
 };
 
 export function loadUserProfile(): UserProfile {

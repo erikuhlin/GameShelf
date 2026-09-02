@@ -227,6 +227,9 @@ export function UniversalSearchModal({
   const [newsResults, setNewsResults] = useState<NewsItem[]>([]);
   const [isLoadingIgdb, setIsLoadingIgdb] = useState(false);
   const [isLoadingFilters, setIsLoadingFilters] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [offset, setOffset] = useState(0);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'all' | 'library' | 'igdb' | 'news'>('all');
   const [showFilters, setShowFilters] = useState(false);
@@ -236,6 +239,7 @@ export function UniversalSearchModal({
   const [addCompletedYear, setAddCompletedYear] = useState<number | null>(CURRENT_YEAR);
   const [showAddDropdown, setShowAddDropdown] = useState<number | null>(null);
   const [activePreset, setActivePreset] = useState<string | null>(null);
+
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -277,7 +281,10 @@ export function UniversalSearchModal({
       setShowFilters(false);
       setActivePreset(null);
       setShowAddDropdown(null);
+      setOffset(0);
+      setHasMore(false);
     }
+
   }, [isOpen]);
 
   // Spara senaste sökningar
@@ -316,7 +323,7 @@ export function UniversalSearchModal({
   }, [games, query]);
 
   // Bygg API-URL från filter
-  const buildFilterUrl = useCallback((q: string, f: AdvancedFilters, preset?: string | null) => {
+  const buildFilterUrl = useCallback((q: string, f: AdvancedFilters, preset?: string | null, pageOffset = 0) => {
     const params = new URLSearchParams();
     if (q.trim()) params.set('q', q.trim());
     if (f.genre) params.set('genre', f.genre.toLowerCase());
@@ -327,25 +334,29 @@ export function UniversalSearchModal({
     if (f.developer) params.set('developer', f.developer);
     if (f.sort) params.set('sort', f.sort);
     if (preset) params.set('preset', preset);
+    if (pageOffset > 0) params.set('offset', String(pageOffset));
     params.set('limit', '20');
     return `/api/games/search?${params.toString()}`;
   }, []);
 
-  // IGDB title-sök (debounced)
+  // IGDB title-sök (debounced) – nollställer offset vid ny sökning
   useEffect(() => {
     if (!query.trim()) {
       setIgdbResults([]);
+      setHasMore(false);
       return;
     }
 
+    setOffset(0);
     const timer = setTimeout(async () => {
       setIsLoadingIgdb(true);
       try {
-        const url = buildFilterUrl(query, filters, activePreset);
+        const url = buildFilterUrl(query, filters, activePreset, 0);
         const res = await fetch(url);
         const data = await res.json();
         if (data.results) {
           setIgdbResults(data.results);
+          setHasMore(data.hasMore ?? false);
         }
       } catch (e) {
         console.error('IGDB search error:', e);
@@ -357,25 +368,29 @@ export function UniversalSearchModal({
     return () => clearTimeout(timer);
   }, [query, filters, activePreset, buildFilterUrl]);
 
-  // Filter/preset sök utan fritext (tidsmaskin & smarta förslag)
+  // Filter/preset sök utan fritext (tidsmaskin & smarta förslag) – nollställer offset
   useEffect(() => {
     if (query.trim()) {
       setFilterResults([]);
+      setHasMore(false);
       return;
     }
     if (!hasAnyFilter) {
       setFilterResults([]);
+      setHasMore(false);
       return;
     }
 
+    setOffset(0);
     const timer = setTimeout(async () => {
       setIsLoadingFilters(true);
       try {
-        const url = buildFilterUrl('', filters, activePreset);
+        const url = buildFilterUrl('', filters, activePreset, 0);
         const res = await fetch(url);
         const data = await res.json();
         if (data.results) {
           setFilterResults(data.results);
+          setHasMore(data.hasMore ?? false);
         }
       } catch (e) {
         console.error('Filter search error:', e);
@@ -386,6 +401,32 @@ export function UniversalSearchModal({
 
     return () => clearTimeout(timer);
   }, [query, filters, activePreset, hasAnyFilter, buildFilterUrl]);
+
+  // Ladda fler resultat (paginering)
+  const handleLoadMore = useCallback(async () => {
+    const newOffset = offset + 20;
+    setIsLoadingMore(true);
+    try {
+      const url = buildFilterUrl(query, filters, activePreset, newOffset);
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.results) {
+        if (query.trim()) {
+          setIgdbResults((prev) => [...prev, ...data.results]);
+        } else {
+          setFilterResults((prev) => [...prev, ...data.results]);
+        }
+        setHasMore(data.hasMore ?? false);
+        setOffset(newOffset);
+      }
+    } catch (e) {
+      console.error('Load more error:', e);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [offset, query, filters, activePreset, buildFilterUrl]);
+
+
 
   // Nyhetssökning
   useEffect(() => {
@@ -494,15 +535,15 @@ export function UniversalSearchModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-6 sm:pt-16 bg-black/85 backdrop-blur-md animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-6 sm:pt-12 bg-black/85 backdrop-blur-md animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl bg-[#111216] border border-zinc-800/90 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-150"
+        className={`w-full bg-[#111216] border border-zinc-800/90 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[94vh] animate-in zoom-in-95 duration-150 transition-all ${showFilters ? 'max-w-5xl' : 'max-w-2xl'}`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ── Search Input ── */}
-        <div className="relative flex items-center px-4 sm:px-5 py-3.5 border-b border-zinc-800/90 bg-zinc-950/60">
+        {/* ── Search Input Row ── */}
+        <div className="relative flex items-center px-4 sm:px-5 py-3.5 border-b border-zinc-800/90 bg-zinc-950/60 shrink-0">
           <Search className="w-5 h-5 text-zinc-400 shrink-0 mr-3" />
           <input
             ref={inputRef}
@@ -552,206 +593,9 @@ export function UniversalSearchModal({
           </div>
         </div>
 
-        {/* ── Advanced Filter Panel ── */}
-        {showFilters && (
-          <div className="border-b border-zinc-800/80 bg-zinc-950/80 p-4 space-y-4">
-            {/* Tidsmaskin / Årsintervall */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                <Hourglass className="w-3.5 h-3.5 text-amber-400" />
-                <span>Tidsmaskin – Årsintervall</span>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    value={filters.yearFrom}
-                    onChange={(e) => setFilters((f) => ({ ...f, yearFrom: e.target.value }))}
-                    placeholder="Från år"
-                    min="1970"
-                    max={CURRENT_YEAR}
-                    className="w-24 bg-zinc-900 border border-zinc-700 focus:border-amber-400 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none"
-                  />
-                  <span className="text-zinc-500 text-xs">–</span>
-                  <input
-                    type="number"
-                    value={filters.yearTo}
-                    onChange={(e) => setFilters((f) => ({ ...f, yearTo: e.target.value }))}
-                    placeholder="Till år"
-                    min="1970"
-                    max={CURRENT_YEAR}
-                    className="w-24 bg-zinc-900 border border-zinc-700 focus:border-amber-400 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none"
-                  />
-                </div>
-                <div className="flex gap-1.5 flex-wrap">
-                  {ERA_PRESETS.map((era) => {
-                    const active = filters.yearFrom === era.yearFrom && filters.yearTo === era.yearTo;
-                    return (
-                      <button
-                        key={era.label}
-                        onClick={() =>
-                          setFilters((f) => ({
-                            ...f,
-                            yearFrom: active ? '' : era.yearFrom,
-                            yearTo: active ? '' : era.yearTo,
-                          }))
-                        }
-                        className={`px-2.5 py-1 rounded-xl text-[11px] font-semibold transition cursor-pointer ${
-                          active
-                            ? 'bg-amber-500 text-zinc-950'
-                            : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
-                        }`}
-                      >
-                        {era.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Genre + Plattform */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Genre</span>
-                <div className="flex gap-1.5 flex-wrap">
-                  {GENRES.map((g) => {
-                    const active = filters.genre === g;
-                    return (
-                      <button
-                        key={g}
-                        onClick={() => setFilters((f) => ({ ...f, genre: active ? '' : g }))}
-                        className={`px-2.5 py-1 rounded-xl text-[11px] font-semibold transition cursor-pointer ${
-                          active
-                            ? 'bg-brand-red text-white'
-                            : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                        }`}
-                      >
-                        {g === 'Role-playing (RPG)' ? 'RPG' : g}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Plattform</span>
-                <div className="flex gap-1.5 flex-wrap">
-                  {PLATFORM_GROUPS.map((p) => {
-                    const active = filters.platform === p.value;
-                    return (
-                      <button
-                        key={p.value}
-                        onClick={() => setFilters((f) => ({ ...f, platform: active ? '' : p.value }))}
-                        className={`px-2.5 py-1 rounded-xl text-[11px] font-semibold transition cursor-pointer ${
-                          active
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                        }`}
-                      >
-                        {p.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Betyg + Utvecklare */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Minst betyg</span>
-                <div className="flex gap-1.5 flex-wrap">
-                  {RATING_OPTIONS.map((r) => {
-                    const active = filters.minRating === r.value;
-                    return (
-                      <button
-                        key={r.value}
-                        onClick={() => setFilters((f) => ({ ...f, minRating: active ? 0 : r.value }))}
-                        className={`px-2.5 py-1 rounded-xl text-[11px] font-semibold transition cursor-pointer ${
-                          active
-                            ? 'bg-amber-500 text-zinc-950'
-                            : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                        }`}
-                      >
-                        {r.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Utvecklare / Studio</span>
-                <input
-                  type="text"
-                  value={filters.developer}
-                  onChange={(e) => setFilters((f) => ({ ...f, developer: e.target.value }))}
-                  placeholder="T.ex. FromSoftware, Rockstar..."
-                  className="w-full bg-zinc-900 border border-zinc-700 focus:border-brand-red rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none placeholder-zinc-600"
-                />
-                <div className="flex gap-1.5 flex-wrap">
-                  {KNOWN_DEVELOPERS.slice(0, 6).map((dev) => (
-                    <button
-                      key={dev}
-                      onClick={() => setFilters((f) => ({ ...f, developer: f.developer === dev ? '' : dev }))}
-                      className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition cursor-pointer ${
-                        filters.developer === dev
-                          ? 'bg-brand-red text-white'
-                          : 'bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-zinc-300'
-                      }`}
-                    >
-                      {dev}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Sortering + Dölj ägda + Rensa */}
-            <div className="flex items-center justify-between gap-3 pt-1 border-t border-zinc-800/60">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-zinc-400 font-medium">Sortera:</span>
-                  <select
-                    value={filters.sort}
-                    onChange={(e) => setFilters((f) => ({ ...f, sort: e.target.value as AdvancedFilters['sort'] }))}
-                    className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs rounded-xl px-2 py-1 focus:outline-none cursor-pointer"
-                  >
-                    <option value="popularity">Popularitet</option>
-                    <option value="rating">Betyg</option>
-                    <option value="newest">Nyast</option>
-                    <option value="oldest">Äldst</option>
-                  </select>
-                </div>
-
-                <label className="flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={filters.hideOwned}
-                    onChange={(e) => setFilters((f) => ({ ...f, hideOwned: e.target.checked }))}
-                    className="accent-brand-red rounded"
-                  />
-                  Dölj spel jag äger
-                </label>
-              </div>
-
-              {(activeFilterCount > 0 || activePreset) && (
-                <button
-                  onClick={resetFilters}
-                  className="text-[11px] text-zinc-500 hover:text-brand-red transition cursor-pointer flex items-center gap-1"
-                >
-                  <X className="w-3 h-3" />
-                  Rensa filter
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* ── Source Tabs (when query active) ── */}
         {query.trim() && (
-          <div className="flex items-center gap-1.5 px-4 sm:px-5 py-2 border-b border-zinc-800/60 bg-zinc-900/30 overflow-x-auto scrollbar-none">
+          <div className="flex items-center gap-1.5 px-4 sm:px-5 py-2 border-b border-zinc-800/60 bg-zinc-900/30 overflow-x-auto scrollbar-none shrink-0">
             {(
               [
                 { id: 'all', label: 'Alla' },
@@ -776,307 +620,522 @@ export function UniversalSearchModal({
           </div>
         )}
 
-        {/* ── Results ── */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-6 scrollbar-thin scrollbar-thumb-zinc-800">
+        {/* ── Main Body: sidebar + results ── */}
+        <div className="flex flex-1 min-h-0">
 
-          {/* Empty state: Smart suggestions */}
-          {!query.trim() && !hasAnyFilter && (
-            <div className="space-y-5">
-              {/* Recent searches */}
-              {recentSearches.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-2.5">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>Senaste sökningar</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {recentSearches.map((term) => (
+          {/* ── LEFT: Filter Sidebar ── */}
+          {showFilters && (
+            <div className="w-56 sm:w-64 shrink-0 border-r border-zinc-800/80 bg-zinc-950/60 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 p-4 space-y-5">
+
+              {/* Tidsmaskin */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                  <Hourglass className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Tidsmaskin</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    value={filters.yearFrom}
+                    onChange={(e) => setFilters((f) => ({ ...f, yearFrom: e.target.value }))}
+                    placeholder="Från"
+                    min="1970"
+                    max={CURRENT_YEAR}
+                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-amber-400 rounded-xl px-2 py-1.5 text-xs text-white focus:outline-none"
+                  />
+                  <span className="text-zinc-500 text-xs shrink-0">–</span>
+                  <input
+                    type="number"
+                    value={filters.yearTo}
+                    onChange={(e) => setFilters((f) => ({ ...f, yearTo: e.target.value }))}
+                    placeholder="Till"
+                    min="1970"
+                    max={CURRENT_YEAR}
+                    className="w-full bg-zinc-900 border border-zinc-700 focus:border-amber-400 rounded-xl px-2 py-1.5 text-xs text-white focus:outline-none"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  {ERA_PRESETS.map((era) => {
+                    const active = filters.yearFrom === era.yearFrom && filters.yearTo === era.yearTo;
+                    return (
                       <button
-                        key={term}
-                        onClick={() => { setQuery(term); saveSearchTerm(term); }}
-                        className="group flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900/90 border border-zinc-800 text-xs text-zinc-300 hover:text-white hover:border-zinc-700 transition cursor-pointer"
+                        key={era.label}
+                        onClick={() =>
+                          setFilters((f) => ({
+                            ...f,
+                            yearFrom: active ? '' : era.yearFrom,
+                            yearTo: active ? '' : era.yearTo,
+                          }))
+                        }
+                        className={`px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition cursor-pointer text-left ${
+                          active
+                            ? 'bg-amber-500 text-zinc-950'
+                            : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                        }`}
                       >
-                        <span>{term}</span>
-                        <X
-                          className="w-3 h-3 text-zinc-500 group-hover:text-zinc-300 transition"
-                          onClick={(e) => removeRecentSearch(e, term)}
-                        />
+                        {era.label}
                       </button>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
 
-              {/* Personalized Smart Suggestions */}
-              <div>
-                <div className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-3">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  <span>
-                    {userProfile?.username ? `Förslag för ${userProfile.username}` : 'Smarta sökförslag'}
-                  </span>
+              {/* Genre */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Genre</span>
+                <div className="flex flex-col gap-1">
+                  {GENRES.map((g) => {
+                    const active = filters.genre === g;
+                    return (
+                      <button
+                        key={g}
+                        onClick={() => setFilters((f) => ({ ...f, genre: active ? '' : g }))}
+                        className={`px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition cursor-pointer text-left ${
+                          active
+                            ? 'bg-brand-red text-white'
+                            : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {g === 'Role-playing (RPG)' ? 'RPG' : g}
+                      </button>
+                    );
+                  })}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {personalSuggestions.map((s) => (
+              </div>
+
+              {/* Plattform */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Plattform</span>
+                <div className="flex flex-col gap-1">
+                  {PLATFORM_GROUPS.map((p) => {
+                    const active = filters.platform === p.value;
+                    return (
+                      <button
+                        key={p.value}
+                        onClick={() => setFilters((f) => ({ ...f, platform: active ? '' : p.value }))}
+                        className={`px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition cursor-pointer text-left ${
+                          active
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Betyg */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Minst betyg</span>
+                <div className="flex flex-col gap-1">
+                  {RATING_OPTIONS.map((r) => {
+                    const active = filters.minRating === r.value;
+                    return (
+                      <button
+                        key={r.value}
+                        onClick={() => setFilters((f) => ({ ...f, minRating: active ? 0 : r.value }))}
+                        className={`px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition cursor-pointer text-left ${
+                          active
+                            ? 'bg-amber-500 text-zinc-950'
+                            : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {r.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Utvecklare */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Studio</span>
+                <input
+                  type="text"
+                  value={filters.developer}
+                  onChange={(e) => setFilters((f) => ({ ...f, developer: e.target.value }))}
+                  placeholder="T.ex. FromSoftware..."
+                  className="w-full bg-zinc-900 border border-zinc-700 focus:border-brand-red rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none placeholder-zinc-600"
+                />
+                <div className="flex flex-col gap-1">
+                  {KNOWN_DEVELOPERS.map((dev) => (
                     <button
-                      key={s.label}
-                      onClick={() => applySuggestion(s)}
-                      className="flex items-center gap-3 p-3 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-brand-red/40 hover:bg-zinc-900 transition cursor-pointer text-left group"
+                      key={dev}
+                      onClick={() => setFilters((f) => ({ ...f, developer: f.developer === dev ? '' : dev }))}
+                      className={`px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition cursor-pointer text-left ${
+                        filters.developer === dev
+                          ? 'bg-brand-red text-white'
+                          : 'bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-zinc-300'
+                      }`}
                     >
-                      <div className="w-9 h-9 rounded-xl bg-zinc-800 flex items-center justify-center text-lg shrink-0 group-hover:scale-110 transition-transform">
-                        {s.icon}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold text-white group-hover:text-brand-red transition truncate">
-                          {s.label}
-                        </div>
-                        <div className="text-[11px] text-zinc-500 truncate">{s.description}</div>
-                      </div>
+                      {dev}
                     </button>
                   ))}
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Filter/preset results (no query) */}
-          {!query.trim() && hasAnyFilter && (
-            <div>
-              <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-3">
-                <div className="flex items-center gap-2">
-                  <Globe className="w-3.5 h-3.5 text-brand-red" />
-                  <span>
-                    {isLoadingFilters ? 'Söker...' : `Resultat (${currentResults.length})`}
-                  </span>
-                </div>
-                {isLoadingFilters && <Loader2 className="w-4 h-4 animate-spin text-brand-red" />}
+              {/* Sortering */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Sortera</span>
+                <select
+                  value={filters.sort}
+                  onChange={(e) => setFilters((f) => ({ ...f, sort: e.target.value as AdvancedFilters['sort'] }))}
+                  className="w-full bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none cursor-pointer"
+                >
+                  <option value="popularity">Popularitet</option>
+                  <option value="rating">Betyg</option>
+                  <option value="newest">Nyast</option>
+                  <option value="oldest">Äldst</option>
+                </select>
               </div>
 
-              {isLoadingFilters && currentResults.length === 0 && (
-                <div className="flex items-center justify-center py-12 text-zinc-500">
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                </div>
+              {/* Dölj ägda */}
+              <label className="flex items-center gap-2 text-[11px] text-zinc-400 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={filters.hideOwned}
+                  onChange={(e) => setFilters((f) => ({ ...f, hideOwned: e.target.checked }))}
+                  className="accent-brand-red rounded"
+                />
+                Dölj spel jag äger
+              </label>
+
+              {/* Rensa */}
+              {(activeFilterCount > 0 || activePreset) && (
+                <button
+                  onClick={resetFilters}
+                  className="w-full text-[11px] text-zinc-500 hover:text-brand-red transition cursor-pointer flex items-center justify-center gap-1 py-1.5 rounded-xl border border-zinc-800 hover:border-brand-red/30"
+                >
+                  <X className="w-3 h-3" />
+                  Rensa alla filter
+                </button>
               )}
-
-              <div className="space-y-2">
-                {currentResults.map((result) => {
-                  const inLibrary = isGameInLibrary(result.id, result.title);
-                  const inLib = games.find((g) => g.igdb_id === result.id);
-                  const isAdding = addingGameId === result.id;
-                  const showDrop = showAddDropdown === result.id;
-
-                  return (
-                    <GameResultCard
-                      key={result.id}
-                      result={result}
-                      inLibrary={inLibrary}
-                      inLibGame={inLib}
-                      isAdding={isAdding}
-                      showDrop={showDrop}
-                      addStatus={addStatus}
-                      addCompletedYear={addCompletedYear}
-                      onSelectGame={() => {
-                        if (inLib) {
-                          onSelectGame(inLib);
-                          onClose();
-                        }
-                      }}
-                      onToggleDrop={() => setShowAddDropdown(showDrop ? null : result.id)}
-                      onSetStatus={setAddStatus}
-                      onSetYear={setAddCompletedYear}
-                      onConfirmAdd={() => handleAddGame(result, addStatus, addCompletedYear)}
-                    />
-                  );
-                })}
-
-                {!isLoadingFilters && currentResults.length === 0 && (
-                  <p className="text-center py-8 text-xs text-zinc-500">
-                    Inga spel matchade dina filter. Prova att justera inställningarna.
-                  </p>
-                )}
-              </div>
             </div>
           )}
 
-          {/* Query-based results */}
-          {query.trim() && (
-            <div className="space-y-5">
-              {/* Library matches */}
-              {(activeTab === 'all' || activeTab === 'library') && libraryResults.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-3">
-                    <Library className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>I ditt bibliotek ({libraryResults.length})</span>
+          {/* ── RIGHT: Results ── */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-6 scrollbar-thin scrollbar-thumb-zinc-800">
+
+            {/* Empty state: Smart suggestions */}
+            {!query.trim() && !hasAnyFilter && (
+              <div className="space-y-5">
+                {recentSearches.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-2.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Senaste sökningar</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {recentSearches.map((term) => (
+                        <button
+                          key={term}
+                          onClick={() => { setQuery(term); saveSearchTerm(term); }}
+                          className="group flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900/90 border border-zinc-800 text-xs text-zinc-300 hover:text-white hover:border-zinc-700 transition cursor-pointer"
+                        >
+                          <span>{term}</span>
+                          <X
+                            className="w-3 h-3 text-zinc-500 group-hover:text-zinc-300 transition"
+                            onClick={(e) => removeRecentSearch(e, term)}
+                          />
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    {libraryResults.map((game) => (
-                      <div
-                        key={game.id}
-                        onClick={() => { saveSearchTerm(query); onSelectGame(game); onClose(); }}
-                        className="flex items-center justify-between p-2.5 sm:p-3 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 hover:bg-zinc-900 cursor-pointer group transition"
+                )}
+
+                <div>
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-3">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>
+                      {userProfile?.username ? `Förslag för ${userProfile.username}` : 'Smarta sökförslag'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {personalSuggestions.map((s) => (
+                      <button
+                        key={s.label}
+                        onClick={() => applySuggestion(s)}
+                        className="flex items-center gap-3 p-3 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-brand-red/40 hover:bg-zinc-900 transition cursor-pointer text-left group"
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-14 rounded-xl overflow-hidden bg-zinc-950 shrink-0 border border-zinc-800">
-                            {game.cover_url ? (
-                              <img src={game.cover_url} alt={game.title} className="w-full h-full object-cover group-hover:scale-105 transition" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <Gamepad className="w-4 h-4 text-zinc-600" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <h4 className="text-sm font-bold text-zinc-100 group-hover:text-brand-red transition truncate">{game.title}</h4>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <StatusBadge game={game} />
-                              {game.release_year && <span className="text-[11px] text-zinc-500">{game.release_year}</span>}
-                            </div>
-                          </div>
+                        <div className="w-9 h-9 rounded-xl bg-zinc-800 flex items-center justify-center text-lg shrink-0 group-hover:scale-110 transition-transform">
+                          {s.icon}
                         </div>
-                        <ArrowRight className="w-4 h-4 text-zinc-500 group-hover:text-white transition shrink-0 ml-2" />
-                      </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-white group-hover:text-brand-red transition truncate">
+                            {s.label}
+                          </div>
+                          <div className="text-[11px] text-zinc-500 truncate">{s.description}</div>
+                        </div>
+                      </button>
                     ))}
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* Studio shortcut */}
-              {query.trim().length >= 2 && onOpenCompany && (
-                <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-3 sm:p-4 hover:border-brand-red/40 transition">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-brand-red/10 border border-brand-red/20 flex items-center justify-center text-brand-red shrink-0">
-                        <Building2 className="w-5 h-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Studio & Utgivare</div>
-                        <div className="text-sm font-bold text-white truncate">"{query.trim()}"</div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => { saveSearchTerm(query.trim()); onClose(); onOpenCompany(0, query.trim(), 'developer'); }}
-                      className="px-3.5 py-1.5 rounded-xl bg-brand-red hover:bg-red-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ml-3"
-                    >
-                      Öppna studio
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
+            {/* Filter/preset results (no query) */}
+            {!query.trim() && hasAnyFilter && (
+              <div>
+                <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-3">
+                  <div className="flex items-center gap-2">
+                    <Globe className="w-3.5 h-3.5 text-brand-red" />
+                    <span>{isLoadingFilters ? 'Söker...' : `Resultat (${currentResults.length}${hasMore ? '+' : ''})`}</span>
                   </div>
+                  {isLoadingFilters && <Loader2 className="w-4 h-4 animate-spin text-brand-red" />}
                 </div>
-              )}
 
-              {/* IGDB Results */}
-              {(activeTab === 'all' || activeTab === 'igdb') && (
-                <div>
-                  <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-3">
-                    <div className="flex items-center gap-2">
-                      <Globe className="w-3.5 h-3.5 text-brand-red" />
-                      <span>Hitta på IGDB</span>
-                    </div>
-                    {isLoadingIgdb && (
-                      <div className="flex items-center gap-1 text-zinc-500">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-red" />
-                        <span>Söker...</span>
-                      </div>
-                    )}
+                {isLoadingFilters && currentResults.length === 0 && (
+                  <div className="flex items-center justify-center py-12 text-zinc-500">
+                    <Loader2 className="w-6 h-6 animate-spin" />
                   </div>
+                )}
 
-                  {igdbResults.length > 0 ? (
-                    <div className="space-y-2">
-                      {igdbResults.map((result) => {
-                        const inLibrary = isGameInLibrary(result.id, result.name);
-                        const inLib = games.find((g) => g.igdb_id === result.id);
-                        const isAdding = addingGameId === result.id;
-                        const showDrop = showAddDropdown === result.id;
-                        const asResult = {
-                          id: result.id,
-                          title: result.name,
-                          cover_url: result.cover?.url,
-                          platforms: (result.platforms || []).map((p: any) => p.name),
-                          genres: (result.genres || []).map((g: any) => g.name),
-                          developers: (result.involved_companies || []).filter((c: any) => c.developer).map((c: any) => c.company.name),
-                          release_year: result.first_release_date ? new Date(result.first_release_date * 1000).getFullYear() : null,
-                          first_release_date: result.first_release_date || null,
-                          igdb_rating: result.total_rating ? Math.round((result.total_rating / 10) * 10) / 10 : null,
-                        };
+                <div className="space-y-2">
+                  {currentResults.map((result) => {
+                    const inLibrary = isGameInLibrary(result.id, result.title);
+                    const inLib = games.find((g) => g.igdb_id === result.id);
+                    const isAdding = addingGameId === result.id;
+                    const showDrop = showAddDropdown === result.id;
+                    return (
+                      <GameResultCard
+                        key={result.id}
+                        result={result}
+                        inLibrary={inLibrary}
+                        inLibGame={inLib}
+                        isAdding={isAdding}
+                        showDrop={showDrop}
+                        addStatus={addStatus}
+                        addCompletedYear={addCompletedYear}
+                        onSelectGame={() => { if (inLib) { onSelectGame(inLib); onClose(); } }}
+                        onToggleDrop={() => setShowAddDropdown(showDrop ? null : result.id)}
+                        onSetStatus={setAddStatus}
+                        onSetYear={setAddCompletedYear}
+                        onConfirmAdd={() => handleAddGame(result, addStatus, addCompletedYear)}
+                      />
+                    );
+                  })}
 
-                        return (
-                          <GameResultCard
-                            key={result.id}
-                            result={asResult}
-                            inLibrary={inLibrary}
-                            inLibGame={inLib}
-                            isAdding={isAdding}
-                            showDrop={showDrop}
-                            addStatus={addStatus}
-                            addCompletedYear={addCompletedYear}
-                            onSelectGame={() => {
-                              if (inLib) { saveSearchTerm(query); onSelectGame(inLib); onClose(); }
-                              else { saveSearchTerm(query); onSelectGame(convertResultToGame(asResult)); onClose(); }
-                            }}
-                            onToggleDrop={() => setShowAddDropdown(showDrop ? null : result.id)}
-                            onSetStatus={setAddStatus}
-                            onSetYear={setAddCompletedYear}
-                            onConfirmAdd={() => handleAddGame(asResult, addStatus, addCompletedYear)}
-                          />
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    !isLoadingIgdb && query.trim().length > 1 && (
-                      <p className="text-xs text-zinc-500 py-3 text-center">
-                        Inga träffar på IGDB för &ldquo;{query}&rdquo;.
-                      </p>
-                    )
+                  {!isLoadingFilters && currentResults.length === 0 && (
+                    <p className="text-center py-8 text-xs text-zinc-500">
+                      Inga spel matchade dina filter. Prova att justera inställningarna.
+                    </p>
+                  )}
+
+                  {/* Ladda fler */}
+                  {hasMore && !isLoadingFilters && (
+                    <button
+                      onClick={handleLoadMore}
+                      disabled={isLoadingMore}
+                      className="w-full py-2.5 rounded-2xl border border-zinc-700 text-xs font-semibold text-zinc-400 hover:text-white hover:border-zinc-600 hover:bg-zinc-900 transition cursor-pointer flex items-center justify-center gap-2 mt-2"
+                    >
+                      {isLoadingMore ? (
+                        <><Loader2 className="w-3.5 h-3.5 animate-spin" />Laddar fler...</>
+                      ) : (
+                        <>Ladda fler resultat<ChevronDown className="w-3.5 h-3.5" /></>
+                      )}
+                    </button>
                   )}
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* News */}
-              {(activeTab === 'all' || activeTab === 'news') && newsResults.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-3">
-                    <Newspaper className="w-3.5 h-3.5 text-rose-400" />
-                    <span>Nyheter ({newsResults.length})</span>
-                  </div>
-                  <div className="space-y-2">
-                    {newsResults.map((item) => (
-                      <a
-                        key={item.id}
-                        href={item.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-between p-3 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 hover:bg-zinc-900 transition group"
-                      >
-                        <div className="min-w-0 pr-3">
-                          <div className="flex items-center gap-2 text-[10px] text-zinc-500 mb-1">
-                            <span className="font-bold text-zinc-300">{item.source}</span>
-                            <span>•</span>
-                            <span>{new Date(item.published).toLocaleDateString('sv-SE')}</span>
+            {/* Query-based results */}
+            {query.trim() && (
+              <div className="space-y-5">
+                {/* Library matches */}
+                {(activeTab === 'all' || activeTab === 'library') && libraryResults.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-3">
+                      <Library className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>I ditt bibliotek ({libraryResults.length})</span>
+                    </div>
+                    <div className="space-y-2">
+                      {libraryResults.map((game) => (
+                        <div
+                          key={game.id}
+                          onClick={() => { saveSearchTerm(query); onSelectGame(game); onClose(); }}
+                          className="flex items-center justify-between p-2.5 sm:p-3 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 hover:bg-zinc-900 cursor-pointer group transition"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-14 rounded-xl overflow-hidden bg-zinc-950 shrink-0 border border-zinc-800">
+                              {game.cover_url ? (
+                                <img src={game.cover_url} alt={game.title} className="w-full h-full object-cover group-hover:scale-105 transition" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <Gamepad className="w-4 h-4 text-zinc-600" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="text-sm font-bold text-zinc-100 group-hover:text-brand-red transition truncate">{game.title}</h4>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <StatusBadge game={game} />
+                                {game.release_year && <span className="text-[11px] text-zinc-500">{game.release_year}</span>}
+                              </div>
+                            </div>
                           </div>
-                          <h5 className="text-xs sm:text-sm font-semibold text-zinc-100 group-hover:text-brand-red transition line-clamp-1">
-                            {item.title}
-                          </h5>
+                          <ArrowRight className="w-4 h-4 text-zinc-500 group-hover:text-white transition shrink-0 ml-2" />
                         </div>
-                        <ExternalLink className="w-4 h-4 text-zinc-500 group-hover:text-white transition shrink-0" />
-                      </a>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* No results */}
-              {!isLoadingIgdb && !isLoadingFilters && libraryResults.length === 0 && igdbResults.length === 0 && newsResults.length === 0 && (
-                <div className="text-center py-12 text-zinc-500">
-                  <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm font-medium">Inga träffar för &ldquo;{query}&rdquo;</p>
-                  <p className="text-xs text-zinc-600 mt-1">Prova en annan titel, utvecklare eller konsol.</p>
-                </div>
-              )}
-            </div>
-          )}
+                {/* Studio shortcut */}
+                {query.trim().length >= 2 && onOpenCompany && (
+                  <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-3 sm:p-4 hover:border-brand-red/40 transition">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-brand-red/10 border border-brand-red/20 flex items-center justify-center text-brand-red shrink-0">
+                          <Building2 className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Studio & Utgivare</div>
+                          <div className="text-sm font-bold text-white truncate">"{query.trim()}"</div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => { saveSearchTerm(query.trim()); onClose(); onOpenCompany(0, query.trim(), 'developer'); }}
+                        className="px-3.5 py-1.5 rounded-xl bg-brand-red hover:bg-red-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ml-3"
+                      >
+                        Öppna studio
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* IGDB Results */}
+                {(activeTab === 'all' || activeTab === 'igdb') && (
+                  <div>
+                    <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-3">
+                      <div className="flex items-center gap-2">
+                        <Globe className="w-3.5 h-3.5 text-brand-red" />
+                        <span>Hitta på IGDB{igdbResults.length > 0 ? ` (${igdbResults.length}${hasMore ? '+' : ''})` : ''}</span>
+                      </div>
+                      {isLoadingIgdb && (
+                        <div className="flex items-center gap-1 text-zinc-500">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-red" />
+                          <span>Söker...</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {igdbResults.length > 0 ? (
+                      <div className="space-y-2">
+                        {igdbResults.map((result) => {
+                          const inLibrary = isGameInLibrary(result.id, result.name);
+                          const inLib = games.find((g) => g.igdb_id === result.id);
+                          const isAdding = addingGameId === result.id;
+                          const showDrop = showAddDropdown === result.id;
+                          const asResult = {
+                            id: result.id,
+                            title: result.name,
+                            cover_url: result.cover?.url,
+                            platforms: (result.platforms || []).map((p: any) => p.name),
+                            genres: (result.genres || []).map((g: any) => g.name),
+                            developers: (result.involved_companies || []).filter((c: any) => c.developer).map((c: any) => c.company.name),
+                            release_year: result.first_release_date ? new Date(result.first_release_date * 1000).getFullYear() : null,
+                            first_release_date: result.first_release_date || null,
+                            igdb_rating: result.total_rating ? Math.round((result.total_rating / 10) * 10) / 10 : null,
+                          };
+                          return (
+                            <GameResultCard
+                              key={result.id}
+                              result={asResult}
+                              inLibrary={inLibrary}
+                              inLibGame={inLib}
+                              isAdding={isAdding}
+                              showDrop={showDrop}
+                              addStatus={addStatus}
+                              addCompletedYear={addCompletedYear}
+                              onSelectGame={() => {
+                                if (inLib) { saveSearchTerm(query); onSelectGame(inLib); onClose(); }
+                                else { saveSearchTerm(query); onSelectGame(convertResultToGame(asResult)); onClose(); }
+                              }}
+                              onToggleDrop={() => setShowAddDropdown(showDrop ? null : result.id)}
+                              onSetStatus={setAddStatus}
+                              onSetYear={setAddCompletedYear}
+                              onConfirmAdd={() => handleAddGame(asResult, addStatus, addCompletedYear)}
+                            />
+                          );
+                        })}
+
+                        {/* Ladda fler – IGDB */}
+                        {hasMore && !isLoadingIgdb && (
+                          <button
+                            onClick={handleLoadMore}
+                            disabled={isLoadingMore}
+                            className="w-full py-2.5 rounded-2xl border border-zinc-700 text-xs font-semibold text-zinc-400 hover:text-white hover:border-zinc-600 hover:bg-zinc-900 transition cursor-pointer flex items-center justify-center gap-2 mt-2"
+                          >
+                            {isLoadingMore ? (
+                              <><Loader2 className="w-3.5 h-3.5 animate-spin" />Laddar fler...</>
+                            ) : (
+                              <>Ladda fler resultat<ChevronDown className="w-3.5 h-3.5" /></>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      !isLoadingIgdb && query.trim().length > 1 && (
+                        <p className="text-xs text-zinc-500 py-3 text-center">
+                          Inga träffar på IGDB för &ldquo;{query}&rdquo;.
+                        </p>
+                      )
+                    )}
+                  </div>
+                )}
+
+                {/* News */}
+                {(activeTab === 'all' || activeTab === 'news') && newsResults.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-3">
+                      <Newspaper className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Nyheter ({newsResults.length})</span>
+                    </div>
+                    <div className="space-y-2">
+                      {newsResults.map((item) => (
+                        <a
+                          key={item.id}
+                          href={item.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between p-3 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 hover:bg-zinc-900 transition group"
+                        >
+                          <div className="min-w-0 pr-3">
+                            <div className="flex items-center gap-2 text-[10px] text-zinc-500 mb-1">
+                              <span className="font-bold text-zinc-300">{item.source}</span>
+                              <span>•</span>
+                              <span>{new Date(item.published).toLocaleDateString('sv-SE')}</span>
+                            </div>
+                            <h5 className="text-xs sm:text-sm font-semibold text-zinc-100 group-hover:text-brand-red transition line-clamp-1">
+                              {item.title}
+                            </h5>
+                          </div>
+                          <ExternalLink className="w-4 h-4 text-zinc-500 group-hover:text-white transition shrink-0" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* No results */}
+                {!isLoadingIgdb && !isLoadingFilters && libraryResults.length === 0 && igdbResults.length === 0 && newsResults.length === 0 && (
+                  <div className="text-center py-12 text-zinc-500">
+                    <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm font-medium">Inga träffar för &ldquo;{query}&rdquo;</p>
+                    <p className="text-xs text-zinc-600 mt-1">Prova en annan titel, utvecklare eller konsol.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ── Footer ── */}
-        <div className="px-5 py-3 border-t border-zinc-800/80 bg-zinc-950/60 flex items-center justify-between text-[11px] text-zinc-500">
+        <div className="px-5 py-3 border-t border-zinc-800/80 bg-zinc-950/60 flex items-center justify-between text-[11px] text-zinc-500 shrink-0">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
               <kbd className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-300 font-mono text-[10px]">ESC</kbd>{' '}Stäng
@@ -1091,7 +1150,6 @@ export function UniversalSearchModal({
     </div>
   );
 }
-
 // ── GameResultCard sub-component ──
 interface GameResultCardProps {
   result: {

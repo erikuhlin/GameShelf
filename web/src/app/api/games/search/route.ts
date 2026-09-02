@@ -78,7 +78,9 @@ const GENRE_ID_MAP: Record<string, { type: 'genre' | 'theme'; ids: string }> = {
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const rawQ = searchParams.get('q')?.trim() || '';
-  const limit = Math.min(Number(searchParams.get('limit')) || 25, 50);
+  const limit = Math.min(Number(searchParams.get('limit')) || 20, 50);
+  const offset = Math.max(Number(searchParams.get('offset')) || 0, 0);
+
 
   // Filterparametrar
   const platformParam = searchParams.get('platform')?.trim().toLowerCase() || '';
@@ -186,6 +188,7 @@ export async function GET(request: NextRequest) {
         ${fields}
         ${wherePart}
         limit ${limit};
+        offset ${offset};
       `;
     } else {
       // Ingen fritext (t.ex. tidsmaskin eller filterutforskning)
@@ -206,10 +209,12 @@ export async function GET(request: NextRequest) {
         ${wherePart}
         ${sortClause}
         limit ${limit};
+        offset ${offset};
       `;
     }
 
     const data = await queryIGDB('games', igdbQuery);
+
 
     // Formatera resultaten med högupplösta omslagsbilder
     const results = (data || []).map((game: any) => {
@@ -251,7 +256,8 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ results });
+    return NextResponse.json({ results, hasMore: results.length === limit });
+
   } catch (error: any) {
     console.error('Error in IGDB /api/games/search:', error);
     return NextResponse.json(

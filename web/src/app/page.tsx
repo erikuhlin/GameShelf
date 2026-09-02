@@ -1612,6 +1612,7 @@ export default function HomePage() {
             role,
           });
         }}
+        userProfile={userProfile}
       />
 
       <ProfileModal

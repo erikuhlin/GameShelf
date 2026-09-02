@@ -154,15 +154,15 @@ export function Header({
 
           {/* 3. Right Zone: Global Actions */}
           <div className="flex items-center gap-2.5">
-            {/* Global Spotlight Search Trigger (⌘K) */}
+            {/* Combined Search & Add Trigger (⌘K) */}
             <button
               onClick={onOpenSearchModal}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-zinc-200 transition shadow-inner"
-              title="Öppna snabbsök (⌘K)"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand-red hover:bg-brand-redPressed text-white transition shadow-md shadow-brand-red/20 transform active:scale-95 whitespace-nowrap"
+              title="Sök & Lägg till spel (⌘K)"
             >
-              <Search className="w-3.5 h-3.5 text-zinc-400" />
-              <span className="text-xs hidden sm:inline">Sök spel...</span>
-              <kbd className="hidden lg:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] font-mono text-zinc-400 border border-zinc-700/60">
+              <Search className="w-3.5 h-3.5" />
+              <span className="text-xs font-bold hidden sm:inline">Sök & Lägg till</span>
+              <kbd className="hidden lg:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-700/60 text-[10px] font-mono text-white/80 border border-red-600/40">
                 ⌘K
               </kbd>
             </button>
@@ -178,15 +178,6 @@ export function Header({
               onOpenProfileModal={onOpenProfileModal}
               onLogout={onLogout}
             />
-
-            {/* Primary Action: Add Game */}
-            <button
-              onClick={onOpenAddModal}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold bg-brand-red hover:bg-brand-redPressed text-white rounded-xl shadow-md shadow-brand-red/20 transition transform active:scale-95 whitespace-nowrap"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Lägg till spel</span>
-            </button>
           </div>
         </div>
       </header>
@@ -218,11 +209,11 @@ export function Header({
         </button>
 
         <button
-          onClick={onOpenAddModal}
+          onClick={onOpenSearchModal}
           className="flex flex-col items-center justify-center -mt-4 w-12 h-12 rounded-full bg-gradient-to-tr from-brand-red to-rose-500 text-white shadow-lg shadow-brand-red/30 transition transform active:scale-95"
-          title="Lägg till spel"
+          title="Sök & Lägg till spel"
         >
-          <Plus className="w-6 h-6" />
+          <Search className="w-5 h-5" />
         </button>
 
         <button

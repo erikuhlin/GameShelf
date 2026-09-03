@@ -31,6 +31,12 @@ export interface GameTodoItem {
   isDone: boolean;
 }
 
+export type GameStoryProgress =
+  | 'justStarted'
+  | 'midway'
+  | 'nearEnd'
+  | 'completed';
+
 export interface Game {
   id: string;
   user_id?: string | null;
@@ -58,6 +64,10 @@ export interface Game {
   last_played_date?: string | null;
   completed_year?: number | null;
   completed_date?: string | null;
+  story_progress?: GameStoryProgress | null;
+  hours_played?: number | null;
+  progress_note?: string | null;
+  note_updated_at?: string | null;
 }
 
 export interface GameCollection {

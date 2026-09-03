@@ -58,6 +58,13 @@ export function mapSupabaseGame(row: any): Game {
     last_played_date: row.last_played_date || null,
     completed_year: row.completed_year !== undefined && row.completed_year !== null ? Number(row.completed_year) : null,
     completed_date: row.completed_date || null,
+    story_progress: row.story_progress || null,
+    hours_played:
+      row.hours_played !== undefined && row.hours_played !== null
+        ? Number(row.hours_played)
+        : null,
+    progress_note: row.progress_note || null,
+    note_updated_at: row.note_updated_at || null,
   };
 }
 

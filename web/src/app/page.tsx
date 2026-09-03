@@ -840,6 +840,7 @@ export default function HomePage() {
                 : g.last_played_date,
               completed_year: isCompleted ? (g.completed_year || currentYear) : g.completed_year,
               completed_date: isCompleted ? (g.completed_date || new Date().toISOString()) : g.completed_date,
+              story_progress: isCompleted ? 'completed' : g.story_progress,
             }
           : g
       );
@@ -857,6 +858,7 @@ export default function HomePage() {
       if (isCompleted) {
         updatePayload.completed_year = currentYear;
         updatePayload.completed_date = new Date().toISOString();
+        updatePayload.story_progress = 'completed';
       }
       await supabase
         .from('user_games')

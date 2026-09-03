@@ -49,8 +49,22 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
     var completedYear: Int? = nil
     var completedDate: Date? = nil
     var storyProgress: GameStoryProgress? = nil
+    var hoursPlayed: Double? = nil
+    var progressNote: String? = nil
+    var noteUpdatedAt: Date? = nil
 
     // MARK: - Computed Helpers
+    var effectiveHoursPlayed: Double {
+        get {
+            if let hp = hoursPlayed { return hp }
+            if let est = estimatedHours { return Double(est) }
+            return 0.0
+        }
+        set {
+            hoursPlayed = newValue
+            estimatedHours = Int(round(newValue))
+        }
+    }
     var isMultiplayerOrOngoing: Bool {
         playTypes.contains(.multiplayer) || playTypes.contains(.ongoing)
     }
@@ -191,6 +205,7 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         case igdbRating, rawgRating, coverURL, igdbID, firstReleaseDate, estimatedHours, isOwned, notes, todos, dateAdded
         case playTypes, isBacklog, priority, lastPlayedDate
         case completedYear, completedDate, storyProgress
+        case hoursPlayed, progressNote, noteUpdatedAt
     }
 
     nonisolated init(
@@ -217,7 +232,10 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         lastPlayedDate: Date? = nil,
         completedYear: Int? = nil,
         completedDate: Date? = nil,
-        storyProgress: GameStoryProgress? = nil
+        storyProgress: GameStoryProgress? = nil,
+        hoursPlayed: Double? = nil,
+        progressNote: String? = nil,
+        noteUpdatedAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -243,6 +261,9 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         self.completedYear = completedYear
         self.completedDate = completedDate
         self.storyProgress = storyProgress
+        self.hoursPlayed = hoursPlayed
+        self.progressNote = progressNote
+        self.noteUpdatedAt = noteUpdatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -323,6 +344,9 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         completedYear = try? container.decodeIfPresent(Int.self, forKey: .completedYear)
         completedDate = try? container.decodeIfPresent(Date.self, forKey: .completedDate)
         storyProgress = try? container.decodeIfPresent(GameStoryProgress.self, forKey: .storyProgress)
+        hoursPlayed = try? container.decodeIfPresent(Double.self, forKey: .hoursPlayed)
+        progressNote = try? container.decodeIfPresent(String.self, forKey: .progressNote)
+        noteUpdatedAt = try? container.decodeIfPresent(Date.self, forKey: .noteUpdatedAt)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -351,6 +375,9 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         try container.encodeIfPresent(completedYear, forKey: .completedYear)
         try container.encodeIfPresent(completedDate, forKey: .completedDate)
         try container.encodeIfPresent(storyProgress, forKey: .storyProgress)
+        try container.encodeIfPresent(hoursPlayed, forKey: .hoursPlayed)
+        try container.encodeIfPresent(progressNote, forKey: .progressNote)
+        try container.encodeIfPresent(noteUpdatedAt, forKey: .noteUpdatedAt)
     }
 }
 

@@ -82,9 +82,24 @@ export async function GET(request: NextRequest) {
   const offset = Math.max(Number(searchParams.get('offset')) || 0, 0);
 
 
-  // Filterparametrar
-  const platformParam = searchParams.get('platform')?.trim().toLowerCase() || '';
-  const genreParam = searchParams.get('genre')?.trim().toLowerCase() || '';
+  // Filterparametrar (stöd för enstaka eller multipla val, kommaseparerade)
+  const platformRaw = [searchParams.get('platform'), searchParams.get('platforms')]
+    .filter(Boolean)
+    .join(',');
+  const genreRaw = [searchParams.get('genre'), searchParams.get('genres')]
+    .filter(Boolean)
+    .join(',');
+
+  const platformTokens = platformRaw
+    .split(',')
+    .map((p) => p.trim().toLowerCase())
+    .filter((p) => p && p !== 'alla');
+
+  const genreTokens = genreRaw
+    .split(',')
+    .map((g) => g.trim().toLowerCase())
+    .filter((g) => g && g !== 'alla');
+
   const yearFrom = searchParams.get('year_from');
   const yearTo = searchParams.get('year_to');
   const minRating = Number(searchParams.get('min_rating')) || 0;
@@ -95,8 +110,8 @@ export async function GET(request: NextRequest) {
 
   // Om ingen fråga och inga filter, returnera tomt
   const hasFilters =
-    Boolean(platformParam) ||
-    Boolean(genreParam) ||
+    platformTokens.length > 0 ||
+    genreTokens.length > 0 ||
     Boolean(yearFrom) ||
     Boolean(yearTo) ||
     minRating > 0 ||
@@ -113,23 +128,48 @@ export async function GET(request: NextRequest) {
   try {
     const whereConditions: string[] = ['cover != null'];
 
-    // 1. Plattform-villkor
-    if (platformParam && platformParam !== 'alla') {
-      const mappedPlatformIds = PLATFORM_ID_MAP[platformParam] || (Number(platformParam) ? platformParam : null);
-      if (mappedPlatformIds) {
-        whereConditions.push(`platforms = (${mappedPlatformIds})`);
+    // 1. Multipla Plattform-villkor
+    if (platformTokens.length > 0) {
+      const allPlatformIds = new Set<string>();
+      for (const token of platformTokens) {
+        const mapped = PLATFORM_ID_MAP[token] || (Number(token) ? token : null);
+        if (mapped) {
+          mapped.split(',').forEach((id) => allPlatformIds.add(id.trim()));
+        }
+      }
+      if (allPlatformIds.size > 0) {
+        whereConditions.push(`platforms = (${Array.from(allPlatformIds).join(', ')})`);
       }
     }
 
-    // 2. Genre/Tema-villkor
-    if (genreParam && genreParam !== 'alla') {
-      const genreMapping = GENRE_ID_MAP[genreParam];
-      if (genreMapping) {
-        if (genreMapping.type === 'theme') {
-          whereConditions.push(`themes = (${genreMapping.ids})`);
-        } else {
-          whereConditions.push(`genres = (${genreMapping.ids})`);
+    // 2. Multipla Genre/Tema-villkor
+    if (genreTokens.length > 0) {
+      const genreIds = new Set<string>();
+      const themeIds = new Set<string>();
+
+      for (const token of genreTokens) {
+        const mapping = GENRE_ID_MAP[token];
+        if (mapping) {
+          if (mapping.type === 'theme') {
+            mapping.ids.split(',').forEach((id) => themeIds.add(id.trim()));
+          } else {
+            mapping.ids.split(',').forEach((id) => genreIds.add(id.trim()));
+          }
         }
+      }
+
+      const subClauses: string[] = [];
+      if (genreIds.size > 0) {
+        subClauses.push(`genres = (${Array.from(genreIds).join(', ')})`);
+      }
+      if (themeIds.size > 0) {
+        subClauses.push(`themes = (${Array.from(themeIds).join(', ')})`);
+      }
+
+      if (subClauses.length === 1) {
+        whereConditions.push(subClauses[0]);
+      } else if (subClauses.length > 1) {
+        whereConditions.push(`(${subClauses.join(' | ')})`);
       }
     }
 

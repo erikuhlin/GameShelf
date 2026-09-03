@@ -520,6 +520,7 @@ struct TrendingGameResult: Sendable {
         startYear: Int? = nil,
         endYear: Int? = nil,
         platformIDs: [Int] = [],
+        genres: [String] = [],
         genre: String? = nil,
         developer: String? = nil,
         minRating: Int = 0,
@@ -574,12 +575,24 @@ struct TrendingGameResult: Sendable {
         }
 
         // 3. Genre / Tema
-        if let g = genre, !g.isEmpty {
-            let safeG = g.replacingOccurrences(of: "\"", with: "\\\"")
-            if safeG.lowercased() == "horror" {
-                conditions.append("themes.name = \"Horror\"")
-            } else {
-                conditions.append("genres.name = \"\(safeG)\"")
+        var allGenres: [String] = genres
+        if let g = genre, !g.isEmpty, !allGenres.contains(g) {
+            allGenres.append(g)
+        }
+        if !allGenres.isEmpty {
+            var subClauses: [String] = []
+            for g in allGenres {
+                let safeG = g.replacingOccurrences(of: "\"", with: "\\\"")
+                if safeG.lowercased() == "horror" {
+                    subClauses.append("themes.name = \"Horror\"")
+                } else {
+                    subClauses.append("genres.name = \"\(safeG)\"")
+                }
+            }
+            if subClauses.count == 1 {
+                conditions.append(subClauses[0])
+            } else if subClauses.count > 1 {
+                conditions.append("(\(subClauses.joined(separator: " | ")))")
             }
         }
 

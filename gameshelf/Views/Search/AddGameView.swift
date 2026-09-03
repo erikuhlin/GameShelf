@@ -209,11 +209,11 @@ struct AddGameView: View {
                     }
                 }
 
-                // Plattform
-                if let platID = filterConfig.platformID {
+                // Plattformar
+                ForEach(Array(filterConfig.platformIDs), id: \.self) { platID in
                     let platName = platformNameFor(platID)
                     filterChip(label: "🎮 \(platName)") {
-                        filterConfig.platformID = nil
+                        filterConfig.platformIDs.remove(platID)
                         Task { await performSearchAsync() }
                     }
                 }
@@ -226,10 +226,11 @@ struct AddGameView: View {
                     }
                 }
 
-                // Genre
-                if let g = filterConfig.genre {
-                    filterChip(label: "⚔️ \(g)") {
-                        filterConfig.genre = nil
+                // Genrer
+                ForEach(Array(filterConfig.genres), id: \.self) { g in
+                    let displayName = (g == "Role-playing (RPG)") ? "RPG" : g
+                    filterChip(label: "⚔️ \(displayName)") {
+                        filterConfig.genres.remove(g)
                         Task { await performSearchAsync() }
                     }
                 }
@@ -826,13 +827,14 @@ struct AddGameView: View {
         }
 
         do {
-            let platformIDs = filterConfig.platformID.map { [$0] } ?? []
+            let platformIDs = Array(filterConfig.platformIDs)
+            let genres = Array(filterConfig.genres)
             let results = try await IGDBService.shared.discoverGames(
                 query: trimmed.isEmpty ? nil : trimmed,
                 startYear: filterConfig.startYear,
                 endYear: filterConfig.endYear,
                 platformIDs: platformIDs,
-                genre: filterConfig.genre,
+                genres: genres,
                 developer: filterConfig.developer.isEmpty ? nil : filterConfig.developer,
                 minRating: filterConfig.minRating,
                 sortOption: filterConfig.sortOption,

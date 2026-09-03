@@ -10,23 +10,58 @@ import SwiftUI
 struct SearchFilterConfig: Equatable {
     var startYear: Int? = nil
     var endYear: Int? = nil
-    var platformID: Int? = nil
-    var platformName: String? = nil
-    var genre: String? = nil
+    var platformIDs: Set<Int> = []
+    var genres: Set<String> = []
     var developer: String = ""
     var minRating: Int = 0
     var hideOwned: Bool = false
     var sortOption: DiscoverSortOption = .popularity
 
+    init(
+        startYear: Int? = nil,
+        endYear: Int? = nil,
+        platformIDs: Set<Int> = [],
+        genres: Set<String> = [],
+        developer: String = "",
+        minRating: Int = 0,
+        hideOwned: Bool = false,
+        sortOption: DiscoverSortOption = .popularity
+    ) {
+        self.startYear = startYear
+        self.endYear = endYear
+        self.platformIDs = platformIDs
+        self.genres = genres
+        self.developer = developer
+        self.minRating = minRating
+        self.hideOwned = hideOwned
+        self.sortOption = sortOption
+    }
+
+    // Bakåtkompatibilitet
+    var platformID: Int? {
+        get { platformIDs.first }
+        set {
+            if let val = newValue { platformIDs = [val] }
+            else { platformIDs.removeAll() }
+        }
+    }
+    var genre: String? {
+        get { genres.first }
+        set {
+            if let val = newValue { genres = [val] }
+            else { genres.removeAll() }
+        }
+    }
+
     var isActive: Bool {
-        startYear != nil || endYear != nil || platformID != nil || genre != nil || !developer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sortOption != .popularity || minRating > 0 || hideOwned
+        startYear != nil || endYear != nil || !platformIDs.isEmpty || !genres.isEmpty || !developer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sortOption != .popularity || minRating > 0 || hideOwned
     }
 
     var activeFilterCount: Int {
         var count = 0
         if startYear != nil || endYear != nil { count += 1 }
-        if platformID != nil { count += 1 }
-        if genre != nil { count += 1 }
+        count += platformIDs.count
+        count += genres.count
         if !developer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { count += 1 }
         if sortOption != .popularity { count += 1 }
         if minRating > 0 { count += 1 }
@@ -37,9 +72,8 @@ struct SearchFilterConfig: Equatable {
     mutating func reset() {
         startYear = nil
         endYear = nil
-        platformID = nil
-        platformName = nil
-        genre = nil
+        platformIDs.removeAll()
+        genres.removeAll()
         developer = ""
         minRating = 0
         hideOwned = false
@@ -268,34 +302,32 @@ struct AdvancedSearchFilterSheet: View {
                 }
 
                 // 3. Plattform
-                Section("Plattform") {
+                Section {
                     if !profile.platforms.isEmpty {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
                                 ForEach(Array(profile.platforms), id: \.self) { platName in
                                     if let match = availablePlatforms.first(where: { platName.localizedCaseInsensitiveContains($0.name) || $0.name.localizedCaseInsensitiveContains(platName) }) {
-                                        let isSelected = localConfig.platformID == match.id
+                                        let isSelected = localConfig.platformIDs.contains(match.id)
                                         Button {
-                                            withAnimation {
+                                            withAnimation(.snappy(duration: 0.2)) {
                                                 if isSelected {
-                                                    localConfig.platformID = nil
-                                                    localConfig.platformName = nil
+                                                    localConfig.platformIDs.remove(match.id)
                                                 } else {
-                                                    localConfig.platformID = match.id
-                                                    localConfig.platformName = match.name
+                                                    localConfig.platformIDs.insert(match.id)
                                                 }
                                             }
                                         } label: {
                                             HStack(spacing: 4) {
                                                 Image(systemName: isSelected ? "checkmark.circle.fill" : "gamecontroller.fill")
                                                     .font(.system(size: 8))
-                                                    .foregroundStyle(isSelected ? Color.white : Color.red)
+                                                    .foregroundStyle(isSelected ? Color.white : Color.blue)
                                                 Text(match.name)
                                                     .font(.caption2.weight(.semibold))
                                             }
                                             .padding(.horizontal, 10)
                                             .padding(.vertical, 6)
-                                            .background(isSelected ? Color.red : Color(.tertiarySystemFill))
+                                            .background(isSelected ? Color.blue : Color(.tertiarySystemFill))
                                             .foregroundStyle(isSelected ? Color.white : Color.primary)
                                             .clipShape(Capsule())
                                         }
@@ -307,10 +339,46 @@ struct AdvancedSearchFilterSheet: View {
                         }
                     }
 
-                    Picker("Välj plattform", selection: $localConfig.platformID) {
-                        Text("Alla plattformar").tag(nil as Int?)
-                        ForEach(availablePlatforms) { plat in
-                            Text(plat.name).tag(plat.id as Int?)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(availablePlatforms) { plat in
+                                let isSelected = localConfig.platformIDs.contains(plat.id)
+                                Button {
+                                    withAnimation(.snappy(duration: 0.2)) {
+                                        if isSelected {
+                                            localConfig.platformIDs.remove(plat.id)
+                                        } else {
+                                            localConfig.platformIDs.insert(plat.id)
+                                        }
+                                    }
+                                } label: {
+                                    HStack(spacing: 5) {
+                                        if isSelected {
+                                            Image(systemName: "checkmark")
+                                                .font(.system(size: 10, weight: .bold))
+                                        }
+                                        Text(plat.name)
+                                            .font(.caption.weight(.semibold))
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 7)
+                                    .background(isSelected ? Color.blue : Color(.tertiarySystemFill))
+                                    .foregroundStyle(isSelected ? Color.white : Color.primary)
+                                    .clipShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                } header: {
+                    HStack {
+                        Text("Plattform")
+                        if !localConfig.platformIDs.isEmpty {
+                            Spacer()
+                            Text("\(localConfig.platformIDs.count) valda")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.blue)
                         }
                     }
                 }
@@ -361,7 +429,7 @@ struct AdvancedSearchFilterSheet: View {
                 }
 
                 // 5. Genre
-                Section("Genre") {
+                Section {
                     if !profile.favoriteGenres.isEmpty {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
@@ -372,14 +440,14 @@ struct AdvancedSearchFilterSheet: View {
                                         $0.queryName.localizedCaseInsensitiveContains(favGenre)
                                     })
                                     let queryVal = match?.queryName ?? favGenre
-                                    let isSelected = localConfig.genre?.lowercased() == queryVal.lowercased()
+                                    let isSelected = localConfig.genres.contains(queryVal)
 
                                     Button {
-                                        withAnimation {
+                                        withAnimation(.snappy(duration: 0.2)) {
                                             if isSelected {
-                                                localConfig.genre = nil
+                                                localConfig.genres.remove(queryVal)
                                             } else {
-                                                localConfig.genre = queryVal
+                                                localConfig.genres.insert(queryVal)
                                             }
                                         }
                                     } label: {
@@ -403,10 +471,46 @@ struct AdvancedSearchFilterSheet: View {
                         }
                     }
 
-                    Picker("Välj genre", selection: $localConfig.genre) {
-                        Text("Alla genrer").tag(nil as String?)
-                        ForEach(availableGenres, id: \.queryName) { g in
-                            Text(g.name).tag(g.queryName as String?)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(availableGenres, id: \.queryName) { g in
+                                let isSelected = localConfig.genres.contains(g.queryName)
+                                Button {
+                                    withAnimation(.snappy(duration: 0.2)) {
+                                        if isSelected {
+                                            localConfig.genres.remove(g.queryName)
+                                        } else {
+                                            localConfig.genres.insert(g.queryName)
+                                        }
+                                    }
+                                } label: {
+                                    HStack(spacing: 5) {
+                                        if isSelected {
+                                            Image(systemName: "checkmark")
+                                                .font(.system(size: 10, weight: .bold))
+                                        }
+                                        Text(g.name)
+                                            .font(.caption.weight(.semibold))
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 7)
+                                    .background(isSelected ? Color.red : Color(.tertiarySystemFill))
+                                    .foregroundStyle(isSelected ? Color.white : Color.primary)
+                                    .clipShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                } header: {
+                    HStack {
+                        Text("Genre")
+                        if !localConfig.genres.isEmpty {
+                            Spacer()
+                            Text("\(localConfig.genres.count) valda")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.red)
                         }
                     }
                 }

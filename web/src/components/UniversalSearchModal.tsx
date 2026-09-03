@@ -52,8 +52,8 @@ interface NewsItem {
 }
 
 interface AdvancedFilters {
-  genre: string;
-  platform: string;
+  genres: string[];
+  platforms: string[];
   yearFrom: string;
   yearTo: string;
   minRating: number;
@@ -67,12 +67,12 @@ interface SmartSuggestion {
   icon: string;
   description: string;
   query?: string;
-  filters?: Partial<AdvancedFilters> & { preset?: string };
+  filters?: Partial<AdvancedFilters> & { preset?: string; genre?: string; platform?: string };
 }
 
 const EMPTY_FILTERS: AdvancedFilters = {
-  genre: '',
-  platform: '',
+  genres: [],
+  platforms: [],
   yearFrom: '',
   yearTo: '',
   minRating: 0,
@@ -247,8 +247,8 @@ export function UniversalSearchModal({
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
-    if (filters.genre) count++;
-    if (filters.platform) count++;
+    count += filters.genres.length;
+    count += filters.platforms.length;
     if (filters.yearFrom || filters.yearTo) count++;
     if (filters.minRating > 0) count++;
     if (filters.developer) count++;
@@ -326,8 +326,8 @@ export function UniversalSearchModal({
   const buildFilterUrl = useCallback((q: string, f: AdvancedFilters, preset?: string | null, pageOffset = 0) => {
     const params = new URLSearchParams();
     if (q.trim()) params.set('q', q.trim());
-    if (f.genre) params.set('genre', f.genre.toLowerCase());
-    if (f.platform) params.set('platform', f.platform);
+    if (f.genres.length > 0) params.set('genres', f.genres.map((g) => g.toLowerCase()).join(','));
+    if (f.platforms.length > 0) params.set('platforms', f.platforms.join(','));
     if (f.yearFrom) params.set('year_from', f.yearFrom);
     if (f.yearTo) params.set('year_to', f.yearTo);
     if (f.minRating > 0) params.set('min_rating', String(f.minRating));
@@ -509,10 +509,15 @@ export function UniversalSearchModal({
       setQuery(suggestion.query);
     }
     if (suggestion.filters) {
-      const { preset, ...filterPart } = suggestion.filters;
-      setFilters((prev) => ({ ...prev, ...filterPart }));
+      const { preset, genre, platform, ...filterPart } = suggestion.filters;
+      setFilters((prev) => ({
+        ...prev,
+        ...filterPart,
+        genres: filterPart.genres ?? (genre ? [genre] : []),
+        platforms: filterPart.platforms ?? (platform ? [platform] : []),
+      }));
       setActivePreset(preset || null);
-      if (Object.keys(filterPart).length > 0 || preset) {
+      if (Object.keys(filterPart).length > 0 || preset || genre || platform) {
         setShowFilters(true);
       }
     }
@@ -577,17 +582,28 @@ export function UniversalSearchModal({
 
       {/* Genre */}
       <section className="space-y-1">
-        <header className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Genre</header>
+        <header className="flex items-center justify-between text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+          <span>Genre</span>
+          {filters.genres.length > 0 && (
+            <span className="text-brand-red font-semibold lowercase">{filters.genres.length} valda</span>
+          )}
+        </header>
         <div className="space-y-0.5">
           {GENRES.map((g) => {
-            const active = filters.genre === g;
+            const active = filters.genres.includes(g);
             return (
               <button key={g}
-                onClick={() => setFilters((f) => ({ ...f, genre: active ? '' : g }))}
-                className={`w-full px-3 py-2 rounded-xl text-xs font-medium transition cursor-pointer text-left ${
+                onClick={() => setFilters((f) => ({
+                  ...f,
+                  genres: active ? f.genres.filter((x) => x !== g) : [...f.genres, g],
+                }))}
+                className={`w-full px-3 py-2 rounded-xl text-xs font-medium transition cursor-pointer text-left flex items-center justify-between ${
                   active ? 'bg-brand-red/15 text-red-300 border border-brand-red/30' : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/50'
                 }`}
-              >{g === 'Role-playing (RPG)' ? 'RPG' : g}</button>
+              >
+                <span>{g === 'Role-playing (RPG)' ? 'RPG' : g}</span>
+                {active && <Check className="w-3.5 h-3.5 text-brand-red shrink-0 ml-2" />}
+              </button>
             );
           })}
         </div>
@@ -597,17 +613,28 @@ export function UniversalSearchModal({
 
       {/* Plattform */}
       <section className="space-y-1">
-        <header className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Plattform</header>
+        <header className="flex items-center justify-between text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+          <span>Plattform</span>
+          {filters.platforms.length > 0 && (
+            <span className="text-blue-400 font-semibold lowercase">{filters.platforms.length} valda</span>
+          )}
+        </header>
         <div className="space-y-0.5">
           {PLATFORM_GROUPS.map((p) => {
-            const active = filters.platform === p.value;
+            const active = filters.platforms.includes(p.value);
             return (
               <button key={p.value}
-                onClick={() => setFilters((f) => ({ ...f, platform: active ? '' : p.value }))}
-                className={`w-full px-3 py-2 rounded-xl text-xs font-medium transition cursor-pointer text-left ${
+                onClick={() => setFilters((f) => ({
+                  ...f,
+                  platforms: active ? f.platforms.filter((x) => x !== p.value) : [...f.platforms, p.value],
+                }))}
+                className={`w-full px-3 py-2 rounded-xl text-xs font-medium transition cursor-pointer text-left flex items-center justify-between ${
                   active ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30' : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/50'
                 }`}
-              >{p.label}</button>
+              >
+                <span>{p.label}</span>
+                {active && <Check className="w-3.5 h-3.5 text-blue-400 shrink-0 ml-2" />}
+              </button>
             );
           })}
         </div>

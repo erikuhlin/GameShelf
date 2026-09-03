@@ -440,7 +440,6 @@ struct AddGameView: View {
                             .foregroundStyle(.red)
                     }
                 }
-                }
             } footer: {
                 if hasMoreResults {
                     HStack {

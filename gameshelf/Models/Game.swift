@@ -13,6 +13,15 @@ struct GameTodoItem: Identifiable, Hashable, Codable, Sendable {
     var isDone: Bool = false
 }
 
+enum GameStoryProgress: String, Codable, CaseIterable, Identifiable, Sendable {
+    case justStarted = "Precis börjat"
+    case midway = "Mitt i det"
+    case nearEnd = "Närmar mig slutet"
+    case completed = "Klar"
+
+    var id: String { rawValue }
+}
+
 struct Game: Identifiable, Hashable, Codable, Sendable {
     var id = UUID()
     var title: String
@@ -39,6 +48,7 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
     var lastPlayedDate: Date? = nil
     var completedYear: Int? = nil
     var completedDate: Date? = nil
+    var storyProgress: GameStoryProgress? = nil
 
     // MARK: - Computed Helpers
     var isMultiplayerOrOngoing: Bool {
@@ -180,7 +190,7 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         case id, title, platforms, releaseYear, genres, developers, status, rating
         case igdbRating, rawgRating, coverURL, igdbID, firstReleaseDate, estimatedHours, isOwned, notes, todos, dateAdded
         case playTypes, isBacklog, priority, lastPlayedDate
-        case completedYear, completedDate
+        case completedYear, completedDate, storyProgress
     }
 
     nonisolated init(
@@ -206,7 +216,8 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         priority: PlayPriority = .none,
         lastPlayedDate: Date? = nil,
         completedYear: Int? = nil,
-        completedDate: Date? = nil
+        completedDate: Date? = nil,
+        storyProgress: GameStoryProgress? = nil
     ) {
         self.id = id
         self.title = title
@@ -231,6 +242,7 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         self.lastPlayedDate = lastPlayedDate
         self.completedYear = completedYear
         self.completedDate = completedDate
+        self.storyProgress = storyProgress
     }
 
     init(from decoder: Decoder) throws {
@@ -310,6 +322,7 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         lastPlayedDate = try? container.decodeIfPresent(Date.self, forKey: .lastPlayedDate)
         completedYear = try? container.decodeIfPresent(Int.self, forKey: .completedYear)
         completedDate = try? container.decodeIfPresent(Date.self, forKey: .completedDate)
+        storyProgress = try? container.decodeIfPresent(GameStoryProgress.self, forKey: .storyProgress)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -337,6 +350,7 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         try container.encodeIfPresent(lastPlayedDate, forKey: .lastPlayedDate)
         try container.encodeIfPresent(completedYear, forKey: .completedYear)
         try container.encodeIfPresent(completedDate, forKey: .completedDate)
+        try container.encodeIfPresent(storyProgress, forKey: .storyProgress)
     }
 }
 

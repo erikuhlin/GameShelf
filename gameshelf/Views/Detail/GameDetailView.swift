@@ -60,6 +60,8 @@ struct GameDetailView: View {
     @State private var showingSimilarGamesSheet = false
     @State private var showingLibraryStatusSheet = false
     @State private var showingCollectionsSheet = false
+    @State private var showingMoveToLibraryDialog = false
+    @State private var showingRemoveWishlistAlert = false
     @State private var selectedVideo: IGDBVideo? = nil
 
     @FocusState private var isNotesFocused: Bool
@@ -176,85 +178,15 @@ struct GameDetailView: View {
                     releaseYear: effectiveReleaseYear
                 )
 
-                // --- 2. HUVUDÅTGÄRDER / STATUS & FLIKAR ---
-                if let g = currentGame {
-                    // Ägt spel: Permanent 3-kolumns statuskort
+                // --- 2. HUVUDÅTGÄRDER / STATUS & FLIKAR (De 3 tillstånden) ---
+                if let g = currentGame, g.isOwned {
+                    // TILLSTÅND 1: I BIBLIOTEKET
                     libraryGameHeaderBar(g)
-
-                    if profile.isTargetGoal(gameID: g.id) || g.status == .completed {
-                        HStack(spacing: 8) {
-                            if profile.isTargetGoal(gameID: g.id) {
-                                HStack(spacing: 5) {
-                                    Image(systemName: "target")
-                                        .font(.caption.bold())
-                                        .foregroundStyle(.yellow)
-                                    Text("Fokusmål 🎯")
-                                        .font(.caption.bold())
-                                        .foregroundStyle(.yellow)
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(Color.yellow.opacity(0.12), in: Capsule())
-                                .overlay(Capsule().stroke(Color.yellow.opacity(0.35), lineWidth: 0.8))
-                            }
-
-                            if g.status == .completed {
-                                Menu {
-                                    Button("Ej angivet (Räkna inte i årets mål)") {
-                                        var copy = g
-                                        copy.completedYear = nil
-                                        updateLocal(copy)
-                                    }
-                                    let currentY = Calendar.current.component(.year, from: Date())
-                                    Button("\(String(currentY)) (I år)") {
-                                        var copy = g
-                                        copy.completedYear = currentY
-                                        if copy.completedDate == nil { copy.completedDate = Date() }
-                                        updateLocal(copy)
-                                    }
-                                    ForEach((currentY - 10..<currentY).reversed(), id: \.self) { y in
-                                        Button(String(y)) {
-                                            var copy = g
-                                            copy.completedYear = y
-                                            updateLocal(copy)
-                                        }
-                                    }
-                                } label: {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "flag.checkered")
-                                            .font(.caption2.bold())
-                                            .foregroundStyle(.teal)
-                                        Text(g.completedYear != nil ? "Klarat \(String(g.completedYear!))" : "Klarat (år ej valt)")
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(.primary)
-                                        Image(systemName: "chevron.down")
-                                            .font(.system(size: 9, weight: .bold))
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(Color.teal.opacity(0.12), in: Capsule())
-                                    .overlay(Capsule().stroke(Color.teal.opacity(0.35), lineWidth: 0.8))
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                            Spacer()
-                        }
-                    }
-
-                    // Två-delad segmenterad flikväljare
+                    focusGoalAndCompletedBadgeBar(g)
                     libraryTabsBar
 
                     if isLoadingRemote {
-                        HStack(spacing: 8) {
-                            ProgressView()
-                                .controlSize(.small)
-                            Text("Hämtar utökad spelinformation...")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 4)
+                        remoteLoadingIndicator
                     } else if let errorMsg = remoteErrorMessage {
                         inlineErrorCard(message: errorMsg)
                     }
@@ -266,11 +198,22 @@ struct GameDetailView: View {
                     case .gameFacts:
                         gameFactsContent
                     }
-                } else if let r = remote {
-                    // Utforska: Lägg till + Önskelista knappar
-                    exploreGameHeaderBar(r)
+                } else if let g = currentGame, !g.isOwned {
+                    // TILLSTÅND 2: ÖNSKELISTA
+                    wishlistHeaderStrip(g)
+                    wishlistActionsBar(g)
 
-                    // Utforska: Sömlöst flöde (Media -> Om spelet -> Spellägen -> HLTB -> Serie -> Liknande -> Studio)
+                    if isLoadingRemote {
+                        remoteLoadingIndicator
+                    } else if let errorMsg = remoteErrorMessage {
+                        inlineErrorCard(message: errorMsg)
+                    }
+
+                    gameFactsContent
+                } else if let r = remote {
+                    // TILLSTÅND 3: EJ TILLAGD (Data från IGDB)
+                    unaddedActionsBar(r)
+
                     gameFactsContent
                 } else {
                     if isLoadingRemote {
@@ -353,6 +296,60 @@ struct GameDetailView: View {
             if let g = currentGame {
                 platformFormatSheet(g)
             }
+        }
+        .confirmationDialog(
+            "Flytta till Biblioteket",
+            isPresented: $showingMoveToLibraryDialog,
+            titleVisibility: .visible
+        ) {
+            if let g = currentGame {
+                Button("🎮 Börja spela nu") {
+                    var copy = g
+                    copy.isOwned = true
+                    copy.status = .playing
+                    copy.isBacklog = false
+                    copy.lastPlayedDate = Date()
+                    updateLocal(copy)
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                }
+
+                Button("📦 Lägg i Backlog") {
+                    var copy = g
+                    copy.isOwned = true
+                    copy.status = .notStarted
+                    copy.isBacklog = true
+                    updateLocal(copy)
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                }
+
+                Button("🏆 Har redan klarat") {
+                    var copy = g
+                    copy.isOwned = true
+                    copy.status = .completed
+                    let currentY = Calendar.current.component(.year, from: Date())
+                    copy.completedYear = currentY
+                    copy.completedDate = Date()
+                    updateLocal(copy)
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                }
+
+                Button("Avbryt", role: .cancel) {}
+            }
+        }
+        .alert("Ta bort från önskelistan?", isPresented: $showingRemoveWishlistAlert) {
+            Button("Ta bort", role: .destructive) {
+                if let g = currentGame {
+                    let igdbID = g.igdbID
+                    store.games.removeAll(where: { $0.id == g.id })
+                    if let id = igdbID {
+                        mode = .igdb(id: id)
+                    }
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                }
+            }
+            Button("Avbryt", role: .cancel) {}
+        } message: {
+            Text("Spelet tas bort från din önskelista.")
         }
         .sheet(item: $selectedGuide) { guide in
             SafariView(url: guide.url)
@@ -890,44 +887,192 @@ struct GameDetailView: View {
         return .secondary
     }
 
-    private func exploreGameHeaderBar(_ r: IGDBGame) -> some View {
+    private func unaddedActionsBar(_ r: IGDBGame) -> some View {
         HStack(spacing: 10) {
             // 1. Lägg till i biblioteket
             Button {
                 showingLibraryStatusSheet = true
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "plus.circle.fill")
+                    Image(systemName: "plus")
                         .font(.subheadline.bold())
                     Text("Lägg till i biblioteket")
                         .font(.subheadline.bold())
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+                .padding(.vertical, 14)
+                .background(Color.red)
+                .foregroundStyle(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.red)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .buttonStyle(.plain)
 
             // 2. Snabbknapp: Önskelista
             Button {
                 addRemoteToWishlist(r)
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "heart.fill")
+                    Image(systemName: "heart")
                         .font(.subheadline)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.primary)
                     Text("Önskelista")
                         .font(.subheadline.bold())
                         .foregroundStyle(.primary)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 14)
                 .background(Color(.secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color(.separator), lineWidth: 1)
+                )
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private func wishlistHeaderStrip(_ g: Game) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "heart.fill")
+                .foregroundStyle(.red)
+                .font(.system(size: 16))
+
+            let dateStr = formattedDateAdded(g.dateAdded)
+            HStack(spacing: 4) {
+                Text("På önskelistan")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
+                Text("·")
+                    .foregroundStyle(.secondary)
+                Text("Tillagd \(dateStr)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(14)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func wishlistActionsBar(_ g: Game) -> some View {
+        HStack(spacing: 10) {
+            // Flytta till Biblioteket
+            Button {
+                showingMoveToLibraryDialog = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.right")
+                        .font(.subheadline.bold())
+                    Text("Flytta till Biblioteket")
+                        .font(.subheadline.bold())
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Color.red)
+                .foregroundStyle(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            }
+            .buttonStyle(.plain)
+
+            // Hjärt-knapp (toggle / ta bort från önskelistan)
+            Button {
+                showingRemoveWishlistAlert = true
+            } label: {
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.red)
+                    .frame(width: 48, height: 48)
+                    .background(Color.red.opacity(0.15))
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.red.opacity(0.4), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func formattedDateAdded(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "sv_SE")
+        formatter.dateFormat = "d MMM"
+        return formatter.string(from: date)
+    }
+
+    @ViewBuilder
+    private func focusGoalAndCompletedBadgeBar(_ g: Game) -> some View {
+        if profile.isTargetGoal(gameID: g.id) || g.status == .completed {
+            HStack(spacing: 8) {
+                if profile.isTargetGoal(gameID: g.id) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "target")
+                            .font(.caption.bold())
+                            .foregroundStyle(.yellow)
+                        Text("Fokusmål 🎯")
+                            .font(.caption.bold())
+                            .foregroundStyle(.yellow)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.yellow.opacity(0.12), in: Capsule())
+                    .overlay(Capsule().stroke(Color.yellow.opacity(0.35), lineWidth: 0.8))
+                }
+
+                if g.status == .completed {
+                    Menu {
+                        Button("Ej angivet (Räkna inte i årets mål)") {
+                            var copy = g
+                            copy.completedYear = nil
+                            updateLocal(copy)
+                        }
+                        let currentY = Calendar.current.component(.year, from: Date())
+                        Button("\(String(currentY)) (I år)") {
+                            var copy = g
+                            copy.completedYear = currentY
+                            if copy.completedDate == nil { copy.completedDate = Date() }
+                            updateLocal(copy)
+                        }
+                        ForEach((currentY - 10..<currentY).reversed(), id: \.self) { y in
+                            Button(String(y)) {
+                                var copy = g
+                                copy.completedYear = y
+                                updateLocal(copy)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "flag.checkered")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.teal)
+                            Text(g.completedYear != nil ? "Klarat \(String(g.completedYear!))" : "Klarat (år ej valt)")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.primary)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.teal.opacity(0.12), in: Capsule())
+                        .overlay(Capsule().stroke(Color.teal.opacity(0.35), lineWidth: 0.8))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Spacer()
+            }
+        }
+    }
+
+    private var remoteLoadingIndicator: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+            Text("Hämtar utökad spelinformation...")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
     }
 
     private func addRemoteToWishlist(_ r: IGDBGame) {
@@ -984,7 +1129,6 @@ struct GameDetailView: View {
             } else {
                 multiplayerPlaytimeCard(g)
             }
-            guidesSection
             notesCard(g)
             collectionsCard(g)
             deleteGameButton(g)
@@ -1005,150 +1149,173 @@ struct GameDetailView: View {
                 trailersSection(videos)
             }
 
-            // 3. Hur långt är spelet? (HowLongToBeat)
+            // 3. Speltid (Referens · HowLongToBeat)
             timeToBeatSection(remote?.timeToBeat)
 
-            // 4. Spelserie & Franchise (och DLCs)
-            franchiseSection
-            if !allDLCsAndExpansions.isEmpty {
-                dlcsSection(allDLCsAndExpansions)
-            }
-            if (remote?.franchiseGames.isEmpty ?? true) && allDLCsAndExpansions.isEmpty {
-                standaloneTitleCard
-            }
+            // 4. Guider & Resurser (Genomspelning & Community)
+            guidesSection
 
-            // 5. Liknande spel
-            if let similar = remote?.similarGames, !similar.isEmpty {
-                similarGamesSection(similar)
-            }
+            // 5. Relaterat (Spelserie, DLC & Expansioner, Liknande spel eller Fristående titel)
+            relatedSection
 
-            // 6. Studio & Utgivare & Fakta
-            studioSection
-            factsSection
+            // 6. Fakta & Betyg (Konsoliderad)
+            factsAndRatingsSection
         }
     }
 
-    // MARK: - Spelframstegstracker (Alternativ C)
+    // MARK: - Spelframstegstracker (Kvalitativa milstolpar & HLTB-band)
 
     private func playtimeProgressCard(_ g: Game) -> some View {
         let loggedHours = g.estimatedHours ?? 0
-        let hltbHours = remote?.timeToBeat?.mainStoryHours ?? remote?.timeToBeat?.mainExtraHours ?? 0
-        let currentProgress: Double = hltbHours > 0 ? min(1.0, Double(loggedHours) / Double(hltbHours)) : (g.status == .completed ? 1.0 : (loggedHours > 0 ? min(1.0, Double(loggedHours) / 40.0) : 0.0))
-        let percent = g.status == .completed ? 100 : Int(round(currentProgress * 100))
+        let mainHours = remote?.timeToBeat?.mainStoryHours ?? 0
+        let extraHours = remote?.timeToBeat?.mainExtraHours ?? 0
+        let compHours = remote?.timeToBeat?.completionistHours ?? 0
+        let currentMilestone = g.storyProgress ?? (g.status == .completed ? .completed : nil)
 
         return detailCard(title: "Spelframsteg") {
-            VStack(alignment: .leading, spacing: 14) {
-                // Topp: Procent och återstående tid
-                HStack(alignment: .firstTextBaseline) {
-                    HStack(spacing: 6) {
-                        Text("\(percent)%")
+            VStack(alignment: .leading, spacing: 16) {
+                // 1. Speltid (Hård siffra med justeringsknappar)
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(loggedHours > 0 ? "\(loggedHours) timmar" : "0 timmar")
                             .font(.system(size: 26, weight: .bold, design: .rounded))
-                            .foregroundStyle(percent == 100 ? Color.green : Color.primary)
-                        Text(percent == 100 ? "Slutfört 🎉" : "genomfört")
-                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Color.primary)
+                        Text(g.status == .completed ? "Klarat 🎉" : (loggedHours > 0 ? "Spelat hittills" : "Ej påbörjat"))
+                            .font(.caption.weight(.medium))
                             .foregroundStyle(.secondary)
                     }
 
                     Spacer()
 
-                    if percent == 100 {
-                        Text("Huvudstory klar")
+                    HStack(spacing: 8) {
+                        if loggedHours > 0 {
+                            Button("-1h") {
+                                adjustPlaytime(by: -1, for: g)
+                            }
                             .font(.caption.bold())
-                            .foregroundStyle(.green)
-                    } else if hltbHours > 0 {
-                        let remaining = max(0, hltbHours - loggedHours)
-                        if remaining > 0 {
-                            Text("~ca \(remaining)h kvar")
-                                .font(.caption.bold())
-                                .foregroundStyle(.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(Color(.tertiarySystemFill))
+                            .foregroundStyle(.secondary)
+                            .clipShape(Capsule())
+                            .buttonStyle(.plain)
                         }
+
+                        Button("+1h") {
+                            adjustPlaytime(by: 1, for: g)
+                        }
+                        .font(.caption.bold())
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(Color(.tertiarySystemFill))
+                        .foregroundStyle(.primary)
+                        .clipShape(Capsule())
+                        .buttonStyle(.plain)
+
+                        Button("+5h") {
+                            adjustPlaytime(by: 5, for: g)
+                        }
+                        .font(.caption.bold())
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(Color.red.opacity(0.15))
+                        .foregroundStyle(.red)
+                        .clipShape(Capsule())
+                        .buttonStyle(.plain)
                     }
                 }
 
-                // Progress bar / Slider
-                VStack(spacing: 6) {
-                    Slider(
-                        value: Binding<Double>(
-                            get: { currentProgress },
-                            set: { newVal in
-                                let targetH = hltbHours > 0 ? hltbHours : 30
-                                let calculatedHours = Int(round(newVal * Double(targetH)))
+                // 2. Kvalitativ milstolpe (4 knappar utan procentslider)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Milstolpe i storyn")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+
+                    HStack(spacing: 6) {
+                        ForEach(GameStoryProgress.allCases) { milestone in
+                            let isSelected = (currentMilestone == milestone)
+                            Button {
                                 var copy = g
-                                copy.estimatedHours = calculatedHours
-                                if newVal >= 0.99 && copy.status != .completed {
+                                copy.storyProgress = milestone
+                                if milestone == .completed && copy.status != .completed {
                                     copy.status = .completed
                                     if copy.completedYear == nil {
                                         copy.completedYear = Calendar.current.component(.year, from: Date())
                                         copy.completedDate = Date()
                                     }
-                                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                                } else {
-                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                } else if milestone != .completed && copy.status == .completed {
+                                    copy.status = .playing
                                 }
                                 updateLocal(copy)
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            } label: {
+                                Text(milestone.rawValue)
+                                    .font(.system(size: 11.5, weight: .semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 9)
+                                    .background(isSelected ? (milestone == .completed ? Color.green : Color.red) : Color(.tertiarySystemFill))
+                                    .foregroundStyle(isSelected ? Color.white : Color.primary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                             }
-                        ),
-                        in: 0.0...1.0
-                    )
-                    .tint(percent == 100 ? .green : .red)
-
-                    if hltbHours > 0 {
-                        HStack {
-                            Text("\(loggedHours) timmar spelat")
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text("Genomsnitt ~\(hltbHours)h (HowLongToBeat)")
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(.secondary)
+                            .buttonStyle(.plain)
                         }
                     }
                 }
 
-                // Snabba milstolpsknappar
-                HStack(spacing: 8) {
-                    ForEach([25, 50, 75], id: \.self) { pct in
-                        let isCurrent = percent >= pct && percent < pct + 25
-                        Button("\(pct)%") {
-                            let targetH = hltbHours > 0 ? hltbHours : 30
-                            let hours = Int(round(Double(pct) / 100.0 * Double(targetH)))
-                            var copy = g
-                            copy.estimatedHours = hours
-                            if copy.status == .completed {
-                                copy.status = .playing
-                            }
-                            updateLocal(copy)
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                        }
-                        .font(.caption.bold())
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(isCurrent ? Color.red.opacity(0.18) : Color(.tertiarySystemFill))
-                        .foregroundStyle(isCurrent ? Color.red : Color.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
+                // 3. HLTB-band (Referens för var speltiden landar)
+                if mainHours > 0 || extraHours > 0 || compHours > 0 {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Relativt HowLongToBeat")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
 
-                    Button("✓ 100% Klar") {
-                        let targetH = hltbHours > 0 ? hltbHours : 30
-                        var copy = g
-                        copy.estimatedHours = targetH
-                        copy.status = .completed
-                        if copy.completedYear == nil {
-                            copy.completedYear = Calendar.current.component(.year, from: Date())
-                            copy.completedDate = Date()
+                        VStack(spacing: 8) {
+                            if mainHours > 0 {
+                                progressHLTBBandRow(name: "Main Story", targetHours: mainHours, loggedHours: loggedHours, icon: "📖")
+                            }
+                            if extraHours > 0 {
+                                progressHLTBBandRow(name: "Main + Extra", targetHours: extraHours, loggedHours: loggedHours, icon: "➕")
+                            }
+                            if compHours > 0 {
+                                progressHLTBBandRow(name: "Completionist", targetHours: compHours, loggedHours: loggedHours, icon: "🏆")
+                            }
                         }
-                        updateLocal(copy)
-                        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
                     }
-                    .font(.caption.bold())
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(percent == 100 ? Color.green.opacity(0.25) : Color.green.opacity(0.12))
-                    .foregroundStyle(Color.green)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
             }
         }
+    }
+
+    private func progressHLTBBandRow(name: String, targetHours: Int, loggedHours: Int, icon: String) -> some View {
+        VStack(spacing: 4) {
+            HStack {
+                Text(icon)
+                    .font(.caption2)
+                Text(name)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(targetHours) tim")
+                    .font(.caption.bold())
+                    .foregroundStyle(.primary)
+            }
+
+            let ratio = targetHours > 0 ? min(1.0, Double(loggedHours) / Double(targetHours)) : 0.0
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color(.tertiarySystemFill))
+                        .frame(height: 5)
+                    Capsule()
+                        .fill(ratio >= 1.0 ? Color.green : (ratio > 0 ? Color.red : Color.clear))
+                        .frame(width: max(0, min(geo.size.width, geo.size.width * CGFloat(ratio))), height: 5)
+                }
+            }
+            .frame(height: 5)
+        }
+        .padding(8)
+        .background(Color(.tertiarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private func multiplayerPlaytimeCard(_ g: Game) -> some View {
@@ -1305,55 +1472,179 @@ struct GameDetailView: View {
         return "gamecontroller.fill"
     }
 
-    // MARK: - Spelserie & Franchise
+    // MARK: - Relaterat (Spelserie, DLC & Expansioner, Liknande spel eller Fristående titel)
 
     @ViewBuilder
-    private var franchiseSection: some View {
-        if let remote = remote, !remote.franchiseGames.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
+    private var relatedSection: some View {
+        let franchiseGames = remote?.franchiseGames ?? []
+        let dlcs = allDLCsAndExpansions
+        let similar = remote?.similarGames ?? []
+        let franchiseName = remote?.franchiseName ?? "Spelserie"
+        let isFranchise = !franchiseGames.isEmpty || !dlcs.isEmpty
+
+        if isFranchise || !similar.isEmpty {
+            VStack(alignment: .leading, spacing: 18) {
                 HStack {
-                    HStack(spacing: 6) {
-                        Image(systemName: "square.stack.3d.up.fill")
-                            .foregroundStyle(.red)
-                        Text(remote.franchiseName != nil ? "Spelserie: \(remote.franchiseName!)" : "Spelserie & Franchise")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-                    }
-
+                    Text("Relaterat")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
                     Spacer()
-
-                    Text("\(remote.franchiseGames.count) spel")
-                        .font(.caption.bold())
-                        .foregroundStyle(.secondary)
                 }
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(remote.franchiseGames) { game in
-                            NavigationLink(destination: GameDetailView(igdbID: game.id)) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    CoverView(title: game.name ?? "", url: game.coverURL, corner: 10, height: 135)
-                                        .frame(width: 95, height: 135)
-                                        .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
-
-                                    Text(game.name ?? "")
+                if isFranchise {
+                    // Spelserie
+                    if !franchiseGames.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                HStack(spacing: 6) {
+                                    Text("◆")
                                         .font(.caption.bold())
+                                        .foregroundStyle(.red)
+                                    Text("Spelserie: \(franchiseName)")
+                                        .font(.subheadline.bold())
                                         .foregroundStyle(.primary)
-                                        .lineLimit(2)
-                                        .multilineTextAlignment(.leading)
+                                }
+                                Spacer()
+                                Text("\(franchiseGames.count) spel")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
 
-                                    if let year = game.releaseYear {
-                                        Text(String(year))
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 12) {
+                                    ForEach(franchiseGames) { game in
+                                        NavigationLink(destination: GameDetailView(igdbID: game.id)) {
+                                            VStack(alignment: .leading, spacing: 6) {
+                                                CoverView(title: game.name ?? "", url: game.coverURL, corner: 10, height: 128)
+                                                    .frame(width: 96, height: 128)
+                                                    .shadow(color: .black.opacity(0.18), radius: 4, x: 0, y: 2)
+
+                                                Text(game.name ?? "")
+                                                    .font(.caption.bold())
+                                                    .foregroundStyle(.primary)
+                                                    .lineLimit(2)
+                                                    .multilineTextAlignment(.leading)
+
+                                                if let year = game.releaseYear {
+                                                    Text(String(year))
+                                                        .font(.caption2)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                            }
+                                            .frame(width: 96)
+                                        }
+                                        .buttonStyle(.plain)
                                     }
                                 }
-                                .frame(width: 95)
+                                .padding(.vertical, 2)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
-                    .padding(.vertical, 2)
+
+                    // DLC & Expansioner
+                    if !dlcs.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                HStack(spacing: 6) {
+                                    Text("◈")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.purple)
+                                    Text("DLC & Expansioner")
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(.primary)
+                                }
+                                Spacer()
+                                Text("(\(dlcs.count))")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 12) {
+                                    ForEach(dlcs) { item in
+                                        NavigationLink(destination: GameDetailView(igdbID: item.id)) {
+                                            VStack(alignment: .leading, spacing: 6) {
+                                                CoverView(title: item.name ?? "DLC", url: item.coverURL, corner: 10, height: 62)
+                                                    .frame(width: 110, height: 62)
+                                                    .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
+
+                                                Text(item.name ?? "DLC")
+                                                    .font(.caption2.bold())
+                                                    .lineLimit(2)
+                                                    .multilineTextAlignment(.leading)
+                                                    .foregroundStyle(.primary)
+                                                    .frame(width: 110, alignment: .topLeading)
+                                            }
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                .padding(.vertical, 2)
+                            }
+                        }
+                    }
+                } else {
+                    // Fristående titel
+                    HStack(spacing: 12) {
+                        Text("⧉")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Fristående titel")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.primary)
+                            Text("Inga ytterligare expansioner eller serietitlar listade på IGDB.")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(.tertiarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+
+                // Liknande spel
+                if !similar.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("LIKNANDE SPEL")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.secondary)
+                                .tracking(0.6)
+                            Spacer()
+                            Button {
+                                showingSimilarGamesSheet = true
+                            } label: {
+                                Text("Visa alla")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.red)
+                            }
+                        }
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(similar) { game in
+                                    NavigationLink(destination: GameDetailView(igdbID: game.id)) {
+                                        VStack(alignment: .leading, spacing: 6) {
+                                            CoverView(title: game.name ?? "", url: game.coverURL, corner: 10, height: 128)
+                                                .frame(width: 96, height: 128)
+                                                .shadow(color: .black.opacity(0.18), radius: 4, x: 0, y: 2)
+
+                                            Text(game.name ?? "")
+                                                .font(.caption.bold())
+                                                .foregroundStyle(.primary)
+                                                .lineLimit(2)
+                                                .multilineTextAlignment(.leading)
+                                        }
+                                        .frame(width: 96)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
                 }
             }
             .padding(16)
@@ -1362,126 +1653,128 @@ struct GameDetailView: View {
         }
     }
 
-    // MARK: - Guider & Resurser
+    // MARK: - Guider & Resurser (Genomspelning & Community)
 
+    @ViewBuilder
     private var guidesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                HStack(spacing: 6) {
-                    Image(systemName: "safari.fill")
-                        .foregroundStyle(.red)
-                    Text("Guider & Resurser")
-                        .font(.headline)
+        if let title = currentGame?.title ?? remote?.name {
+            let encoded = title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? title
+
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    HStack(spacing: 6) {
+                        Image(systemName: "safari.fill")
+                            .foregroundStyle(.red)
+                        Text("Guider & Resurser")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                    }
+
+                    Spacer()
+
+                    Text("Öppnas i appen")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                // 1. GENOMSPELNING
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("GENOMSPELNING")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+                        .tracking(0.6)
+
+                    if let url = URL(string: "https://www.google.com/search?q=\(encoded)+IGN+walkthrough+guide") {
+                        guideItemRow(
+                            title: "IGN Walkthrough",
+                            subtitle: "Komplett guide & kapitelgenomgång",
+                            icon: "book.fill",
+                            color: .red,
+                            url: url
+                        )
+                    }
+
+                    if let url = URL(string: "https://www.google.com/search?q=\(encoded)+PowerPyx+trophy+guide") {
+                        guideItemRow(
+                            title: "PowerPyx Trophy Guide",
+                            subtitle: "Troféer & 100%-genomgång",
+                            icon: "trophy.fill",
+                            color: .yellow,
+                            url: url
+                        )
+                    }
+
+                    if let url = URL(string: "https://www.google.com/search?q=\(encoded)+interactive+map") {
+                        guideItemRow(
+                            title: "Interaktiv Karta",
+                            subtitle: "Samlarobjekt, bossar & kartor",
+                            icon: "map.fill",
+                            color: .green,
+                            url: url
+                        )
+                    }
+                }
+
+                // 2. COMMUNITY
+                let cleanCommunity = title.components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
+                if let url = URL(string: "https://www.reddit.com/r/\(cleanCommunity)/") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("COMMUNITY")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.secondary)
+                            .tracking(0.6)
+                            .padding(.top, 4)
+
+                        guideItemRow(
+                            title: "Reddit Community",
+                            subtitle: "Diskussioner, builds & tips",
+                            icon: "bubble.left.and.bubble.right.fill",
+                            color: .orange,
+                            url: url
+                        )
+                    }
+                }
+            }
+            .padding(16)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+    }
+
+    private func guideItemRow(title: String, subtitle: String, icon: String, color: Color, url: URL) -> some View {
+        Button {
+            selectedGuide = GuideWebItem(title: title, subtitle: subtitle, icon: icon, color: color, url: url)
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(color.opacity(0.18))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: icon)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(color)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline.bold())
                         .foregroundStyle(.primary)
+                    Text(subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
 
                 Spacer()
 
-                Text("Öppnas i appen")
-                    .font(.caption2)
+                Image(systemName: "arrow.up.right")
+                    .font(.caption.bold())
                     .foregroundStyle(.secondary)
             }
-
-            VStack(spacing: 8) {
-                ForEach(guideOptions) { guide in
-                    Button {
-                        selectedGuide = guide
-                    } label: {
-                        HStack(spacing: 12) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(guide.color.opacity(0.15))
-                                    .frame(width: 38, height: 38)
-                                Image(systemName: guide.icon)
-                                    .font(.subheadline.bold())
-                                    .foregroundStyle(guide.color)
-                            }
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(guide.title)
-                                    .font(.subheadline.bold())
-                                    .foregroundStyle(.primary)
-                                Text(guide.subtitle)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer()
-
-                            Image(systemName: "arrow.up.right")
-                                .font(.caption.bold())
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(10)
-                        .background(Color(.tertiarySystemFill))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
+            .padding(10)
+            .background(Color(.tertiarySystemFill))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
-        .padding(16)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-
-    private var guideOptions: [GuideWebItem] {
-        guard let title = currentGame?.title ?? remote?.name else { return [] }
-        let encoded = title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? title
-        var list: [GuideWebItem] = []
-
-        if let url = URL(string: "https://www.google.com/search?q=\(encoded)+IGN+walkthrough+guide") {
-            list.append(GuideWebItem(
-                title: "IGN Walkthrough",
-                subtitle: "Komplett guide & kapitelgenomgång",
-                icon: "book.fill",
-                color: .red,
-                url: url
-            ))
-        }
-
-        if let url = URL(string: "https://www.google.com/search?q=\(encoded)+PowerPyx+trophy+guide") {
-            list.append(GuideWebItem(
-                title: "PowerPyx Trophy Guide",
-                subtitle: "Troféer & 100% achievements",
-                icon: "trophy.fill",
-                color: .yellow,
-                url: url
-            ))
-        }
-
-        if let url = URL(string: "https://howlongtobeat.com/?q=\(encoded)") {
-            list.append(GuideWebItem(
-                title: "HowLongToBeat",
-                subtitle: "Detaljerad tidsstatistik & stilar",
-                icon: "clock.fill",
-                color: .blue,
-                url: url
-            ))
-        }
-
-        if let url = URL(string: "https://www.google.com/search?q=\(encoded)+interactive+map") {
-            list.append(GuideWebItem(
-                title: "Interaktiv Karta",
-                subtitle: "Samlarobjekt, bossar & kartor",
-                icon: "map.fill",
-                color: .green,
-                url: url
-            ))
-        }
-
-        let cleanCommunity = title.components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
-        if let url = URL(string: "https://www.reddit.com/r/\(cleanCommunity)/") {
-            list.append(GuideWebItem(
-                title: "Reddit Community",
-                subtitle: "Diskussioner, builds & tips",
-                icon: "bubble.left.and.bubble.right.fill",
-                color: .orange,
-                url: url
-            ))
-        }
-
-        return list
+        .buttonStyle(.plain)
     }
 
 
@@ -1826,26 +2119,9 @@ struct GameDetailView: View {
         let title = currentGame?.title ?? remote?.name ?? "Spel"
         let genres = currentGame?.genres ?? remote?.genres?.map(\.name) ?? []
         let gameModes = remote?.gameModes?.map(\.name) ?? []
-
         let isMultiplayerOnly = isPureMultiplayer(gameModes: gameModes, gameTitle: title, genres: genres)
 
-        let mainStr: String
-        let extraStr: String
-        let compStr: String
-
-        if isMultiplayerOnly {
-            mainStr = "—"
-            extraStr = "—"
-            compStr = "—"
-        } else if let ttb = ttb, (ttb.hastily ?? 0 > 0 || ttb.normally ?? 0 > 0 || ttb.completely ?? 0 > 0) {
-            mainStr = ttb.mainStoryFormatted
-            extraStr = ttb.mainExtraFormatted
-            compStr = ttb.completionistFormatted
-        } else {
-            mainStr = "—"
-            extraStr = "—"
-            compStr = "—"
-        }
+        let hasData = !isMultiplayerOnly && ttb != nil && ((ttb?.hastily ?? 0) > 0 || (ttb?.normally ?? 0) > 0 || (ttb?.completely ?? 0) > 0)
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -1863,15 +2139,61 @@ struct GameDetailView: View {
                         .background(Color.blue.opacity(0.15))
                         .foregroundStyle(.blue)
                         .clipShape(Capsule())
+                } else if hasData {
+                    Text("Referens · HowLongToBeat")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
 
-            HStack(spacing: 10) {
-                timeCard(icon: "book.fill", title: "Main Story", value: mainStr)
-                timeCard(icon: "plus.square.fill", title: "Main + Extra", value: extraStr)
-                timeCard(icon: "trophy.fill", title: "100%", value: compStr)
+            if isMultiplayerOnly {
+                HStack(spacing: 8) {
+                    Image(systemName: "person.2.fill")
+                        .foregroundStyle(.blue)
+                    Text("Flerspelarspel – ingen fast kampanjtid")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            } else if let ttb = ttb, hasData {
+                VStack(spacing: 8) {
+                    refBandRow(icon: "📖", name: "Main Story", val: ttb.mainStoryFormatted)
+                    refBandRow(icon: "➕", name: "Main + Extra", val: ttb.mainExtraFormatted)
+                    refBandRow(icon: "🏆", name: "Completionist", val: ttb.completionistFormatted)
+                }
+            } else {
+                Text("Ingen speltidsstatistik tillgänglig än.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
             }
         }
+        .padding(16)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func refBandRow(icon: String, name: String, val: String) -> some View {
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color(.tertiarySystemFill))
+                    .frame(width: 28, height: 28)
+                Text(icon)
+                    .font(.system(size: 13))
+            }
+            Text(name)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(val)
+                .font(.subheadline.bold())
+                .foregroundStyle(.primary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(.tertiarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private func isPureMultiplayer(gameModes: [String], gameTitle: String, genres: [String]) -> Bool {
@@ -1908,283 +2230,153 @@ struct GameDetailView: View {
         return false
     }
 
-    private func timeCard(icon: String, title: String, value: String) -> some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.subheadline)
-                .foregroundStyle(.red)
+    // MARK: - Fakta & Betyg (Konsoliderad tabell)
 
-            VStack(spacing: 2) {
-                Text(title)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+    private var factsAndRatingsSection: some View {
+        let playerRating: String? = {
+            if let tr = remote?.totalRating { return String(format: "%.1f/10", tr / 10.0) }
+            if let ir = currentGame?.igdbRating { return String(format: "%.1f/10", ir) }
+            return nil
+        }()
 
-                Text(value)
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
+        let criticRating: String? = {
+            if let cr = remote?.aggregatedRating { return "\(Int(round(cr)))/100" }
+            return nil
+        }()
+
+        let genresText: String? = {
+            if let g = currentGame?.genres, !g.isEmpty {
+                return g.joined(separator: ", ")
             }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .padding(.horizontal, 6)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
+            if let g = remote?.genres?.map(\.name), !g.isEmpty {
+                return g.joined(separator: ", ")
+            }
+            return nil
+        }()
 
-    @ViewBuilder
-    private var studioSection: some View {
-        let devCompanies = remote?.involvedCompanies?.filter { $0.developer == true } ?? []
-        let pubCompanies = remote?.involvedCompanies?.filter { $0.publisher == true } ?? []
+        let platformsText: String? = {
+            if let plats = remote?.platforms?.map(\.name), !plats.isEmpty {
+                return plats.joined(separator: ", ")
+            }
+            if let plats = currentGame?.platforms, !plats.isEmpty {
+                return plats.joined(separator: ", ")
+            }
+            return nil
+        }()
 
-        let fallbackDev = remote?.developerName ?? currentGame?.developers.first
-        let fallbackPub = remote?.publisherName
+        let dateText = formattedReleaseDate
+        let developerName = remote?.developerName ?? currentGame?.developers.first
+        let publisherName = remote?.publisherName
 
-        let hasDevs = !devCompanies.isEmpty || (fallbackDev != nil && !fallbackDev!.isEmpty)
-        let hasPubs = !pubCompanies.isEmpty || (fallbackPub != nil && !fallbackPub!.isEmpty)
-
-        if hasDevs || hasPubs {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Studio & utgivare")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-
-                VStack(spacing: 0) {
-                    // Utvecklare
-                    if !devCompanies.isEmpty {
-                        ForEach(Array(devCompanies.enumerated()), id: \.offset) { idx, item in
-                            if let name = item.company?.name {
-                                if idx > 0 {
-                                    Divider().padding(.leading, 14)
+        return detailCard(title: "Fakta & Betyg") {
+            VStack(spacing: 0) {
+                // Betyg
+                if playerRating != nil || criticRating != nil {
+                    factRow(label: "Betyg") {
+                        HStack(spacing: 6) {
+                            if let pr = playerRating {
+                                HStack(spacing: 3) {
+                                    Text("★").foregroundStyle(.yellow)
+                                    Text("\(pr) IGDB").bold()
                                 }
-                                NavigationLink(destination: CompanyGamesView(companyName: name, role: .developer, companyID: item.company?.id)) {
-                                    HStack {
-                                        Text("Utvecklare")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.primary)
-                                        Spacer()
-                                        Text(name)
-                                            .font(.subheadline.weight(.medium))
-                                            .foregroundStyle(.red)
-                                        Image(systemName: "chevron.right")
-                                            .font(.caption.bold())
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .padding(14)
-                                    .contentShape(Rectangle())
+                            }
+                            if playerRating != nil && criticRating != nil {
+                                Text("·").foregroundStyle(.secondary)
+                            }
+                            if let cr = criticRating {
+                                HStack(spacing: 3) {
+                                    Text("✅").font(.caption2)
+                                    Text("\(cr) Kritiker").bold().foregroundStyle(.green)
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
-                    } else if let dev = fallbackDev, !dev.isEmpty {
-                        NavigationLink(destination: CompanyGamesView(companyName: dev, role: .developer)) {
-                            HStack {
-                                Text("Utvecklare")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                Text(dev)
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(.red)
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(14)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
+                        .font(.subheadline)
                     }
+                    Divider()
+                }
 
-                    if hasDevs && hasPubs {
+                // Genre
+                if let g = genresText, !g.isEmpty {
+                    factRow(label: "Genre") {
+                        Text(g)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.primary)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    Divider()
+                }
+
+                // Plattformar
+                if let p = platformsText, !p.isEmpty {
+                    factRow(label: "Plattformar") {
+                        Text(p)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.primary)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    Divider()
+                }
+
+                // Lanseringsdatum
+                if let d = dateText {
+                    factRow(label: "Lanseringsdatum") {
+                        Text(d)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.primary)
+                    }
+                    if (developerName != nil && !developerName!.isEmpty) || (publisherName != nil && !publisherName!.isEmpty) {
                         Divider()
-                            .padding(.leading, 14)
                     }
+                }
 
-                    // Utgivare
-                    if !pubCompanies.isEmpty {
-                        ForEach(Array(pubCompanies.enumerated()), id: \.offset) { idx, item in
-                            if let name = item.company?.name {
-                                if idx > 0 {
-                                    Divider().padding(.leading, 14)
-                                }
-                                NavigationLink(destination: CompanyGamesView(companyName: name, role: .publisher, companyID: item.company?.id)) {
-                                    HStack {
-                                        Text("Utgivare")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.primary)
-                                        Spacer()
-                                        Text(name)
-                                            .font(.subheadline.weight(.medium))
-                                            .foregroundStyle(.red)
-                                        Image(systemName: "chevron.right")
-                                            .font(.caption.bold())
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .padding(14)
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    } else if let pub = fallbackPub, !pub.isEmpty {
-                        NavigationLink(destination: CompanyGamesView(companyName: pub, role: .publisher)) {
-                            HStack {
-                                Text("Utgivare")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                Text(pub)
-                                    .font(.subheadline.weight(.medium))
+                // Utvecklare
+                if let dev = developerName, !dev.isEmpty {
+                    factRow(label: "Utvecklare") {
+                        NavigationLink(destination: CompanyGamesView(companyName: dev, role: .developer)) {
+                            HStack(spacing: 4) {
+                                Text(dev)
+                                    .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(.red)
                                 Image(systemName: "chevron.right")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(.secondary)
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.red)
                             }
-                            .padding(14)
-                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
                     }
-                }
-                .background(Color(.secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var factsSection: some View {
-        if let r = remote {
-            factsCard(r)
-        } else if let g = currentGame {
-            localFactsCard(g)
-        }
-    }
-
-    private func localFactsCard(_ g: Game) -> some View {
-        detailCard(title: "Fakta & Betyg") {
-            VStack(alignment: .leading, spacing: 12) {
-                if let rating = g.igdbRating {
-                    HStack {
-                        Text("IGDB Betyg")
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Label("\(String(format: "%.1f", rating)) / 10", systemImage: "star.fill")
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.yellow)
+                    if publisherName != nil && !publisherName!.isEmpty {
+                        Divider()
                     }
                 }
 
-                if !g.genres.isEmpty {
-                    if g.igdbRating != nil { Divider() }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Genrer")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(g.genres.joined(separator: ", "))
-                            .font(.subheadline)
-                    }
-                }
-
-                if !g.platforms.isEmpty {
-                    if g.igdbRating != nil || !g.genres.isEmpty { Divider() }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Plattformar")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(g.platforms.joined(separator: ", "))
-                            .font(.subheadline)
-                    }
-                }
-
-                if !g.developers.isEmpty {
-                    if g.igdbRating != nil || !g.genres.isEmpty || !g.platforms.isEmpty { Divider() }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Utvecklare")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(g.developers.joined(separator: ", "))
-                            .font(.subheadline)
-                    }
-                }
-
-                if let dateText = formattedReleaseDate {
-                    if g.igdbRating != nil || !g.genres.isEmpty || !g.platforms.isEmpty || !g.developers.isEmpty { Divider() }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Lanseringsdatum")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(dateText)
-                            .font(.subheadline)
+                // Utgivare
+                if let pub = publisherName, !pub.isEmpty {
+                    factRow(label: "Utgivare") {
+                        NavigationLink(destination: CompanyGamesView(companyName: pub, role: .publisher)) {
+                            HStack(spacing: 4) {
+                                Text(pub)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.red)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.red)
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    private func factsCard(_ r: IGDBGame) -> some View {
-        detailCard(title: "Fakta & Betyg") {
-            VStack(alignment: .leading, spacing: 12) {
-                if let rating = r.totalRating {
-                    HStack {
-                        Text("IGDB Betyg")
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Label("\(String(format: "%.1f", rating / 10.0)) / 10", systemImage: "star.fill")
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.yellow)
-                    }
-                }
-
-                if let critic = r.aggregatedRating {
-                    Divider()
-                    HStack {
-                        Text("Kritikerbetyg")
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text("\(Int(critic))/100")
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.green)
-                    }
-                }
-
-                if let genres = r.genres?.map({ $0.name }).joined(separator: ", "), !genres.isEmpty {
-                    Divider()
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Genrer")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(genres)
-                            .font(.subheadline)
-                    }
-                }
-
-                if let plats = r.platforms?.map({ $0.name }).joined(separator: ", "), !plats.isEmpty {
-                    Divider()
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Plattformar")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(plats)
-                            .font(.subheadline)
-                    }
-                }
-
-                if let dateText = formattedReleaseDate {
-                    Divider()
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Lanseringsdatum")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(dateText)
-                            .font(.subheadline)
-                    }
-                }
-            }
+    private func factRow<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .frame(width: 105, alignment: .leading)
+            Spacer()
+            content()
         }
+        .padding(.vertical, 10)
     }
 
     private func trailersSection(_ videos: [IGDBVideo]) -> some View {
@@ -2259,78 +2451,7 @@ struct GameDetailView: View {
         }
     }
 
-    private var standaloneTitleCard: some View {
-        HStack(spacing: 14) {
-            Image(systemName: "square.stack.3d.up")
-                .font(.title2)
-                .foregroundStyle(.secondary)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Fristående titel")
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.primary)
-
-                Text("Inga ytterligare expansioner eller serietitlar listade på IGDB.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-        }
-        .padding(16)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-
-    private func similarGamesSection(_ games: [IGDBRelatedGame]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                HStack(spacing: 6) {
-                    Image(systemName: "sparkles")
-                        .foregroundStyle(.red)
-                    Text("Liknande spel")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-            }
-            .contentShape(Rectangle())
-            .onTapGesture {
-                showingSimilarGamesSheet = true
-            }
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(games) { game in
-                        NavigationLink(destination: GameDetailView(igdbID: game.id)) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                CoverView(title: game.name ?? "Spel", url: game.coverURL, corner: 12, height: 135)
-                                    .frame(width: 95, height: 135)
-                                    .shadow(color: .black.opacity(0.12), radius: 4, x: 0, y: 2)
-
-                                Text(game.name ?? "Spel")
-                                    .font(.caption.bold())
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.leading)
-                                    .foregroundStyle(.primary)
-                                    .frame(width: 95, alignment: .topLeading)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-        }
-        .padding(16)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
 
     private var allDLCsAndExpansions: [IGDBRelatedGame] {
         guard let remote = remote else { return [] }
@@ -2466,7 +2587,7 @@ struct GameDetailView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
-            if let g = currentGame {
+            if let g = currentGame, g.isOwned {
                 let isTarget = profile.isTargetGoal(gameID: g.id)
                 Button {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {

@@ -522,8 +522,10 @@ struct TrendingGameResult: Sendable {
         platformIDs: [Int] = [],
         genre: String? = nil,
         developer: String? = nil,
+        minRating: Int = 0,
         sortOption: DiscoverSortOption = .popularity,
-        limit: Int = 30
+        limit: Int = 30,
+        offset: Int = 0
     ) async throws -> [IGDBGame] {
         let token = try await IGDBAuthManager.shared.getValidToken()
         guard let url = URL(string: "https://api.igdb.com/v4/games") else {
@@ -591,6 +593,9 @@ struct TrendingGameResult: Sendable {
         if sortOption == .rating {
             conditions.append("total_rating != null & total_rating_count > 3")
         }
+        if minRating > 0 {
+            conditions.append("total_rating >= \(minRating) & total_rating_count > 3")
+        }
 
         let whereClause = conditions.isEmpty ? "" : "where \(conditions.joined(separator: " & "));"
 
@@ -605,6 +610,7 @@ struct TrendingGameResult: Sendable {
             search "\(safeQuery)";
             fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, total_rating, total_rating_count, involved_companies.company.name, involved_companies.developer, category, game_type, parent_game;
             \(whereClause)
+            offset \(offset);
             limit \(limit);
             """
         } else {
@@ -612,6 +618,7 @@ struct TrendingGameResult: Sendable {
             fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, total_rating, total_rating_count, involved_companies.company.name, involved_companies.developer, category, game_type, parent_game;
             \(whereClause)
             sort \(sortOption.igdbSortClause);
+            offset \(offset);
             limit \(limit);
             """
         }

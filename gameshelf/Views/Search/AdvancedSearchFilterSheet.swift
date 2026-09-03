@@ -14,10 +14,12 @@ struct SearchFilterConfig: Equatable {
     var platformName: String? = nil
     var genre: String? = nil
     var developer: String = ""
+    var minRating: Int = 0
+    var hideOwned: Bool = false
     var sortOption: DiscoverSortOption = .popularity
 
     var isActive: Bool {
-        startYear != nil || endYear != nil || platformID != nil || genre != nil || !developer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sortOption != .popularity
+        startYear != nil || endYear != nil || platformID != nil || genre != nil || !developer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sortOption != .popularity || minRating > 0 || hideOwned
     }
 
     var activeFilterCount: Int {
@@ -27,6 +29,8 @@ struct SearchFilterConfig: Equatable {
         if genre != nil { count += 1 }
         if !developer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { count += 1 }
         if sortOption != .popularity { count += 1 }
+        if minRating > 0 { count += 1 }
+        if hideOwned { count += 1 }
         return count
     }
 
@@ -37,6 +41,8 @@ struct SearchFilterConfig: Equatable {
         platformName = nil
         genre = nil
         developer = ""
+        minRating = 0
+        hideOwned = false
         sortOption = .popularity
     }
 }
@@ -71,6 +77,37 @@ struct PlatformOption: Identifiable {
     let id: Int
     let name: String
     let icon: String
+}
+
+enum SmartSearchPreset: String, CaseIterable, Identifiable {
+    case trending = "Hetaste just nu 🔥"
+    case masterpieces = "Mästerverk (90+) ⭐"
+    case retro2000s = "2000-talets Nostalgi ⏳"
+    case hidden = "Dolda Pärlor 💎"
+
+    var id: String { rawValue }
+
+    var description: String {
+        switch self {
+        case .trending: return "Nyutgivna titlar med högst hype"
+        case .masterpieces: return "Topprankade spel med 90+ betyg"
+        case .retro2000s: return "Guldåldersspel från 2000–2006"
+        case .hidden: return "Högt betyg, låg uppmärksamhet"
+        }
+    }
+
+    var config: SearchFilterConfig {
+        switch self {
+        case .trending:
+            return SearchFilterConfig(sortOption: .releaseDateDesc)
+        case .masterpieces:
+            return SearchFilterConfig(minRating: 90, sortOption: .rating)
+        case .retro2000s:
+            return SearchFilterConfig(startYear: 2000, endYear: 2006, minRating: 75, sortOption: .rating)
+        case .hidden:
+            return SearchFilterConfig(minRating: 82, sortOption: .rating)
+        }
+    }
 }
 
 struct AdvancedSearchFilterSheet: View {
@@ -372,6 +409,42 @@ struct AdvancedSearchFilterSheet: View {
                             Text(g.name).tag(g.queryName as String?)
                         }
                     }
+                }
+
+                // 6. Minsta betyg
+                Section("Minsta betyg") {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach([
+                                (label: "Alla", value: 0),
+                                (label: "70+", value: 70),
+                                (label: "80+", value: 80),
+                                (label: "85+", value: 85),
+                                (label: "90+ 🏆", value: 90)
+                            ], id: \.value) { option in
+                                let isSelected = localConfig.minRating == option.value
+                                Button {
+                                    withAnimation { localConfig.minRating = option.value }
+                                } label: {
+                                    Text(option.label)
+                                        .font(.caption.weight(.semibold))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 7)
+                                        .background(isSelected ? Color.red : Color(.tertiarySystemFill))
+                                        .foregroundStyle(isSelected ? Color.white : Color.primary)
+                                        .clipShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+
+                // 7. Dölj ägda spel
+                Section {
+                    Toggle("Dölj spel jag äger", isOn: $localConfig.hideOwned)
+                        .tint(.red)
                 }
 
                 // Nollställ

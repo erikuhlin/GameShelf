@@ -29,6 +29,12 @@ struct AddGameView: View {
     @State private var selectedGenreFilter: String? = nil
     @State private var discoveryDebounceTask: Task<Void, Never>? = nil
 
+    // Paginering (Ladda fler)
+    @State private var currentOffset: Int = 0
+    @State private var hasMoreResults: Bool = false
+    @State private var isLoadingMore: Bool = false
+    private let pageSize = 20
+
     // Senaste sökningar
     @AppStorage("gameshelf_ios_recent_searches") private var recentSearchesRaw: String = ""
 
@@ -236,6 +242,22 @@ struct AddGameView: View {
                     }
                 }
 
+                // Min-betyg
+                if filterConfig.minRating > 0 {
+                    filterChip(label: "⭐ \(filterConfig.minRating)+") {
+                        filterConfig.minRating = 0
+                        Task { await performSearchAsync() }
+                    }
+                }
+
+                // Dölj ägda
+                if filterConfig.hideOwned {
+                    filterChip(label: "👁️ Döljer ägda") {
+                        filterConfig.hideOwned = false
+                        Task { await performSearchAsync() }
+                    }
+                }
+
                 // Rensa alla
                 Button {
                     withAnimation {
@@ -417,6 +439,27 @@ struct AddGameView: View {
                             .foregroundStyle(.red)
                     }
                 }
+                }
+            } footer: {
+                if hasMoreResults {
+                    HStack {
+                        Spacer()
+                        if isLoadingMore {
+                            ProgressView()
+                                .tint(.red)
+                        } else {
+                            Button {
+                                Task { await performSearchAsync(loadMore: true) }
+                            } label: {
+                                Label("Ladda fler resultat", systemImage: "arrow.down.circle")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.red)
+                            }
+                        }
+                        Spacer()
+                    }
+                    .padding(.vertical, 12)
+                }
             }
         }
         .listStyle(.plain)
@@ -469,6 +512,44 @@ struct AddGameView: View {
                                 }
                             }
                             .padding(.vertical, 2)
+                        }
+                    }
+                }
+
+                // Smarta Sökförslag
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Image(systemName: "sparkles")
+                            .foregroundStyle(.yellow)
+                        Text("Smarta sökförslag")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                        ForEach(SmartSearchPreset.allCases) { preset in
+                            Button {
+                                filterConfig = preset.config
+                                Task { await performSearchAsync() }
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(preset.rawValue)
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
+                                    Text(preset.description)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(12)
+                                .background(Color(.secondarySystemGroupedBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -717,7 +798,7 @@ struct AddGameView: View {
         }
     }
 
-    private func performSearchAsync() async {
+    private func performSearchAsync(loadMore: Bool = false) async {
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if trimmed.isEmpty && !filterConfig.isActive {
@@ -725,13 +806,23 @@ struct AddGameView: View {
                 searchResults = []
                 isLoading = false
                 errorMessage = nil
+                currentOffset = 0
+                hasMoreResults = false
             }
             return
         }
 
-        await MainActor.run {
-            isLoading = true
-            errorMessage = nil
+        let offset = loadMore ? currentOffset + pageSize : 0
+
+        if loadMore {
+            await MainActor.run { isLoadingMore = true }
+        } else {
+            await MainActor.run {
+                isLoading = true
+                errorMessage = nil
+                currentOffset = 0
+                hasMoreResults = false
+            }
         }
 
         do {
@@ -743,18 +834,37 @@ struct AddGameView: View {
                 platformIDs: platformIDs,
                 genre: filterConfig.genre,
                 developer: filterConfig.developer.isEmpty ? nil : filterConfig.developer,
+                minRating: filterConfig.minRating,
                 sortOption: filterConfig.sortOption,
-                limit: 35
+                limit: pageSize,
+                offset: offset
             )
 
+            // Apply hideOwned filter in-memory
+            let libraryIDs = Set(store.games.compactMap { $0.igdbID })
+            let libraryTitles = Set(store.games.map { $0.title.lowercased() })
+            let filtered = filterConfig.hideOwned
+                ? results.filter { !libraryIDs.contains($0.id) && !libraryTitles.contains($0.name.lowercased()) }
+                : results
+
             await MainActor.run {
-                self.searchResults = results
+                if loadMore {
+                    self.searchResults.append(contentsOf: filtered)
+                    self.currentOffset = offset
+                } else {
+                    self.searchResults = filtered
+                }
+                self.hasMoreResults = results.count == pageSize
                 self.isLoading = false
+                self.isLoadingMore = false
             }
         } catch {
             await MainActor.run {
-                self.errorMessage = "Kunde inte slutföra sökningen (\(error.localizedDescription))."
+                if !loadMore {
+                    self.errorMessage = "Kunde inte slutföra sökningen (\(error.localizedDescription))."
+                }
                 self.isLoading = false
+                self.isLoadingMore = false
             }
         }
     }

@@ -65,6 +65,7 @@ struct ExploreView: View {
     @State private var upcomingGames: [IGDBGame] = []
     @State private var isLoadingUpcoming: Bool = false
     @State private var showingGamingGoalSheet: Bool = false
+    @State private var showingAvatarPickerSheet: Bool = false
 
     private var prefs: ExplorePrefs {
         .init(minAge: profile.age, platforms: Array(profile.platforms))
@@ -216,6 +217,10 @@ struct ExploreView: View {
             }
             .sheet(isPresented: $showingGamingGoalSheet) {
                 gamingGoalSheet
+            }
+            .sheet(isPresented: $showingAvatarPickerSheet) {
+                AvatarPickerSheet()
+                    .environmentObject(profile)
             }
             .sheet(isPresented: $showingProfileSheet) {
                 NavigationStack {
@@ -1300,29 +1305,33 @@ struct ExploreView: View {
 
     // MARK: - Onboarding State (Om biblioteket är helt tomt)
     private var onboardingView: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 24) {
             // Välkomstkort
             VStack(alignment: .leading, spacing: 8) {
                 Text(profile.username.trimmingCharacters(in: .whitespaces).isEmpty ? "Välkommen till GameShelf 👋" : "Välkommen, \(profile.username) 👋")
                     .font(.title2.bold())
                     .foregroundStyle(.primary)
-                Text("Ditt personliga spelbibliotek, smarta rekommendationer och de senaste nyheterna på ett och samma ställe.")
+                Text("Ditt personliga spelbibliotek, smarta rekommendationer, Spel-DNA och spelstatistik på ett och samma ställe.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
-            .padding(16)
+            .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 LinearGradient(
-                    colors: [Color.red.opacity(0.15), Color.orange.opacity(0.08)],
+                    colors: [Color.red.opacity(0.18), Color.orange.opacity(0.08)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
             )
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.red.opacity(0.2), lineWidth: 1)
+            )
 
-            // Steg 1: Profilnamn
-            VStack(alignment: .leading, spacing: 8) {
+            // Steg 1: Profilnamn & Avatar
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
                     Image(systemName: "person.crop.circle.fill")
                         .foregroundStyle(.red)
@@ -1330,33 +1339,83 @@ struct ExploreView: View {
                         .font(.headline)
                         .foregroundStyle(.primary)
                 }
-                HStack {
-                    Image(systemName: "pencil")
-                        .foregroundStyle(.secondary)
-                    TextField("Ange ditt namn eller gamer-tag...", text: $profile.username)
-                        .font(.subheadline)
+
+                HStack(spacing: 12) {
+                    Button {
+                        showingAvatarPickerSheet = true
+                    } label: {
+                        ZStack(alignment: .bottomTrailing) {
+                            UserAvatarView(size: 46)
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(3)
+                                .background(Color.red, in: Circle())
+                                .offset(x: 2, y: 2)
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    HStack {
+                        Image(systemName: "pencil")
+                            .foregroundStyle(.secondary)
+                        TextField("Ange ditt namn eller gamer-tag...", text: $profile.username)
+                            .font(.subheadline)
+                    }
+                    .padding(12)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-                .padding(12)
-                .background(Color(.secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                // Snabba avatar-val
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(AvatarPickerSheet.presets) { preset in
+                            let isSelected = profile.avatarType == preset.id
+                            Button {
+                                withAnimation(.snappy) {
+                                    profile.avatarType = preset.id
+                                }
+                            } label: {
+                                Text(preset.icon)
+                                    .font(.title3)
+                                    .padding(8)
+                                    .background(isSelected ? Color.red.opacity(0.25) : Color(.secondarySystemGroupedBackground))
+                                    .clipShape(Circle())
+                                    .overlay(
+                                        Circle()
+                                            .stroke(isSelected ? Color.red : Color.white.opacity(0.08), lineWidth: isSelected ? 1.5 : 0.8)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
             }
 
             // Steg 2: Välj dina plattformar
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
                     Image(systemName: "gamecontroller.fill")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.blue)
                     Text("2. Välj dina plattformar")
                         .font(.headline)
                         .foregroundStyle(.primary)
                 }
+                Text("Vilka konsoler och enheter spelar du på?")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 let platforms = [
-                    "PlayStation 5", "PlayStation 4",
-                    "PC", "Steam Deck",
+                    "PlayStation 5",
+                    "Xbox Series X",
+                    "PC",
                     "Nintendo Switch",
-                    "Xbox Series X|S", "Xbox One",
-                    "Mac / iOS", "Retro & Klassiker"
+                    "Steam Deck",
+                    "PlayStation 4",
+                    "Xbox One",
+                    "Retro / Övrigt"
                 ]
 
                 FlowLayout(spacing: 8) {
@@ -1374,6 +1433,60 @@ struct ExploreView: View {
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
+                            .background(isSelected ? Color.blue : Color(.secondarySystemGroupedBackground))
+                            .foregroundStyle(isSelected ? Color.white : Color.primary)
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            // Steg 3: Välj dina favoritgenrer
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    Image(systemName: "heart.fill")
+                        .foregroundStyle(.red)
+                    Text("3. Välj dina favoritgenrer")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                }
+                Text("Hjälper oss tipsa om rätt spel i sök och upptäck.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                let genres = [
+                    "RPG",
+                    "Action",
+                    "Skräck",
+                    "FPS",
+                    "Äventyr",
+                    "Strategi",
+                    "Simulator",
+                    "Plattform",
+                    "Pussel",
+                    "Sport",
+                    "Racing",
+                    "Fighting",
+                    "Indie",
+                    "Cozy"
+                ]
+
+                FlowLayout(spacing: 8) {
+                    ForEach(genres, id: \.self) { genre in
+                        let isSelected = profile.favoriteGenres.contains(genre)
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                profile.toggleGenre(genre)
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                Text(genre)
+                                    .font(.caption.weight(.semibold))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
                             .background(isSelected ? Color.red : Color(.secondarySystemGroupedBackground))
                             .foregroundStyle(isSelected ? Color.white : Color.primary)
                             .clipShape(Capsule())
@@ -1383,21 +1496,72 @@ struct ExploreView: View {
                 }
             }
 
-            // Steg 3: Sätt ditt spelmål för 2026
-            VStack(alignment: .leading, spacing: 8) {
+            // Steg 4: Vad spelar du för? (Spel-DNA)
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
-                    Image(systemName: "trophy.fill")
-                        .foregroundStyle(.yellow)
-                    Text("3. Sätt ditt spelmål för 2026")
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(.purple)
+                    Text("4. Vad spelar du för?")
                         .font(.headline)
                         .foregroundStyle(.primary)
                 }
-                Text("Hur många spel siktar du på att klara i år?")
+                Text("Välj vad du söker i spel för att forma ditt unika Spel-DNA.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                let motives = [
+                    ("Story", "📖"),
+                    ("Utforskning", "🧭"),
+                    ("Action", "⚡"),
+                    ("Tävling", "🏆"),
+                    ("Avkoppling", "☕"),
+                    ("Utmaning", "💀"),
+                    ("Kreativitet", "🎨")
+                ]
+
+                FlowLayout(spacing: 8) {
+                    ForEach(motives, id: \.0) { motive, icon in
+                        let isSelected = profile.playFor.contains(motive)
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                profile.togglePlayFor(motive)
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(icon)
+                                Text(motive)
+                                    .font(.caption.weight(.semibold))
+                                if isSelected {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 9, weight: .bold))
+                                }
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(isSelected ? Color.purple : Color(.secondarySystemGroupedBackground))
+                            .foregroundStyle(isSelected ? Color.white : Color.primary)
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            // Steg 5: Sätt ditt spelmål för 2026
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    Image(systemName: "trophy.fill")
+                        .foregroundStyle(.yellow)
+                    Text("5. Sätt ditt spelmål för 2026")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                }
+                Text("Hur många spel siktar du på att klara i år? Välj helt fritt eller hoppa över.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 8) {
-                    ForEach([6, 12, 20, 30], id: \.self) { goal in
+                    ForEach([0, 6, 12, 20, 30], id: \.self) { goal in
                         let isSelected = profile.annualGamingGoal == goal
                         Button {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -1405,10 +1569,10 @@ struct ExploreView: View {
                             }
                         } label: {
                             VStack(spacing: 3) {
-                                Text("\(goal)")
+                                Text(goal == 0 ? "Inget" : "\(goal)")
                                     .font(.subheadline.bold())
-                                Text(goal == 6 ? "Lugnt" : (goal == 12 ? "Standard" : (goal == 20 ? "Entusiast" : "Hardcore")))
-                                    .font(.system(size: 9))
+                                Text(goal == 0 ? "Valfritt" : (goal == 6 ? "Lugnt" : (goal == 12 ? "Standard" : (goal == 20 ? "Entusiast" : "Hardcore"))))
+                                    .font(.system(size: 8))
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
@@ -1423,14 +1587,27 @@ struct ExploreView: View {
                         .buttonStyle(.plain)
                     }
                 }
+
+                // Anpassat mål med Stepper
+                HStack {
+                    Text("Anpassat mål:")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Stepper(profile.annualGamingGoal == 0 ? "Inget mål satt" : "\(profile.annualGamingGoal) spel", value: $profile.annualGamingGoal, in: 0...100)
+                        .font(.subheadline.bold())
+                }
+                .padding(10)
+                .background(Color(.secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
 
-            // Steg 4: Kickstarta samlingen med kurerade spel
+            // Steg 6: Kickstarta samlingen med kurerade spel
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
                     Image(systemName: "sparkles")
                         .foregroundStyle(.purple)
-                    Text("4. Kickstarta din samling")
+                    Text("6. Kickstarta din samling")
                         .font(.headline)
                         .foregroundStyle(.primary)
                 }
@@ -1500,7 +1677,7 @@ struct ExploreView: View {
                             } else {
                                 Menu {
                                     Button {
-                                        addStarterGame(title: game.title, platform: game.plats.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces) ?? "PC", year: game.year, status: .playing)
+                                        addStarterGame(title: game.title, platform: game.plats.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces) ?? "PC", year: game.year, genre: game.genre, status: .playing)
                                     } label: {
                                         HStack {
                                             Image(systemName: "play.circle.fill")
@@ -1508,7 +1685,7 @@ struct ExploreView: View {
                                         }
                                     }
                                     Button {
-                                        addStarterGame(title: game.title, platform: game.plats.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces) ?? "PC", year: game.year, status: .completed)
+                                        addStarterGame(title: game.title, platform: game.plats.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces) ?? "PC", year: game.year, genre: game.genre, status: .completed)
                                     } label: {
                                         HStack {
                                             Image(systemName: "checkmark.circle")
@@ -1516,7 +1693,7 @@ struct ExploreView: View {
                                         }
                                     }
                                     Button {
-                                        addStarterGame(title: game.title, platform: game.plats.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces) ?? "PC", year: game.year, status: .notStarted, isOwned: false)
+                                        addStarterGame(title: game.title, platform: game.plats.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces) ?? "PC", year: game.year, genre: game.genre, status: .notStarted, isOwned: false)
                                     } label: {
                                         HStack {
                                             Image(systemName: "bookmark")
@@ -1582,12 +1759,12 @@ struct ExploreView: View {
         }
     }
 
-    private func addStarterGame(title: String, platform: String, year: Int, status: PlayStatus = .playing, isOwned: Bool = true) {
+    private func addStarterGame(title: String, platform: String, year: Int, genre: String = "Action", status: PlayStatus = .playing, isOwned: Bool = true) {
         let game = Game(
             title: title,
             platforms: [platform],
             releaseYear: year,
-            genres: ["Action", "Äventyr"],
+            genres: [genre],
             developers: [],
             status: status,
             rating: status == .completed ? 8 : 0,
@@ -1595,6 +1772,22 @@ struct ExploreView: View {
             isOwned: isOwned
         )
         store.add(game)
+
+        Task {
+            if let igdb = await OnlineSearchClient.searchGames(matching: title).first {
+                await MainActor.run {
+                    if let existing = store.games.first(where: { $0.id == game.id }) {
+                        var updated = existing
+                        updated.coverURL = igdb.coverURL
+                        updated.igdbID = igdb.id
+                        if let gList = igdb.genres?.map(\.name), !gList.isEmpty {
+                            updated.genres = gList
+                        }
+                        store.update(updated)
+                    }
+                }
+            }
+        }
     }
 
     private func openIGDBFrom(title: String) {

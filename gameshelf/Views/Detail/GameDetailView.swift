@@ -1197,49 +1197,78 @@ struct GameDetailView: View {
 
         return detailCard(title: "Spelframsteg") {
             VStack(alignment: .leading, spacing: 16) {
-                // 1. Tidsangivelse ("36h spelade" - tap för redigering inline)
-                HStack(alignment: .center) {
-                    if isEditingHours {
-                        HStack(spacing: 8) {
-                            TextField("0", text: $manualHoursInput)
-                                .keyboardType(.decimalPad)
-                                .font(.system(size: 18, weight: .bold, design: .rounded))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color(.tertiarySystemFill))
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                                .frame(width: 80)
-                                .onSubmit {
-                                    saveManualHours(for: g)
-                                }
-
-                            Text("tim")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-
-                            Spacer()
-
-                            Button("Klar") {
+                // 1. Tidsangivelse
+                if isEditingHours {
+                    HStack(spacing: 8) {
+                        TextField("0", text: $manualHoursInput)
+                            .keyboardType(.decimalPad)
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color(.tertiarySystemFill))
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .frame(width: 80)
+                            .onSubmit {
                                 saveManualHours(for: g)
                             }
-                            .font(.caption.bold())
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(Color.red)
-                            .foregroundStyle(.white)
-                            .clipShape(Capsule())
-                            .buttonStyle(.plain)
 
-                            Button("Avbryt") {
-                                isEditingHours = false
-                            }
-                            .font(.caption)
+                        Text("timmar")
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
-                            .buttonStyle(.plain)
+
+                        Spacer()
+
+                        Button("Klar") {
+                            saveManualHours(for: g)
                         }
-                    } else {
+                        .font(.caption.bold())
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(Color.red)
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                        .buttonStyle(.plain)
+
+                        Button("Avbryt") {
+                            isEditingHours = false
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .buttonStyle(.plain)
+                    }
+                } else if hours == 0 {
+                    // Tomt läge: Ingen tid loggad + Tydlig "Logga tid"-knapp
+                    HStack(alignment: .center) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Speltid")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Text("Ingen tid loggad")
+                                .font(.subheadline)
+                                .foregroundStyle(.tertiary)
+                        }
+
+                        Spacer()
+
                         Button {
-                            manualHoursInput = hours > 0 ? (hours.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(hours))" : String(format: "%.1f", hours)) : ""
+                            manualHoursInput = ""
+                            isEditingHours = true
+                        } label: {
+                            Label("Logga tid", systemImage: "plus")
+                                .font(.subheadline.weight(.semibold))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(Color.red)
+                                .foregroundStyle(.white)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } else {
+                    // Aktivt läge: Visa loggad tid + Snabbknappar
+                    HStack(alignment: .center) {
+                        Button {
+                            manualHoursInput = hours.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(hours))" : String(format: "%.1f", hours)
                             isEditingHours = true
                         } label: {
                             HStack(alignment: .firstTextBaseline, spacing: 5) {
@@ -1252,27 +1281,22 @@ struct GameDetailView: View {
                             }
                         }
                         .buttonStyle(.plain)
-                    }
 
-                    Spacer()
+                        Spacer()
 
-                    // Snabbknappar (-1h, +1h, +5h) - garanterat att aldrig radbrytas
-                    if !isEditingHours {
                         HStack(spacing: 6) {
-                            if hours > 0 {
-                                Button("-1h") {
-                                    adjustPlaytime(by: -1.0, for: g)
-                                }
-                                .font(.system(size: 12, weight: .bold))
-                                .lineLimit(1)
-                                .fixedSize()
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 7)
-                                .background(Color(.tertiarySystemFill))
-                                .foregroundStyle(.secondary)
-                                .clipShape(Capsule())
-                                .buttonStyle(.plain)
+                            Button("-1h") {
+                                adjustPlaytime(by: -1.0, for: g)
                             }
+                            .font(.system(size: 12, weight: .bold))
+                            .lineLimit(1)
+                            .fixedSize()
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(Color(.tertiarySystemFill))
+                            .foregroundStyle(.secondary)
+                            .clipShape(Capsule())
+                            .buttonStyle(.plain)
 
                             Button("+1h") {
                                 adjustPlaytime(by: 1.0, for: g)
@@ -1303,17 +1327,27 @@ struct GameDetailView: View {
                     }
                 }
 
-                // 2. HLTB-band (Sleek progress bars utan klumpiga kapsel-boxar)
+                // 2. HLTB-band (Snygga referensband med ikonbrickor och tydliga tracks)
                 if hasHLTB {
-                    VStack(alignment: .leading, spacing: 10) {
-                        if mainHours > 0 {
-                            progressHLTBBandRow(name: "Main Story", targetHours: mainHours, hoursPlayed: hours, icon: "📖")
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("REFERENS · HOWLONGTOBEAT")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.tertiary)
+                                .tracking(0.5)
+                            Spacer()
                         }
-                        if extraHours > 0 {
-                            progressHLTBBandRow(name: "Main + Extra", targetHours: extraHours, hoursPlayed: hours, icon: "➕")
-                        }
-                        if compHours > 0 {
-                            progressHLTBBandRow(name: "Completionist", targetHours: compHours, hoursPlayed: hours, icon: "🏆")
+
+                        VStack(spacing: 12) {
+                            if mainHours > 0 {
+                                progressHLTBBandRow(name: "Main Story", targetHours: mainHours, hoursPlayed: hours, icon: "📖")
+                            }
+                            if extraHours > 0 {
+                                progressHLTBBandRow(name: "Main + Extra", targetHours: extraHours, hoursPlayed: hours, icon: "➕")
+                            }
+                            if compHours > 0 {
+                                progressHLTBBandRow(name: "Completionist", targetHours: compHours, hoursPlayed: hours, icon: "🏆")
+                            }
                         }
 
                         // Overflow-hantering enligt specifikation
@@ -1329,10 +1363,10 @@ struct GameDetailView: View {
                             .padding(.top, 2)
                         }
                     }
-                    .padding(.vertical, 2)
+                    .padding(.top, 2)
                 }
 
-                // 3. Kvalitativt läge (En rad med enhetlig höjd, bryts aldrig)
+                // 3. Kvalitativt läge (Enhetlig 44pt höjd, ingen avklippt text)
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Var är du i spelet?")
                         .font(.caption.bold())
@@ -1348,11 +1382,13 @@ struct GameDetailView: View {
                                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                             } label: {
                                 Text(milestone.rawValue)
-                                    .font(.system(size: 11.5, weight: .semibold))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.75)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                                    .minimumScaleFactor(0.7)
                                     .frame(maxWidth: .infinity)
-                                    .frame(height: 38)
+                                    .frame(height: 44)
+                                    .padding(.horizontal, 4)
                                     .background(isSelected ? (milestone == .completed ? Color.green : Color.red) : Color(.tertiarySystemFill))
                                     .foregroundStyle(isSelected ? Color.white : Color.primary)
                                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -1429,7 +1465,7 @@ struct GameDetailView: View {
                             HStack(alignment: .top, spacing: 10) {
                                 Image(systemName: "square.and.pencil")
                                     .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(.red)
                                     .padding(.top, 1)
 
                                 if let note = g.progressNote, !note.isEmpty {
@@ -1477,13 +1513,21 @@ struct GameDetailView: View {
 
     private func progressHLTBBandRow(name: String, targetHours: Int, hoursPlayed: Double, icon: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .center) {
-                Text(icon)
-                    .font(.caption)
+            HStack(alignment: .center, spacing: 8) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.white.opacity(0.06))
+                        .frame(width: 24, height: 24)
+                    Text(icon)
+                        .font(.system(size: 12))
+                }
+
                 Text(name)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
+
                 Spacer()
+
                 Text("\(targetHours) tim")
                     .font(.subheadline.bold())
                     .foregroundStyle(.primary)
@@ -1494,29 +1538,28 @@ struct GameDetailView: View {
                 ZStack(alignment: .leading) {
                     // Bakgrundslinje
                     Capsule()
-                        .fill(Color.white.opacity(0.08))
-                        .frame(height: 5)
+                        .fill(Color(.tertiarySystemFill))
+                        .frame(height: 6)
 
-                    // Fyllnad
+                    // Fyllnad (om speltid finns)
                     if ratio > 0 {
                         Capsule()
                             .fill(ratio >= 1.0 ? Color.green.opacity(0.9) : Color.red.opacity(0.85))
-                            .frame(width: max(5, min(geo.size.width, geo.size.width * CGFloat(ratio))), height: 5)
+                            .frame(width: max(6, min(geo.size.width, geo.size.width * CGFloat(ratio))), height: 6)
                     }
 
                     // Vit markörlinje vid fyllnadsgraden enligt specifikation
                     if ratio > 0 && ratio < 1.0 {
                         Capsule()
                             .fill(Color.white)
-                            .frame(width: 2.5, height: 9)
-                            .shadow(color: .black.opacity(0.3), radius: 2)
+                            .frame(width: 2.5, height: 10)
+                            .shadow(color: .black.opacity(0.4), radius: 2)
                             .offset(x: max(0, min(geo.size.width - 2.5, geo.size.width * CGFloat(ratio) - 1.25)))
                     }
                 }
             }
-            .frame(height: 9)
+            .frame(height: 10)
         }
-        .padding(.vertical, 2)
     }
 
     private func multiplayerPlaytimeCard(_ g: Game) -> some View {

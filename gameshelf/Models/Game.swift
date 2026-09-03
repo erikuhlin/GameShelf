@@ -56,13 +56,10 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
     // MARK: - Computed Helpers
     var effectiveHoursPlayed: Double {
         get {
-            if let hp = hoursPlayed { return hp }
-            if let est = estimatedHours { return Double(est) }
-            return 0.0
+            hoursPlayed ?? 0.0
         }
         set {
             hoursPlayed = newValue
-            estimatedHours = Int(round(newValue))
         }
     }
     var isMultiplayerOrOngoing: Bool {

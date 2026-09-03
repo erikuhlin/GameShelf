@@ -1201,26 +1201,41 @@ struct GameDetailView: View {
                 HStack(alignment: .center) {
                     if isEditingHours {
                         HStack(spacing: 8) {
-                            TextField("Timmar", text: $manualHoursInput)
+                            TextField("0", text: $manualHoursInput)
                                 .keyboardType(.decimalPad)
-                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 18, weight: .bold, design: .rounded))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color(.tertiarySystemFill))
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                                 .frame(width: 80)
                                 .onSubmit {
                                     saveManualHours(for: g)
                                 }
 
+                            Text("tim")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+
+                            Spacer()
+
                             Button("Klar") {
                                 saveManualHours(for: g)
                             }
                             .font(.caption.bold())
-                            .buttonStyle(.borderedProminent)
-                            .tint(.red)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(Color.red)
+                            .foregroundStyle(.white)
+                            .clipShape(Capsule())
+                            .buttonStyle(.plain)
 
                             Button("Avbryt") {
                                 isEditingHours = false
                             }
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .buttonStyle(.plain)
                         }
                     } else {
                         Button {
@@ -1229,10 +1244,10 @@ struct GameDetailView: View {
                         } label: {
                             HStack(alignment: .firstTextBaseline, spacing: 5) {
                                 Text("\(hoursDisplay) spelade")
-                                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                                    .font(.system(size: 22, weight: .bold, design: .rounded))
                                     .foregroundStyle(Color.primary)
                                 Image(systemName: "pencil")
-                                    .font(.system(size: 13))
+                                    .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -1241,69 +1256,64 @@ struct GameDetailView: View {
 
                     Spacer()
 
-                    // Snabbknappar (-1h, +0.5h, +1h, +5h)
-                    HStack(spacing: 6) {
-                        if hours > 0 {
-                            Button("-1h") {
-                                adjustPlaytime(by: -1.0, for: g)
+                    // Snabbknappar (-1h, +1h, +5h) - garanterat att aldrig radbrytas
+                    if !isEditingHours {
+                        HStack(spacing: 6) {
+                            if hours > 0 {
+                                Button("-1h") {
+                                    adjustPlaytime(by: -1.0, for: g)
+                                }
+                                .font(.system(size: 12, weight: .bold))
+                                .lineLimit(1)
+                                .fixedSize()
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(Color(.tertiarySystemFill))
+                                .foregroundStyle(.secondary)
+                                .clipShape(Capsule())
+                                .buttonStyle(.plain)
                             }
-                            .font(.caption.bold())
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
+
+                            Button("+1h") {
+                                adjustPlaytime(by: 1.0, for: g)
+                            }
+                            .font(.system(size: 12, weight: .bold))
+                            .lineLimit(1)
+                            .fixedSize()
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
                             .background(Color(.tertiarySystemFill))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.primary)
+                            .clipShape(Capsule())
+                            .buttonStyle(.plain)
+
+                            Button("+5h") {
+                                adjustPlaytime(by: 5.0, for: g)
+                            }
+                            .font(.system(size: 12, weight: .bold))
+                            .lineLimit(1)
+                            .fixedSize()
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(Color.red.opacity(0.15))
+                            .foregroundStyle(.red)
                             .clipShape(Capsule())
                             .buttonStyle(.plain)
                         }
-
-                        Button("+0.5h") {
-                            adjustPlaytime(by: 0.5, for: g)
-                        }
-                        .font(.caption.bold())
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .background(Color(.tertiarySystemFill))
-                        .foregroundStyle(.primary)
-                        .clipShape(Capsule())
-                        .buttonStyle(.plain)
-
-                        Button("+1h") {
-                            adjustPlaytime(by: 1.0, for: g)
-                        }
-                        .font(.caption.bold())
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .background(Color(.tertiarySystemFill))
-                        .foregroundStyle(.primary)
-                        .clipShape(Capsule())
-                        .buttonStyle(.plain)
-
-                        Button("+5h") {
-                            adjustPlaytime(by: 5.0, for: g)
-                        }
-                        .font(.caption.bold())
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .background(Color.red.opacity(0.15))
-                        .foregroundStyle(.red)
-                        .clipShape(Capsule())
-                        .buttonStyle(.plain)
                     }
                 }
 
-                // 2. HLTB-band (Visas enbart om HLTB finns, med 0% fyllnad om hours == 0)
+                // 2. HLTB-band (Sleek progress bars utan klumpiga kapsel-boxar)
                 if hasHLTB {
-                    VStack(alignment: .leading, spacing: 8) {
-                        VStack(spacing: 8) {
-                            if mainHours > 0 {
-                                progressHLTBBandRow(name: "Main Story", targetHours: mainHours, hoursPlayed: hours, icon: "📖")
-                            }
-                            if extraHours > 0 {
-                                progressHLTBBandRow(name: "Main + Extra", targetHours: extraHours, hoursPlayed: hours, icon: "➕")
-                            }
-                            if compHours > 0 {
-                                progressHLTBBandRow(name: "Completionist", targetHours: compHours, hoursPlayed: hours, icon: "🏆")
-                            }
+                    VStack(alignment: .leading, spacing: 10) {
+                        if mainHours > 0 {
+                            progressHLTBBandRow(name: "Main Story", targetHours: mainHours, hoursPlayed: hours, icon: "📖")
+                        }
+                        if extraHours > 0 {
+                            progressHLTBBandRow(name: "Main + Extra", targetHours: extraHours, hoursPlayed: hours, icon: "➕")
+                        }
+                        if compHours > 0 {
+                            progressHLTBBandRow(name: "Completionist", targetHours: compHours, hoursPlayed: hours, icon: "🏆")
                         }
 
                         // Overflow-hantering enligt specifikation
@@ -1319,16 +1329,14 @@ struct GameDetailView: View {
                             .padding(.top, 2)
                         }
                     }
+                    .padding(.vertical, 2)
                 }
 
-                // 3. Kvalitativt läge (Single-select, tap sätter direkt, ändrar INTE status)
+                // 3. Kvalitativt läge (En rad med enhetlig höjd, bryts aldrig)
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Var är du i spelet?")
-                            .font(.caption.bold())
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
+                    Text("Var är du i spelet?")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
 
                     HStack(spacing: 6) {
                         ForEach(GameStoryProgress.allCases) { milestone in
@@ -1341,8 +1349,10 @@ struct GameDetailView: View {
                             } label: {
                                 Text(milestone.rawValue)
                                     .font(.system(size: 11.5, weight: .semibold))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
                                     .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 9)
+                                    .frame(height: 38)
                                     .background(isSelected ? (milestone == .completed ? Color.green : Color.red) : Color(.tertiarySystemFill))
                                     .foregroundStyle(isSelected ? Color.white : Color.primary)
                                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -1367,13 +1377,13 @@ struct GameDetailView: View {
                     }
 
                     if isEditingProgressNote {
-                        VStack(alignment: .trailing, spacing: 6) {
+                        VStack(alignment: .trailing, spacing: 8) {
                             TextField("T.ex. Nuvarande kapitel, quest eller mål...", text: $progressNoteDraft, axis: .vertical)
                                 .lineLimit(2...4)
                                 .font(.subheadline)
-                                .padding(10)
+                                .padding(12)
                                 .background(Color(.tertiarySystemFill))
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .onChange(of: progressNoteDraft) { _, newValue in
                                     if newValue.count > 140 {
                                         progressNoteDraft = String(newValue.prefix(140))
@@ -1390,8 +1400,10 @@ struct GameDetailView: View {
                                 Button("Avbryt") {
                                     isEditingProgressNote = false
                                 }
-                                .font(.caption)
+                                .font(.caption.weight(.medium))
                                 .foregroundStyle(.secondary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
 
                                 Button("Spara") {
                                     var copy = g
@@ -1402,7 +1414,11 @@ struct GameDetailView: View {
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                 }
                                 .font(.caption.bold())
-                                .foregroundStyle(.red)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 6)
+                                .background(Color.red)
+                                .foregroundStyle(.white)
+                                .clipShape(Capsule())
                             }
                         }
                     } else {
@@ -1410,11 +1426,11 @@ struct GameDetailView: View {
                             progressNoteDraft = g.progressNote ?? ""
                             isEditingProgressNote = true
                         } label: {
-                            HStack(alignment: .top, spacing: 8) {
+                            HStack(alignment: .top, spacing: 10) {
                                 Image(systemName: "square.and.pencil")
-                                    .font(.caption)
+                                    .font(.subheadline)
                                     .foregroundStyle(.secondary)
-                                    .padding(.top, 2)
+                                    .padding(.top, 1)
 
                                 if let note = g.progressNote, !note.isEmpty {
                                     Text(note)
@@ -1429,9 +1445,9 @@ struct GameDetailView: View {
 
                                 Spacer()
                             }
-                            .padding(10)
-                            .background(Color(.tertiarySystemGroupedBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .padding(12)
+                            .background(Color(.tertiarySystemFill))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                         .buttonStyle(.plain)
                     }
@@ -1460,16 +1476,16 @@ struct GameDetailView: View {
     }
 
     private func progressHLTBBandRow(name: String, targetHours: Int, hoursPlayed: Double, icon: String) -> some View {
-        VStack(spacing: 4) {
-            HStack {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center) {
                 Text(icon)
-                    .font(.caption2)
+                    .font(.caption)
                 Text(name)
-                    .font(.caption.weight(.medium))
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text("\(targetHours) tim")
-                    .font(.caption.bold())
+                    .font(.subheadline.bold())
                     .foregroundStyle(.primary)
             }
 
@@ -1478,28 +1494,29 @@ struct GameDetailView: View {
                 ZStack(alignment: .leading) {
                     // Bakgrundslinje
                     Capsule()
-                        .fill(Color(.tertiarySystemFill))
-                        .frame(height: 6)
+                        .fill(Color.white.opacity(0.08))
+                        .frame(height: 5)
 
                     // Fyllnad
-                    Capsule()
-                        .fill(ratio >= 1.0 ? Color.green : (ratio > 0 ? Color.red : Color.clear))
-                        .frame(width: max(0, min(geo.size.width, geo.size.width * CGFloat(ratio))), height: 6)
+                    if ratio > 0 {
+                        Capsule()
+                            .fill(ratio >= 1.0 ? Color.green.opacity(0.9) : Color.red.opacity(0.85))
+                            .frame(width: max(5, min(geo.size.width, geo.size.width * CGFloat(ratio))), height: 5)
+                    }
 
                     // Vit markörlinje vid fyllnadsgraden enligt specifikation
                     if ratio > 0 && ratio < 1.0 {
-                        RoundedRectangle(cornerRadius: 1)
+                        Capsule()
                             .fill(Color.white)
-                            .frame(width: 2, height: 10)
-                            .offset(x: max(0, min(geo.size.width - 2, geo.size.width * CGFloat(ratio) - 1)))
+                            .frame(width: 2.5, height: 9)
+                            .shadow(color: .black.opacity(0.3), radius: 2)
+                            .offset(x: max(0, min(geo.size.width - 2.5, geo.size.width * CGFloat(ratio) - 1.25)))
                     }
                 }
             }
-            .frame(height: 6)
+            .frame(height: 9)
         }
-        .padding(8)
-        .background(Color(.tertiarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(.vertical, 2)
     }
 
     private func multiplayerPlaytimeCard(_ g: Game) -> some View {

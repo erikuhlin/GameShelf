@@ -95,7 +95,7 @@ export function ProfileMenu({
         );
       }
     }
-    const initial = (profileName || 'E').charAt(0).toUpperCase();
+    const initial = (profileName || profile?.username || 'S').charAt(0).toUpperCase();
     return (
       <div
         className={`${

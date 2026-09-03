@@ -82,9 +82,21 @@ export function Header({
                 )}
               </div>
               <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 mt-1">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span
+                  className={`inline-block w-1.5 h-1.5 rounded-full ${
+                    profileName
+                      ? 'bg-emerald-500 animate-pulse'
+                      : totalGames > 0
+                      ? 'bg-amber-500'
+                      : 'bg-zinc-600'
+                  }`}
+                />
                 <span className="truncate max-w-[130px] sm:max-w-none text-zinc-400">
-                  {profileName ? 'Synkad med iPhone' : 'Lokal synk'}
+                  {profileName
+                    ? 'Synkad med iPhone'
+                    : totalGames > 0
+                    ? 'Gästläge (lokal)'
+                    : 'Ej inloggad'}
                 </span>
               </div>
             </div>

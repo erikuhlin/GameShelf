@@ -128,16 +128,27 @@ export default function HomePage() {
 
       const loaded = loadUserProfile();
       setUserProfile(loaded);
-      setProfileName(loaded.username);
+
+      // Sätt endast inloggat tillstånd om en länkad användare faktiskt finns sparad
       if (savedUserId) {
         setPairedUserId(savedUserId);
+        const storedName = localStorage.getItem('gameshelf_profile_name') || loaded.username;
+        setProfileName(storedName);
         fetchRemoteProfile(savedUserId);
+      } else {
+        setPairedUserId(null);
+        setProfileName('');
       }
 
       const handleProfileUpdate = () => {
         const p = loadUserProfile();
         setUserProfile(p);
-        setProfileName(p.username);
+        const currentPairId = localStorage.getItem('gameshelf_paired_user_id');
+        if (currentPairId) {
+          setProfileName(p.username);
+        } else {
+          setProfileName('');
+        }
       };
       window.addEventListener('gameshelf_profile_updated', handleProfileUpdate);
       return () => window.removeEventListener('gameshelf_profile_updated', handleProfileUpdate);

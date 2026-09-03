@@ -57,8 +57,8 @@ export const DEFAULT_PLAY_FOR = [
 const PROFILE_STORAGE_KEY = 'gameshelf_user_profile';
 
 export const DEFAULT_PROFILE: UserProfile = {
-  username: 'Erik',
-  age: 27,
+  username: '',
+  age: 25,
   platforms: ['PlayStation 5', 'PC'],
   favoriteGenres: ['RPG', 'Action', 'Skräck'],
   playFor: ['Story', 'Utforskning'],

@@ -1780,6 +1780,12 @@ struct ExploreView: View {
                         var updated = existing
                         updated.coverURL = igdb.coverURL
                         updated.igdbID = igdb.id
+                        if let date = igdb.firstReleaseDate {
+                            updated.firstReleaseDate = date
+                        }
+                        if let y = igdb.releaseYear {
+                            updated.releaseYear = y
+                        }
                         if let gList = igdb.genres?.map(\.name), !gList.isEmpty {
                             updated.genres = gList
                         }

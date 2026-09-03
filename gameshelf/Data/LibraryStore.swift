@@ -101,7 +101,17 @@ final class LibraryStore: ObservableObject {
         do {
             let remoteGames = try await SupabaseSyncService.shared.fetchRemoteGames()
             if !remoteGames.isEmpty || self.games.isEmpty {
-                self.games = remoteGames
+                // Bevara kända lanseringsdatum från befintliga lokala spel så de inte skrivs över
+                let localDateMap = Dictionary(uniqueKeysWithValues: self.games.compactMap { g in
+                    g.firstReleaseDate.map { (g.id, $0) }
+                })
+                self.games = remoteGames.map { r in
+                    var merged = r
+                    if merged.firstReleaseDate == nil, let cachedDate = localDateMap[merged.id] {
+                        merged.firstReleaseDate = cachedDate
+                    }
+                    return merged
+                }
             } else {
                 for game in self.games {
                     try? await SupabaseSyncService.shared.upsertGame(game)
@@ -130,8 +140,17 @@ final class LibraryStore: ObservableObject {
         isEnrichingDates = true
         defer { isEnrichingDates = false }
 
+        let currentYear = Calendar.current.component(.year, from: Date())
+
         while true {
-            let gamesNeedingDates = self.games.filter { $0.firstReleaseDate == nil && !checkedGameIDsForDates.contains($0.id) }
+            let gamesNeedingDates = self.games
+                .filter { $0.firstReleaseDate == nil && !checkedGameIDsForDates.contains($0.id) }
+                .sorted { g1, g2 in
+                    // Prioritera spel från innevarande och framtida år så "Kommande"-taggar sätts rätt direkt
+                    let g1Prio = g1.releaseYear >= currentYear ? 1 : 0
+                    let g2Prio = g2.releaseYear >= currentYear ? 1 : 0
+                    return g1Prio > g2Prio
+                }
             guard !gamesNeedingDates.isEmpty else { break }
 
             var updatedBatch: [Game] = []
@@ -171,7 +190,7 @@ final class LibraryStore: ObservableObject {
                         }
                     }
                 } catch {
-                    // Fortsätt tyst till nästa
+                    checkedGameIDsForDates.remove(game.id)
                 }
             }
 

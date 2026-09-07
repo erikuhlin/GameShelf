@@ -45,7 +45,7 @@ struct ActivityView: View {
     /// Spel klarade under innevarande år
     private var thisYearCompletedCount: Int {
         libraryGames.filter {
-            $0.status == .completed && ($0.completedYear == currentYear || ($0.completedDate != nil && Calendar.current.component(.year, from: $0.completedDate!) == currentYear))
+            $0.status == .completed && $0.completedYear == currentYear
         }.count
     }
 

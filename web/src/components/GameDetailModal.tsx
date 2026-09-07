@@ -44,6 +44,7 @@ import {
   MessageSquare,
   ArrowRight,
   CheckCircle2,
+  ChevronDown,
 } from 'lucide-react';
 import { GameShareModal } from './GameShareModal';
 
@@ -328,10 +329,12 @@ export function GameDetailModal({
     if (isPlaying) setIsBacklog(false);
 
     let nextStoryProgress = storyProgress;
+    let nextCompletedYear = completedYear;
     if (isCompleted) {
       nextStoryProgress = 'completed';
       setStoryProgress('completed');
-      if (!completedYear) {
+      if (completedYear === null || completedYear === undefined) {
+        nextCompletedYear = currentYear;
         setCompletedYear(currentYear);
       }
     }
@@ -340,12 +343,17 @@ export function GameDetailModal({
       status: newStatus,
       is_backlog: isPlaying ? false : isBacklog,
       last_played_date: isPlaying ? game.last_played_date || new Date().toISOString() : game.last_played_date,
-      completed_year: isCompleted ? (completedYear || currentYear) : completedYear,
+      completed_year: isCompleted ? nextCompletedYear : completedYear,
       completed_date: isCompleted ? (game.completed_date || new Date().toISOString()) : game.completed_date,
       story_progress: nextStoryProgress,
     };
 
     saveGameUpdates(updates);
+  };
+
+  const handleCompletedYearChange = (year: number | null) => {
+    setCompletedYear(year);
+    saveGameUpdates({ completed_year: year });
   };
 
   // Kvalitativ milstolpeändring (Enkelriktad: ändrar INTE spelets status)
@@ -838,6 +846,32 @@ export function GameDetailModal({
                     <span className="text-zinc-500 font-normal">Ditt betyg</span>
                   </div>
                 ) : null}
+
+                {/* Klarat år (Spelmål) badge i headern - motsvarande appens GameDetailView */}
+                {isOwned && status === 'completed' && (
+                  <div className="relative inline-flex items-center">
+                    <select
+                      value={completedYear !== null && completedYear !== undefined ? completedYear : ''}
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? null : Number(e.target.value);
+                        handleCompletedYearChange(val);
+                      }}
+                      className="appearance-none flex items-center gap-1.5 pl-2.5 pr-7 py-1 rounded-lg bg-teal-950/50 border border-teal-500/40 hover:border-teal-500/70 text-xs font-semibold text-teal-300 focus:outline-none focus:border-teal-400 cursor-pointer transition shadow-sm"
+                      title="Välj vilket år du klarade spelet (används för årligt spelmål)"
+                    >
+                      <option value="">🏁 Klarat (år ej valt)</option>
+                      <option value={new Date().getFullYear()}>
+                        🏁 Klarat {new Date().getFullYear()} (I år)
+                      </option>
+                      {Array.from({ length: 25 }, (_, i) => new Date().getFullYear() - 1 - i).map((y) => (
+                        <option key={y} value={y}>
+                          🏁 Klarat {y}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-3.5 h-3.5 text-teal-400 absolute right-2 pointer-events-none" />
+                  </div>
+                )}
               </div>
 
               {/* Genrer & Singleplayer */}
@@ -924,18 +958,21 @@ export function GameDetailModal({
 
                 {/* Klarat år selector när status är Klar */}
                 {(status === 'completed' || storyProgress === 'completed') && (
-                  <div className="flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-500/30 rounded-lg px-2 py-1">
-                    <span className="text-[11px] text-emerald-400 font-semibold">Klarat:</span>
+                  <div className="flex items-center gap-1.5 bg-teal-950/40 border border-teal-500/30 rounded-lg px-2 py-1">
+                    <span className="text-[11px] text-teal-400 font-semibold">Klarat år (Spelmål):</span>
                     <select
-                      value={completedYear || new Date().getFullYear()}
+                      value={completedYear !== null && completedYear !== undefined ? completedYear : ''}
                       onChange={(e) => {
-                        const yr = Number(e.target.value);
-                        setCompletedYear(yr);
-                        saveGameUpdates({ completed_year: yr });
+                        const val = e.target.value === '' ? null : Number(e.target.value);
+                        handleCompletedYearChange(val);
                       }}
-                      className="bg-zinc-950 border border-emerald-500/40 rounded px-1.5 py-0.5 text-xs font-bold text-emerald-300 focus:outline-none focus:border-emerald-400 cursor-pointer"
+                      className="bg-zinc-950 border border-teal-500/40 rounded px-1.5 py-0.5 text-xs font-bold text-teal-300 focus:outline-none focus:border-teal-400 cursor-pointer"
                     >
-                      {Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                      <option value="">Ej angivet (Räkna inte i årets mål)</option>
+                      <option value={new Date().getFullYear()}>
+                        {new Date().getFullYear()} (I år)
+                      </option>
+                      {Array.from({ length: 25 }, (_, i) => new Date().getFullYear() - 1 - i).map((y) => (
                         <option key={y} value={y}>
                           {y}
                         </option>

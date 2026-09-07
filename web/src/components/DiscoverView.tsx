@@ -484,15 +484,13 @@ export function DiscoverView({
 
   const currentYear = new Date().getFullYear();
 
-  // Spelmål beräkning (räknar endast aktiva ägda spel som klarats under innevarande år)
+  // Spelmål beräkning: tar ENDAST hänsyn till spel där man satt klarat år till innevarande år (t.ex. 2026)
   const completedGamesCount = useMemo(() => {
     return games.filter(
       (g) =>
         (g.status === 'completed' || (g.status as string) === 'Klar') &&
         g.is_owned !== false &&
-        (Number(g.completed_year) === currentYear ||
-          (g.completed_date && new Date(g.completed_date).getFullYear() === currentYear) ||
-          (!g.completed_year && !g.completed_date))
+        Number(g.completed_year) === currentYear
     ).length;
   }, [games, currentYear]);
 

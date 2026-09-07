@@ -301,7 +301,7 @@ struct ExploreView: View {
 
     private var currentYearCompletedCount: Int {
         store.games.filter {
-            $0.status == .completed && $0.isOwned && ($0.completedYear == currentYear || ($0.completedDate != nil && Calendar.current.component(.year, from: $0.completedDate!) == currentYear))
+            $0.status == .completed && $0.isOwned && $0.completedYear == currentYear
         }.count
     }
 

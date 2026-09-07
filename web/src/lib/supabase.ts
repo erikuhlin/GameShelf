@@ -70,6 +70,7 @@ export function packGameNotes(userNotes: string | null | undefined, meta: GameMe
   const cleanMeta: Record<string, any> = {};
 
   if (meta.completed_year !== undefined && meta.completed_year !== null) cleanMeta.completed_year = Number(meta.completed_year);
+  else if (meta.completed_year === null) cleanMeta.completed_year = null;
   if (meta.completed_date) cleanMeta.completed_date = meta.completed_date;
   if (meta.story_progress) cleanMeta.story_progress = meta.story_progress;
   if (meta.hours_played !== undefined && meta.hours_played !== null) cleanMeta.hours_played = Number(meta.hours_played);
@@ -178,8 +179,6 @@ export function mapSupabaseGame(row: any): Game {
       ? Number(meta.completed_year)
       : row.completed_year !== undefined && row.completed_year !== null
       ? Number(row.completed_year)
-      : isCompleted
-      ? fallbackYear
       : null;
 
   const completedDate =

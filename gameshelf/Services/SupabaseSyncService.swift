@@ -88,7 +88,11 @@ actor SupabaseSyncService {
 
             // Pack metadata (completedYear, completedDate) into notes
             var metaDict: [String: Any] = [:]
-            if let cy = game.completedYear { metaDict["completed_year"] = cy }
+            if let cy = game.completedYear {
+                metaDict["completed_year"] = cy
+            } else if game.status == .completed {
+                metaDict["completed_year"] = NSNull()
+            }
             if let cd = game.completedDate { metaDict["completed_date"] = ISO8601DateFormatter().string(from: cd) }
 
             let cleanNotes = game.notes.replacingOccurrences(of: #"<!--GS_META:[\s\S]*?-->\n?"#, with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -156,6 +160,8 @@ actor SupabaseSyncService {
                             parsedCompletedYear = cy
                         } else if let cyStr = dict["completed_year"] as? String, let cyInt = Int(cyStr) {
                             parsedCompletedYear = cyInt
+                        } else if dict.keys.contains("completed_year") {
+                            parsedCompletedYear = nil
                         }
                         if let cdStr = dict["completed_date"] as? String {
                             parsedCompletedDate = ISO8601DateFormatter().date(from: cdStr)

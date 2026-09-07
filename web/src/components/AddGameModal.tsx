@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Game, IGDBSearchResult, PlayStatus } from '@/types/game';
-import { supabase, normalizeIgdbRating } from '@/lib/supabase';
+import { supabase, normalizeIgdbRating, sanitizeUserGamePayload, mapSupabaseGame } from '@/lib/supabase';
 import { inferPlayTypes } from '@/lib/statusHelper';
 import { Search, X, Loader2, Plus, Check, Star, Gamepad, Calendar } from 'lucide-react';
 
@@ -106,9 +106,10 @@ export function AddGameModal({
         completed_date: choice.status === 'completed' && completedYear ? new Date().toISOString() : null,
       };
 
+      const sanitizedPayload = sanitizeUserGamePayload(newGamePayload);
       const { data, error } = await supabase
         .from('user_games')
-        .insert([newGamePayload])
+        .insert([sanitizedPayload])
         .select()
         .single();
 
@@ -123,7 +124,7 @@ export function AddGameModal({
         } as any;
         onGameAdded(fallbackGame);
       } else if (data) {
-        onGameAdded(data as Game);
+        onGameAdded(mapSupabaseGame(data));
       }
     } catch (err: any) {
       console.error('Error in handleAddGame:', err);

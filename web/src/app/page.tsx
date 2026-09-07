@@ -496,12 +496,6 @@ export default function HomePage() {
               if (!game.igdb_id && existing?.igdb_id) {
                 game.igdb_id = existing.igdb_id;
               }
-              if (existing?.completed_year && !game.completed_year) {
-                game.completed_year = existing.completed_year;
-              }
-              if (existing?.completed_date && !game.completed_date) {
-                game.completed_date = existing.completed_date;
-              }
               return game;
             });
 
@@ -898,7 +892,7 @@ export default function HomePage() {
       ...(isPlaying ? { is_backlog: false } : {}),
       ...(isCompleted
         ? {
-            completed_year: currentGame?.completed_year || currentYear,
+            completed_year: currentGame?.completed_year ?? null,
             completed_date: currentGame?.completed_date || new Date().toISOString(),
             story_progress: 'completed',
           }

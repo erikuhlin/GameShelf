@@ -329,21 +329,16 @@ export function GameDetailModal({
     if (isPlaying) setIsBacklog(false);
 
     let nextStoryProgress = storyProgress;
-    let nextCompletedYear = completedYear;
     if (isCompleted) {
       nextStoryProgress = 'completed';
       setStoryProgress('completed');
-      if (completedYear === null || completedYear === undefined) {
-        nextCompletedYear = currentYear;
-        setCompletedYear(currentYear);
-      }
     }
 
     const updates: Partial<Game> = {
       status: newStatus,
       is_backlog: isPlaying ? false : isBacklog,
       last_played_date: isPlaying ? game.last_played_date || new Date().toISOString() : game.last_played_date,
-      completed_year: isCompleted ? nextCompletedYear : completedYear,
+      completed_year: completedYear ?? null,
       completed_date: isCompleted ? (game.completed_date || new Date().toISOString()) : game.completed_date,
       story_progress: nextStoryProgress,
     };
@@ -420,7 +415,7 @@ export function GameDetailModal({
       newIsBacklog = true;
     } else if (choice === 'completed') {
       newStatus = 'completed';
-      newCompletedYear = currentYear;
+      newCompletedYear = null;
       newCompletedDate = nowIso;
       newStoryProg = 'completed';
     }

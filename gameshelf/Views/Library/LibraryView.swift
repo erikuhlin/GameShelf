@@ -1204,9 +1204,6 @@ struct LibraryView: View {
                     copy.isOwned = true
                     copy.isBacklog = false
                     copy.status = .completed
-                    let currentY = Calendar.current.component(.year, from: Date())
-                    copy.completedYear = currentY
-                    copy.completedDate = Date()
                     copy.storyProgress = .completed
                     store.update(copy)
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()

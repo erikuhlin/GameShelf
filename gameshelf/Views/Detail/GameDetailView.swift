@@ -568,10 +568,6 @@ struct GameDetailView: View {
                                     copy.lastPlayedDate = Date()
                                 }
                             } else if st == .completed {
-                                if copy.completedYear == nil {
-                                    copy.completedYear = Calendar.current.component(.year, from: Date())
-                                    copy.completedDate = Date()
-                                }
                                 copy.storyProgress = .completed
                             }
                             updateLocal(copy)

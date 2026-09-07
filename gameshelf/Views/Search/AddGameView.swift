@@ -1333,10 +1333,6 @@ private struct IGDBSearchRow: View {
             updated.isBacklog = true
         } else if status == .completed {
             updated.isBacklog = false
-            if updated.completedYear == nil {
-                updated.completedYear = Calendar.current.component(.year, from: Date())
-                updated.completedDate = Date()
-            }
             updated.storyProgress = .completed
         }
         store.update(updated)

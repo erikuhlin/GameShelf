@@ -32,7 +32,7 @@ export function AddGameModal({
   const [isLoading, setIsLoading] = useState(false);
   const [addingId, setAddingId] = useState<number | null>(null);
   const [initialChoice, setInitialChoice] = useState<string>('backlog');
-  const [completedYear, setCompletedYear] = useState<number | null>(new Date().getFullYear());
+  const [completedYear, setCompletedYear] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Debounced IGDB search

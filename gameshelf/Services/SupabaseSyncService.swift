@@ -175,12 +175,6 @@ actor SupabaseSyncService {
                 parsedCompletedDate = ISO8601DateFormatter().date(from: compStr)
             }
 
-            if playStatus == .completed && parsedCompletedYear == nil {
-                parsedCompletedYear = Calendar.current.component(.year, from: parsedDate)
-            }
-            if playStatus == .completed && parsedCompletedDate == nil {
-                parsedCompletedDate = parsedDate
-            }
 
             return Game(
                 id: id,

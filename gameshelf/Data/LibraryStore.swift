@@ -65,6 +65,26 @@ final class LibraryStore: ObservableObject {
             try loadGames()
             try loadCollections()
             isLoaded = true
+
+            // Engångssanering av tidigare auto-tilldelade completedYear (2026) på genomspelade spel
+            let cleanupKey = "has_cleaned_legacy_auto_completed_year_v1"
+            if !UserDefaults.standard.bool(forKey: cleanupKey) {
+                let currentY = Calendar.current.component(.year, from: Date())
+                var modified = false
+                self.games = self.games.map { g in
+                    var copy = g
+                    if copy.completedYear == currentY && copy.title.lowercased() != "007 first light" {
+                        copy.completedYear = nil
+                        copy.completedDate = nil
+                        modified = true
+                    }
+                    return copy
+                }
+                if modified {
+                    try? saveGames()
+                }
+                UserDefaults.standard.set(true, forKey: cleanupKey)
+            }
         } catch {
             self.games = []
             self.collections = []

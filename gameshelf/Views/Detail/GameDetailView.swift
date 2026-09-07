@@ -334,9 +334,6 @@ struct GameDetailView: View {
                     var copy = g
                     copy.isOwned = true
                     copy.status = .completed
-                    let currentY = Calendar.current.component(.year, from: Date())
-                    copy.completedYear = currentY
-                    copy.completedDate = Date()
                     copy.storyProgress = .completed
                     updateLocal(copy)
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()

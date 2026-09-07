@@ -119,9 +119,8 @@ struct ExploreView: View {
     }
 
     private func runInitialLoad() async {
-        if store.games.isEmpty {
-            await store.syncWithRemote()
-        }
+        await store.syncWithRemote()
+        await profile.syncWithRemote()
         news.reload(platforms: prefs.platforms, minAge: prefs.minAge, libraryGames: store.games)
         async let trFetch: Void = trending.fetch(platformFamilies: prefs.platforms, news: news.items)
         async let upFetch: Void = loadUpcomingHighlight()
@@ -171,6 +170,8 @@ struct ExploreView: View {
             .toolbar(.hidden, for: .navigationBar)
             .task { await runInitialLoad() }
             .refreshable {
+                await store.syncWithRemote()
+                await profile.syncWithRemote()
                 forYouRefreshID = UUID()
                 news.reload(platforms: prefs.platforms, minAge: prefs.minAge, libraryGames: store.games)
                 async let trFetch: Void = trending.fetch(platformFamilies: prefs.platforms, news: news.items, forceReload: true)

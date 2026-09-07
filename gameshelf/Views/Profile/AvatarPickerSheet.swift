@@ -303,10 +303,15 @@ struct UserAvatarView: View {
                     .frame(width: size, height: size)
                     .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 2))
 
-                let letter = profile.username.trimmingCharacters(in: .whitespaces).first.map { String($0).uppercased() } ?? "E"
-                Text(letter)
-                    .font(.system(size: size * 0.42, weight: .black))
-                    .foregroundStyle(.white)
+                if let letter = profile.username.trimmingCharacters(in: .whitespaces).first.map({ String($0).uppercased() }), !letter.isEmpty {
+                    Text(letter)
+                        .font(.system(size: size * 0.42, weight: .black))
+                        .foregroundStyle(.white)
+                } else {
+                    Image(systemName: "person.fill")
+                        .font(.system(size: size * 0.42))
+                        .foregroundStyle(.white.opacity(0.8))
+                }
             }
         }
     }

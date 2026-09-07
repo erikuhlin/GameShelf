@@ -57,12 +57,24 @@ public final class SupabaseAuthManager: ObservableObject {
     private let urlSession: URLSession
 
     public var persistentUserId: UUID {
-        if let saved = UserDefaults.standard.string(forKey: deviceUserKey), let uuid = UUID(uuidString: saved) {
-            return uuid
+        if let sessionUser = currentUser, sessionUser.isLinkedWithRealEmail {
+            return sessionUser.id
         }
-        let newUUID = currentUser?.id ?? UUID()
-        UserDefaults.standard.set(newUUID.uuidString, forKey: deviceUserKey)
-        return newUUID
+        return ProfileManager.shared.activeProfileId
+    }
+
+    public func setExplicitUserId(_ id: UUID) {
+        UserDefaults.standard.set(id.uuidString, forKey: deviceUserKey)
+        if currentUser == nil || !(currentUser?.isLinkedWithRealEmail ?? false) {
+            let updatedUser = SupabaseUser(id: id, email: nil, isAnonymous: true)
+            self.currentUser = updatedUser
+            let dummySession = SupabaseSession(
+                accessToken: SupabaseConfig.anonKey,
+                refreshToken: nil,
+                user: updatedUser
+            )
+            saveSession(dummySession)
+        }
     }
 
     private init() {
@@ -85,6 +97,8 @@ public final class SupabaseAuthManager: ObservableObject {
     private func saveSession(_ session: SupabaseSession) {
         self.session = session
         self.currentUser = session.user
+        UserDefaults.standard.set(session.user.id.uuidString, forKey: deviceUserKey)
+        ProfileManager.shared.updateActiveProfile(linkedEmail: session.user.email)
         if let data = try? JSONEncoder().encode(session) {
             UserDefaults.standard.set(data, forKey: sessionStorageKey)
         }

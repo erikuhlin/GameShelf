@@ -66,6 +66,7 @@ struct ExploreView: View {
     @State private var isLoadingUpcoming: Bool = false
     @State private var showingGamingGoalSheet: Bool = false
     @State private var showingAvatarPickerSheet: Bool = false
+    @State private var showingPairingSheet: Bool = false
 
     private var prefs: ExplorePrefs {
         .init(minAge: profile.age, platforms: Array(profile.platforms))
@@ -163,6 +164,8 @@ struct ExploreView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 14)
+                .frame(maxWidth: 960)
+                .frame(maxWidth: .infinity, alignment: .center)
             }
             .background(Color.ds.background.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
@@ -220,6 +223,11 @@ struct ExploreView: View {
             }
             .sheet(isPresented: $showingAvatarPickerSheet) {
                 AvatarPickerSheet()
+                    .environmentObject(profile)
+            }
+            .sheet(isPresented: $showingPairingSheet) {
+                DevicePairingView()
+                    .environmentObject(store)
                     .environmentObject(profile)
             }
             .sheet(isPresented: $showingProfileSheet) {
@@ -1329,6 +1337,60 @@ struct ExploreView: View {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(Color.red.opacity(0.2), lineWidth: 1)
             )
+
+            // Snabbval för befintliga användare
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.title2)
+                        .foregroundStyle(Color.ds.brandRed)
+                        .padding(10)
+                        .background(Color.ds.brandRed.opacity(0.12), in: Circle())
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Har du redan ett konto eller bibliotek?")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.primary)
+
+                        Text("Koppla ihop med din andra enhet eller webbkonto för att hämta ditt spelbibliotek och din profil direkt.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Button {
+                    showingPairingSheet = true
+                } label: {
+                    HStack {
+                        Image(systemName: "qrcode.viewfinder")
+                        Text("Koppla enhet eller logga in")
+                            .bold()
+                    }
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.ds.brandRed)
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(16)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.ds.brandRed.opacity(0.25), lineWidth: 1)
+            )
+
+            HStack {
+                Rectangle().fill(Color.secondary.opacity(0.2)).frame(height: 1)
+                Text("ELLER SKAPA NY PROFIL PÅ DENNA ENHET")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.secondary)
+                Rectangle().fill(Color.secondary.opacity(0.2)).frame(height: 1)
+            }
+            .padding(.vertical, 4)
 
             // Steg 1: Profilnamn & Avatar
             VStack(alignment: .leading, spacing: 10) {

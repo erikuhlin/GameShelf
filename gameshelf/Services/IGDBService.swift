@@ -499,19 +499,21 @@ struct TrendingGameResult: Sendable {
         return try await requestGames(body: bodyString, url: url, token: token)
     }
 
-    /// Hämtar de officiellt liknande spelen för ett visst spel baserat på IGDBs similar_games
+    /// Hämtar de officiellt liknande spelen för ett visst spel baserat på IGDBs similar_games med kvalitetsfilter
     func fetchSimilarGames(forGameID id: Int, limit: Int = 12) async throws -> [IGDBGame] {
         let detail = try await fetchGameDetails(id: id)
         guard let similar = detail.similarGames, !similar.isEmpty else { return [] }
-        let ids = similar.prefix(limit).map { String($0.id) }.joined(separator: ",")
+        let ids = similar.prefix(limit * 2).map { String($0.id) }.joined(separator: ",")
         let token = try await IGDBAuthManager.shared.getValidToken()
         guard let url = URL(string: "https://api.igdb.com/v4/games") else { throw URLError(.badURL) }
         let body = """
         fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, total_rating, total_rating_count;
-        where id = (\(ids)) & cover != null;
+        where id = (\(ids)) & cover != null & (total_rating = null | total_rating >= 70);
+        sort total_rating desc;
         limit \(limit);
         """
-        return try await requestGames(body: body, url: url, token: token)
+        let games = try await requestGames(body: body, url: url, token: token)
+        return games.filter { !$0.isDLC }
     }
 
     /// Avancerad sökning och upptäckt med årtal, tidsperiod, plattform, genre, utvecklare och sortering
@@ -602,12 +604,12 @@ struct TrendingGameResult: Sendable {
             conditions.append("involved_companies.company.name ~ *\"\(safeDev)\"*")
         }
 
-        // 5. Betyg / Popularitetskrav vid sortering på betyg för relevans
+        // 5. Betyg / Popularitetskrav vid sortering på betyg för relevans (undvik obskyra moddar/retro med få röster)
         if sortOption == .rating {
-            conditions.append("total_rating != null & total_rating_count > 3")
+            conditions.append("total_rating != null & total_rating_count >= 20")
         }
         if minRating > 0 {
-            conditions.append("total_rating >= \(minRating) & total_rating_count > 3")
+            conditions.append("total_rating >= \(minRating)")
         }
 
         let whereClause = conditions.isEmpty ? "" : "where \(conditions.joined(separator: " & "));"

@@ -10,6 +10,7 @@ import SwiftUI
 struct AccountSyncSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: LibraryStore
+    @EnvironmentObject private var profile: ProfileStore
     @ObservedObject private var authManager = SupabaseAuthManager.shared
 
     @State private var email = ""
@@ -30,7 +31,7 @@ struct AccountSyncSheet: View {
                         VStack(alignment: .leading, spacing: 2) {
                             if let user = authManager.currentUser {
                                 if user.isLinkedWithRealEmail {
-                                    Text("Länkat webbkonto")
+                                    Text("Länkat Gameshelf-konto")
                                         .font(.subheadline.bold())
                                     Text(user.email ?? "Inloggad")
                                         .font(.caption)
@@ -50,8 +51,8 @@ struct AccountSyncSheet: View {
                         }
                         Spacer()
                         Circle()
-                            .fill(authManager.currentUser != nil ? Color.green : Color.orange)
-                            .frame(width: 10, height: 10)
+                        .fill(authManager.currentUser != nil ? Color.green : Color.orange)
+                        .frame(width: 10, height: 10)
                     }
 
                     HStack {
@@ -68,7 +69,7 @@ struct AccountSyncSheet: View {
                         HStack {
                             Image(systemName: "qrcode.viewfinder")
                                 .foregroundStyle(Color.ds.brandRed)
-                            Text("Parkoppla med webbläsare (Kod/QR)")
+                            Text("Koppla enheter (Kod/QR)")
                                 .bold()
                             Spacer()
                             Image(systemName: "chevron.right")
@@ -80,9 +81,10 @@ struct AccountSyncSheet: View {
                     Button {
                         Task {
                             isSyncingManual = true
+                            await profile.syncWithRemote()
                             await store.syncWithRemote()
                             isSyncingManual = false
-                            successMessage = "Biblioteket har synkroniserats med Supabase!"
+                            successMessage = "Biblioteket och profilen har synkroniserats med Supabase!"
                         }
                     } label: {
                         HStack {
@@ -93,15 +95,15 @@ struct AccountSyncSheet: View {
                     .disabled(isSyncingManual)
                 }
 
-                // Sektion: Länka konto för webbåtkomst
+                // Sektion: Länka konto för flerenhets- och webbåtkomst
                 if !(authManager.currentUser?.isLinkedWithRealEmail ?? false) {
                     Section {
-                        Text("Koppla din egen e-postadress och ett lösenord till detta konto, så kan du logga in på webben (http://localhost:3000/login) och se samma spel där.")
+                        Text("Koppla en e-postadress och ett lösenord till detta bibliotek för att automatiskt komma åt dina spel på alla dina enheter (mobil, surfplatta eller på webben).")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
 
                         Picker("Läge", selection: $isExistingAccount) {
-                            Text("Skapa inloggning").tag(false)
+                            Text("Skapa konto").tag(false)
                             Text("Logga in").tag(true)
                         }
                         .pickerStyle(.segmented)
@@ -133,7 +135,7 @@ struct AccountSyncSheet: View {
                                 if authManager.isLoading {
                                     ProgressView()
                                 } else {
-                                    Text(isExistingAccount ? "Logga in på webbkonto" : "Länka till webbkonto")
+                                    Text(isExistingAccount ? "Logga in och synka" : "Skapa konto och synka")
                                         .bold()
                                 }
                                 Spacer()
@@ -141,7 +143,7 @@ struct AccountSyncSheet: View {
                         }
                         .disabled(email.isEmpty || password.isEmpty || authManager.isLoading)
                     } header: {
-                        Text(isExistingAccount ? "Logga in med befintligt konto" : "Anslut till webben (Skapa inloggning)")
+                        Text(isExistingAccount ? "Logga in med befintligt konto" : "Skapa Gameshelf-konto")
                     }
                 } else {
                     Section("Hantering") {
@@ -151,12 +153,12 @@ struct AccountSyncSheet: View {
                                 await authManager.ensureAnonymousAuth()
                             }
                         } label: {
-                            Text("Logga ut från webbkonto")
+                            Text("Logga ut från Gameshelf-kontot")
                         }
                     }
                 }
             }
-            .navigationTitle("Webb & Synk")
+            .navigationTitle("Konto & Synk")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -177,12 +179,14 @@ struct AccountSyncSheet: View {
             do {
                 if isExistingAccount {
                     try await authManager.signIn(email: email, password: password)
+                    await profile.syncWithRemote()
                     await store.syncWithRemote()
-                    successMessage = "Inloggad! Spelsamlingen synkas nu mot ditt webbkonto."
+                    successMessage = "Inloggad! Spelsamlingen synkroniseras nu mot ditt konto."
                 } else {
                     try await authManager.linkAccount(email: email, password: password)
+                    await profile.syncWithRemote()
                     await store.syncWithRemote()
-                    successMessage = "Ditt konto är nu länkat! Du kan nu logga in på webben med samma uppgifter."
+                    successMessage = "Ditt konto är nu länkat! Du kan nu logga in på webben eller andra enheter med samma uppgifter."
                 }
             } catch {
                 // Felmeddelandet sätts automatiskt i authManager.authError

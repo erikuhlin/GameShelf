@@ -14,7 +14,7 @@ import SwiftUI
 
 struct gameshelfApp: App {
     @StateObject private var store = LibraryStore()
-    @StateObject private var profile = ProfileStore()
+    @StateObject private var profile = ProfileStore.shared
 
     var body: some Scene {
         WindowGroup {

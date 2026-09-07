@@ -18,12 +18,12 @@ struct ProfileSettingsSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Webb & Databassynk") {
+                Section("Konto & Enhetssynk") {
                     Button {
                         showingPairingSheet = true
                     } label: {
                         HStack {
-                            Label("📱 Parkoppla webbläsare (Kod/QR)", systemImage: "qrcode.viewfinder")
+                            Label("Koppla enheter (Kod/QR)", systemImage: "arrow.triangle.2.circlepath")
                                 .bold()
                             Spacer()
                             Image(systemName: "chevron.right")
@@ -36,7 +36,7 @@ struct ProfileSettingsSheet: View {
                         showingAccountSyncSheet = true
                     } label: {
                         HStack {
-                            Label("Konto- och serverinställningar", systemImage: "gearshape")
+                            Label("Konto- och synkinställningar", systemImage: "person.crop.circle.badge.checkmark")
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(.caption)
@@ -77,6 +77,7 @@ struct ProfileSettingsSheet: View {
             .sheet(isPresented: $showingAccountSyncSheet) {
                 AccountSyncSheet()
                     .environmentObject(store)
+                    .environmentObject(profile)
             }
         }
     }

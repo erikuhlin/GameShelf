@@ -10,7 +10,7 @@ import {
   GamePlayType,
   GameStoryProgress,
 } from '@/types/game';
-import { supabase } from '@/lib/supabase';
+import { supabase, sanitizeUserGamePayload } from '@/lib/supabase';
 import { StatusBadge } from './StatusBadge';
 import { getStatusDisplayTitle, inferPlayTypes } from '@/lib/statusHelper';
 import {
@@ -278,7 +278,8 @@ export function GameDetailModal({
               };
               onUpdateGame({ ...game, ...updates });
               try {
-                supabase.from('user_games').update(updates).eq('id', game.id).then();
+                const sanitized = sanitizeUserGamePayload(updates, game);
+                supabase.from('user_games').update(sanitized).eq('id', game.id).then();
               } catch (_) {}
             }
           }
@@ -307,9 +308,10 @@ export function GameDetailModal({
     onUpdateGame(updatedGame);
 
     try {
+      const sanitized = sanitizeUserGamePayload(updates, game);
       await supabase
         .from('user_games')
-        .update(updates)
+        .update(sanitized)
         .eq('id', game.id);
     } catch (err) {
       console.warn('Failed to persist game updates to Supabase:', err);
@@ -329,6 +331,9 @@ export function GameDetailModal({
     if (isCompleted) {
       nextStoryProgress = 'completed';
       setStoryProgress('completed');
+      if (!completedYear) {
+        setCompletedYear(currentYear);
+      }
     }
 
     const updates: Partial<Game> = {
@@ -916,6 +921,28 @@ export function GameDetailModal({
                     <option value="abandoned">❌ Avbrutet</option>
                   </select>
                 </div>
+
+                {/* Klarat år selector när status är Klar */}
+                {(status === 'completed' || storyProgress === 'completed') && (
+                  <div className="flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-500/30 rounded-lg px-2 py-1">
+                    <span className="text-[11px] text-emerald-400 font-semibold">Klarat:</span>
+                    <select
+                      value={completedYear || new Date().getFullYear()}
+                      onChange={(e) => {
+                        const yr = Number(e.target.value);
+                        setCompletedYear(yr);
+                        saveGameUpdates({ completed_year: yr });
+                      }}
+                      className="bg-zinc-950 border border-emerald-500/40 rounded px-1.5 py-0.5 text-xs font-bold text-emerald-300 focus:outline-none focus:border-emerald-400 cursor-pointer"
+                    >
+                      {Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Betyg */}
                 <div className="flex items-center gap-1.5 ml-auto">

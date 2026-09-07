@@ -57,8 +57,8 @@ enum NewsKind: String, Codable, Hashable, CaseIterable {
 }
 
 // Lätta nyhetsartiklar som visas i Explore
-struct NewsItem: Identifiable, Hashable, Sendable {
-    let id = UUID()
+struct NewsItem: Identifiable, Hashable, Sendable, Codable {
+    var id: String
     let title: String
     let source: String
     let link: URL?
@@ -70,6 +70,32 @@ struct NewsItem: Identifiable, Hashable, Sendable {
     var matchedGameCoverURL: URL? = nil
     var matchedGameStatus: String? = nil
 
+    init(
+        id: String? = nil,
+        title: String,
+        source: String,
+        link: URL?,
+        published: Date?,
+        image: URL?,
+        tags: [String],
+        kind: NewsKind,
+        matchedGameTitle: String? = nil,
+        matchedGameCoverURL: URL? = nil,
+        matchedGameStatus: String? = nil
+    ) {
+        self.id = id ?? (link?.absoluteString ?? UUID().uuidString)
+        self.title = title
+        self.source = source
+        self.link = link
+        self.published = published
+        self.image = image
+        self.tags = tags
+        self.kind = kind
+        self.matchedGameTitle = matchedGameTitle
+        self.matchedGameCoverURL = matchedGameCoverURL
+        self.matchedGameStatus = matchedGameStatus
+    }
+
     var relativePublishedTime: String {
         guard let pub = published else { return "" }
         let formatter = RelativeDateTimeFormatter()
@@ -79,52 +105,130 @@ struct NewsItem: Identifiable, Hashable, Sendable {
     }
 }
 
+// Tidsfilter för nyhetsarkiv
+enum NewsTimeFilter: String, CaseIterable, Identifiable {
+    case all = "Alla tider"
+    case past24h = "Senaste 24h"
+    case pastWeek = "Senaste veckan"
+    case pastMonth = "Senaste månaden"
+    case older = "Äldre än 30d"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .all: return "clock"
+        case .past24h: return "clock.badge.checkmark"
+        case .pastWeek: return "calendar"
+        case .pastMonth: return "calendar.badge.clock"
+        case .older: return "archivebox"
+        }
+    }
+}
+
 @MainActor
 final class NewsFetcher: ObservableObject {
     @Published var items: [NewsItem] = []
     @Published var isLoading = false
     @Published var isLoadingMore = false
     @Published var canLoadMore = false
+    @Published var selectedTimeFilter: NewsTimeFilter = .all
 
     // Client-side filters & paging
     private var filterKeywords: [String] = []
     private var filterKind: NewsKind? = nil
     private var onlyLibraryGames: Bool = false
     private var searchFilter: String = ""
+    private var currentCategoryName: String = "Alla"
 
     private let pageSize = 20
     private var currentPage = 1
     private var allItems: [NewsItem] = []
 
+    private var archiveFileURL: URL? {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("gameshelf_news_archive_v1.json")
+    }
+
     private let feedStrings: [String] = [
-        // 1. Dedikerade Recensioner & Tester
+        // 1. Svenska Spelmedier
+        "https://www.gamereactor.se/rss/rss.php?texttype=4", // Nyheter SE
+        "https://www.gamereactor.se/rss/rss.php?texttype=2", // Recensioner SE
+
+        // 2. Dedikerade Recensioner & Tester
+        "https://feeds.feedburner.com/ign/reviews",
+        "https://www.eurogamer.net/feed/reviews",
         "https://www.gamespot.com/feeds/reviews/",
         "https://www.pushsquare.com/feeds/reviews",
         "https://www.nintendolife.com/feeds/reviews",
         "https://www.purexbox.com/feeds/reviews",
 
-        // 2. Ledande Spelmedier
+        // 3. Ledande Globala Spelmedier
+        "https://feeds.feedburner.com/ign/all",
+        "https://www.eurogamer.net/feed",
         "https://www.pcgamer.com/rss/",
         "https://www.polygon.com/rss/index.xml",
         "https://kotaku.com/rss",
         "https://www.gamespot.com/feeds/mashup/",
         "https://www.videogameschronicle.com/feed/",
+        "https://www.gamesradar.com/rss/",
         "https://www.rockpapershotgun.com/feed",
+        "https://www.vg247.com/feed",
+        "https://www.pcgamesn.com/feed",
         "https://www.destructoid.com/feed/",
         "https://www.gematsu.com/feed",
+        "https://www.siliconera.com/feed/",
+
+        // 4. Officiella & Plattformsspecifika
+        "https://news.xbox.com/en-us/feed/",
         "https://blog.playstation.com/feed/",
         "https://www.nintendolife.com/feeds/latest",
+        "https://nintendoeverything.com/feed/",
         "https://www.pushsquare.com/feeds/latest",
-        "https://www.purexbox.com/feeds/latest"
+        "https://www.purexbox.com/feeds/latest",
+        "https://toucharcade.com/feed/"
     ]
 
-    /// Hämtar alla RSS-källor parallellt på under en sekund och matchar mot biblioteket
+    init() {
+        // Läs in sparat arkiv från disk omedelbart vid start så användaren ser nyheter direkt
+        let cached = loadArchiveFromDisk()
+        if !cached.isEmpty {
+            self.allItems = cached
+            self.recompute()
+        }
+    }
+
+    private func loadArchiveFromDisk() -> [NewsItem] {
+        guard let url = archiveFileURL, FileManager.default.fileExists(atPath: url.path) else { return [] }
+        do {
+            let data = try Data(contentsOf: url)
+            let decoded = try JSONDecoder().decode([NewsItem].self, from: data)
+            return decoded
+        } catch {
+            return []
+        }
+    }
+
+    private func saveArchiveToDisk(_ items: [NewsItem]) {
+        guard let url = archiveFileURL else { return }
+        do {
+            let data = try JSONEncoder().encode(items)
+            try data.write(to: url, options: .atomic)
+        } catch {
+            // Ignorera sparfel
+        }
+    }
+
+    /// Hämtar alla RSS-källor parallellt, sparar i disk-arkiv och matchar mot biblioteket
     func reload(platforms: [String] = [], minAge: Int = 0, libraryGames: [Game] = []) {
         Task {
             isLoading = true
-            items = []
-            allItems = []
-            canLoadMore = false
+
+            // Läs in tidigare sparat arkiv så vi inte tappar äldre artiklar
+            let existingArchive = self.loadArchiveFromDisk()
+            if self.allItems.isEmpty {
+                self.allItems = existingArchive
+                self.recompute()
+            }
 
             let feeds = feedStrings.compactMap { URL(string: $0) }
 
@@ -148,27 +252,30 @@ final class NewsFetcher: ObservableObject {
                 return allResults
             }
 
-            // Filtrera bort dubbletter baserat på titel
-            var seenTitles = Set<String>()
-            let uniqueCollected = collected.filter { item in
-                let simp = item.title.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
-                if seenTitles.contains(simp) { return false }
-                seenTitles.insert(simp)
+            // Slå ihop nya artiklar med befintligt arkiv
+            let merged = collected + existingArchive
+
+            // Filtrera bort dubbletter baserat på förenklad titel eller unik länk
+            var seenKeys = Set<String>()
+            let uniqueCollected = merged.filter { item in
+                let key = item.link?.absoluteString ?? item.title.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).joined()
+                if seenKeys.contains(key) { return false }
+                seenKeys.insert(key)
                 return true
             }
 
-            // Filtrera bort gamla artiklar (> 60 dagar)
-            let cutoff = Calendar.current.date(byAdding: .day, value: -60, to: Date()) ?? Date()
-            let recent = uniqueCollected.filter { item in
-                if let d = item.published { return d >= cutoff }
-                return true
-            }
+            // Sortera efter datum (nyast först) och behåll upp till 800 historiska artiklar
+            let sorted = uniqueCollected
+                .sorted { ($0.published ?? .distantPast) > ($1.published ?? .distantPast) }
+                .prefix(800)
 
-            // Sortera efter datum
-            let sorted = recent.sorted { ($0.published ?? .distantPast) > ($1.published ?? .distantPast) }
+            let finalArchive = Array(sorted)
+
+            // Spara det uppdaterade arkivet till disk
+            self.saveArchiveToDisk(finalArchive)
 
             // Matcha mot bibliotekets spel
-            let enriched = sorted.map { item -> NewsItem in
+            let enriched = finalArchive.map { item -> NewsItem in
                 var modItem = item
                 let lowerTitle = item.title.lowercased()
 
@@ -190,14 +297,28 @@ final class NewsFetcher: ObservableObject {
         }
     }
 
-    private var currentCategoryName: String = "Alla"
-
-    func setFilters(platformKeywords: [String], kind: NewsKind?, onlyLibrary: Bool = false, categoryName: String = "Alla", searchText: String = "") {
+    func setFilters(
+        platformKeywords: [String],
+        kind: NewsKind?,
+        onlyLibrary: Bool = false,
+        categoryName: String = "Alla",
+        searchText: String = "",
+        timeFilter: NewsTimeFilter? = nil
+    ) {
         self.filterKeywords = platformKeywords.map { $0.lowercased() }
         self.filterKind = kind
         self.onlyLibraryGames = onlyLibrary
         self.currentCategoryName = categoryName
         self.searchFilter = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let tf = timeFilter {
+            self.selectedTimeFilter = tf
+        }
+        self.currentPage = 1
+        self.recompute()
+    }
+
+    func setTimeFilter(_ filter: NewsTimeFilter) {
+        self.selectedTimeFilter = filter
         self.currentPage = 1
         self.recompute()
     }
@@ -215,7 +336,26 @@ final class NewsFetcher: ObservableObject {
     private func recompute() {
         var list = allItems
 
-        // 1. Filtrera på kategori
+        // 1. Filtrera på tidsintervall
+        let now = Date()
+        switch selectedTimeFilter {
+        case .all:
+            break
+        case .past24h:
+            let cutoff = Calendar.current.date(byAdding: .hour, value: -24, to: now) ?? now
+            list = list.filter { ($0.published ?? .distantPast) >= cutoff }
+        case .pastWeek:
+            let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: now) ?? now
+            list = list.filter { ($0.published ?? .distantPast) >= cutoff }
+        case .pastMonth:
+            let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: now) ?? now
+            list = list.filter { ($0.published ?? .distantPast) >= cutoff }
+        case .older:
+            let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: now) ?? now
+            list = list.filter { ($0.published ?? .distantPast) < cutoff }
+        }
+
+        // 2. Filtrera på kategori
         switch currentCategoryName {
         case "Mina spel":
             list = list.filter { $0.matchedGameTitle != nil }
@@ -243,7 +383,7 @@ final class NewsFetcher: ObservableObject {
             break
         }
 
-        // 2. Filtrera på plattforms-nyckelord om sådana valts
+        // 3. Filtrera på plattforms-nyckelord om sådana valts
         if !filterKeywords.isEmpty {
             list = list.filter { item in
                 let text = (item.title + " " + item.tags.joined(separator: " ")).lowercased()
@@ -251,7 +391,7 @@ final class NewsFetcher: ObservableObject {
             }
         }
 
-        // 3. Filtrera på söktext
+        // 4. Filtrera på söktext (söker genom titel, källa och matchat biblioteksspel)
         if !searchFilter.isEmpty {
             list = list.filter {
                 $0.title.lowercased().contains(searchFilter) ||

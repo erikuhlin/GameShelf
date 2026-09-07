@@ -63,6 +63,7 @@ struct NewsFeedView: View {
     @StateObject private var trending = TrendingFetcher()
 
     @State private var selectedNewsCategory: NewsFilterCategory = .all
+    @State private var selectedTimeFilter: NewsTimeFilter = .all
     @State private var newsSearchText: String = ""
     @State private var sheet: NewsSheetRoute? = nil
     @State private var findError: String? = nil
@@ -74,25 +75,58 @@ struct NewsFeedView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                // 1. Sökfält för nyheter
+                // 1. Sökfält och Tidsfilter
                 HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField("Sök bland nyheter, spel & källor...", text: $newsSearchText)
-                        .textFieldStyle(.plain)
-                    if !newsSearchText.isEmpty {
-                        Button {
-                            newsSearchText = ""
-                            applyNewsFilters()
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.secondary)
+                        TextField("Sök bland nyheter, recensioner & arkiv...", text: $newsSearchText)
+                            .textFieldStyle(.plain)
+                        if !newsSearchText.isEmpty {
+                            Button {
+                                newsSearchText = ""
+                                applyNewsFilters()
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
+                    .padding(10)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                    // Tidsfilter-meny
+                    Menu {
+                        ForEach(NewsTimeFilter.allCases) { filter in
+                            Button {
+                                selectedTimeFilter = filter
+                                applyNewsFilters()
+                            } label: {
+                                HStack {
+                                    Text(filter.rawValue)
+                                    if selectedTimeFilter == filter {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: selectedTimeFilter.icon)
+                            Text(selectedTimeFilter == .all ? "Tid" : selectedTimeFilter.rawValue)
+                                .font(.subheadline.weight(.semibold))
+                                .lineLimit(1)
+                            Image(systemName: "chevron.down")
+                                .font(.caption2.bold())
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 10)
+                        .background(selectedTimeFilter != .all ? Color.red.opacity(0.15) : Color(.secondarySystemGroupedBackground))
+                        .foregroundStyle(selectedTimeFilter != .all ? Color.red : Color.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
                 }
-                .padding(10)
-                .background(Color(.secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .onChange(of: newsSearchText) { _, _ in
                     applyNewsFilters()
                 }
@@ -282,7 +316,8 @@ struct NewsFeedView: View {
             kind: selectedNewsCategory.kind,
             onlyLibrary: onlyMyGames,
             categoryName: selectedNewsCategory.rawValue,
-            searchText: newsSearchText
+            searchText: newsSearchText,
+            timeFilter: selectedTimeFilter
         )
     }
 

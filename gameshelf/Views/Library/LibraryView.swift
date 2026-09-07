@@ -76,7 +76,9 @@ struct LibraryYearGroup: Identifiable {
 
 struct LibraryView: View {
     @EnvironmentObject var store: LibraryStore
+    @EnvironmentObject private var profile: ProfileStore
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @State private var selectedTab: LibrarySectionTab = .owned
     @State private var selectedStatusFilter: PlayStatusFilter = .all
@@ -89,18 +91,30 @@ struct LibraryView: View {
     @State private var collapsedYears: Set<Int> = []
     @State private var isSearching = false
 
-    // 3 kolumner för Poster Grid med topplinjering
-    private let posterGridColumns = [
-        GridItem(.flexible(), spacing: 10, alignment: .top),
-        GridItem(.flexible(), spacing: 10, alignment: .top),
-        GridItem(.flexible(), spacing: 10, alignment: .top)
-    ]
+    // Adaptiva kolumner för Poster Grid (3 på iPhone, 5–8 på iPad)
+    private var posterGridColumns: [GridItem] {
+        if horizontalSizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 135, maximum: 185), spacing: 14, alignment: .top)]
+        } else {
+            return [
+                GridItem(.flexible(), spacing: 10, alignment: .top),
+                GridItem(.flexible(), spacing: 10, alignment: .top),
+                GridItem(.flexible(), spacing: 10, alignment: .top)
+            ]
+        }
+    }
 
-    // 2 kolumner för Samlingar
-    private let collectionGridColumns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
-    ]
+    // Adaptiva kolumner för Samlingar (2 på iPhone, 3–4 på iPad)
+    private var collectionGridColumns: [GridItem] {
+        if horizontalSizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 280, maximum: 380), spacing: 16)]
+        } else {
+            return [
+                GridItem(.flexible(), spacing: 12),
+                GridItem(.flexible(), spacing: 12)
+            ]
+        }
+    }
 
     // Aktiva spel som spelas just nu
     private var playingNowGames: [Game] {
@@ -462,6 +476,7 @@ struct LibraryView: View {
                 .padding(.bottom, 56) // Extra marginal så sista raden scrollas helt ovanför flytande tab-baren
             }
             .refreshable {
+                await profile.syncWithRemote()
                 await store.syncWithRemote()
             }
         }
@@ -1094,66 +1109,137 @@ struct LibraryView: View {
     // MARK: - Context Menu för spel
     @ViewBuilder
     private func gameContextMenu(for game: Game) -> some View {
-        Menu("Ändra status") {
-            ForEach(PlayStatus.allCases, id: \.self) { status in
+        if game.isOwned {
+            Menu("Ändra status") {
+                ForEach(PlayStatus.allCases, id: \.self) { status in
+                    Button {
+                        var copy = game
+                        copy.status = status
+                        if status == .playing {
+                            copy.isBacklog = false
+                            if copy.lastPlayedDate == nil {
+                                copy.lastPlayedDate = Date()
+                            }
+                        }
+                        store.update(copy)
+                    } label: {
+                        Label(status.title(for: game.playTypes), systemImage: status.icon(for: game.playTypes))
+                    }
+                }
+            }
+
+            Button {
+                var copy = game
+                copy.isBacklog.toggle()
+                store.update(copy)
+            } label: {
+                Label(
+                    game.isBacklog ? "Ta bort från Backlog" : "Lägg till i Backlog",
+                    systemImage: game.isBacklog ? "archivebox.fill" : "archivebox"
+                )
+            }
+
+            Menu("Samlingar") {
+                ForEach(store.collections) { col in
+                    let inCol = col.gameIDs.contains(game.id)
+                    Button {
+                        store.toggleGame(game.id, in: col.id)
+                    } label: {
+                        Label(col.name, systemImage: inCol ? "checkmark.circle.fill" : "circle")
+                    }
+                }
+                Divider()
+                Button {
+                    showingCreateCollectionSheet = true
+                } label: {
+                    Label("Ny samling...", systemImage: "plus")
+                }
+            }
+
+            Button {
+                var copy = game
+                copy.isOwned = false
+                copy.isBacklog = false
+                copy.status = .notStarted
+                store.update(copy)
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            } label: {
+                Label("Flytta till önskelista", systemImage: "heart")
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                store.delete(game)
+            } label: {
+                Label("Ta bort", systemImage: "trash")
+            }
+        } else {
+            Menu("Flytta till biblioteket") {
                 Button {
                     var copy = game
-                    copy.status = status
-                    if status == .playing {
-                        copy.isBacklog = false
-                        if copy.lastPlayedDate == nil {
-                            copy.lastPlayedDate = Date()
-                        }
-                    }
+                    copy.isOwned = true
+                    copy.isBacklog = true
+                    copy.status = .notStarted
                     store.update(copy)
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 } label: {
-                    Label(status.title(for: game.playTypes), systemImage: status.icon(for: game.playTypes))
+                    Label("Lägg i Backlog", systemImage: "archivebox.fill")
                 }
-            }
-        }
 
-        Button {
-            var copy = game
-            copy.isBacklog.toggle()
-            store.update(copy)
-        } label: {
-            Label(
-                game.isBacklog ? "Ta bort från Backlog" : "Lägg till i Backlog",
-                systemImage: game.isBacklog ? "archivebox.fill" : "archivebox"
-            )
-        }
-
-        Menu("Samlingar") {
-            ForEach(store.collections) { col in
-                let inCol = col.gameIDs.contains(game.id)
                 Button {
-                    store.toggleGame(game.id, in: col.id)
+                    var copy = game
+                    copy.isOwned = true
+                    copy.isBacklog = false
+                    copy.status = .playing
+                    copy.lastPlayedDate = Date()
+                    store.update(copy)
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 } label: {
-                    Label(col.name, systemImage: inCol ? "checkmark.circle.fill" : "circle")
+                    Label("Börja spela nu", systemImage: "play.fill")
+                }
+
+                Button {
+                    var copy = game
+                    copy.isOwned = true
+                    copy.isBacklog = false
+                    copy.status = .completed
+                    let currentY = Calendar.current.component(.year, from: Date())
+                    copy.completedYear = currentY
+                    copy.completedDate = Date()
+                    copy.storyProgress = .completed
+                    store.update(copy)
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                } label: {
+                    Label("Har redan klarat", systemImage: "checkmark.seal.fill")
                 }
             }
-            Divider()
-            Button {
-                showingCreateCollectionSheet = true
-            } label: {
-                Label("Ny samling...", systemImage: "plus")
+
+            Menu("Samlingar") {
+                ForEach(store.collections) { col in
+                    let inCol = col.gameIDs.contains(game.id)
+                    Button {
+                        store.toggleGame(game.id, in: col.id)
+                    } label: {
+                        Label(col.name, systemImage: inCol ? "checkmark.circle.fill" : "circle")
+                    }
+                }
+                Divider()
+                Button {
+                    showingCreateCollectionSheet = true
+                } label: {
+                    Label("Ny samling...", systemImage: "plus")
+                }
             }
-        }
 
-        Button {
-            var copy = game
-            copy.isOwned.toggle()
-            store.update(copy)
-        } label: {
-            Label(game.isOwned ? "Flytta till Spelminnen" : "Markera som i ägo", systemImage: "archivebox")
-        }
+            Divider()
 
-        Divider()
-
-        Button(role: .destructive) {
-            store.delete(game)
-        } label: {
-            Label("Ta bort", systemImage: "trash")
+            Button(role: .destructive) {
+                store.delete(game)
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            } label: {
+                Label("Ta bort från önskelistan", systemImage: "trash")
+            }
         }
     }
 
@@ -1234,16 +1320,21 @@ struct LibraryView: View {
     }
 }
 
-// MARK: - 3-Kolumners Poster Card (Koncept 2)
+// MARK: - Poster Card med adaptiv höjd för iPad/iPhone
 struct LibraryPosterCard: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     let game: Game
     var showWishlistInfo: Bool = false
     var showYearBadge: Bool = true
 
+    private var posterHeight: CGFloat {
+        horizontalSizeClass == .regular ? 205 : 155
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             ZStack(alignment: .top) {
-                CoverView(title: game.title, url: game.coverURL, corner: 10, height: 155, fullWidth: true)
+                CoverView(title: game.title, url: game.coverURL, corner: 10, height: posterHeight, fullWidth: true)
                     .shadow(color: .black.opacity(0.12), radius: 4, x: 0, y: 2)
 
                 // Badges Overlay

@@ -88,34 +88,46 @@ final class LibraryStore: ObservableObject {
 
         // Engångsmigrering av befintliga lokala spel vid allra första anslutningen
         if isFirstSync && !self.games.isEmpty {
-            for game in self.games {
-                try? await SupabaseSyncService.shared.upsertGame(game)
-            }
+            try? await SupabaseSyncService.shared.upsertGames(self.games)
             for col in self.collections {
                 try? await SupabaseSyncService.shared.upsertCollection(col)
             }
             UserDefaults.standard.set(true, forKey: initialMigrationKey)
         }
 
-        // 1. Synka spel från servern (speglar direkt tillägg och raderingar)
+        // 1. Synka spel från servern (speglar ändringar och bevarar lokala spel)
         do {
             let remoteGames = try await SupabaseSyncService.shared.fetchRemoteGames()
-            if !remoteGames.isEmpty || self.games.isEmpty {
+            if !remoteGames.isEmpty {
                 // Bevara kända lanseringsdatum från befintliga lokala spel så de inte skrivs över
                 let localDateMap = Dictionary(uniqueKeysWithValues: self.games.compactMap { g in
                     g.firstReleaseDate.map { (g.id, $0) }
                 })
-                self.games = remoteGames.map { r in
+                let remoteMap = Dictionary(uniqueKeysWithValues: remoteGames.map { ($0.id, $0) })
+
+                // Identifiera eventuella lokala spel som inte finns på servern än
+                let localOnlyGames = self.games.filter { remoteMap[$0.id] == nil }
+
+                // Skapa en sammanslagen lista: remote-spel först, plus eventuella lokala spel som saknas i molnet
+                var mergedGames = remoteGames.map { r in
                     var merged = r
                     if merged.firstReleaseDate == nil, let cachedDate = localDateMap[merged.id] {
                         merged.firstReleaseDate = cachedDate
                     }
                     return merged
                 }
-            } else {
-                for game in self.games {
-                    try? await SupabaseSyncService.shared.upsertGame(game)
+                if !localOnlyGames.isEmpty {
+                    mergedGames.append(contentsOf: localOnlyGames)
+                    Task {
+                        try? await SupabaseSyncService.shared.upsertGames(localOnlyGames)
+                    }
                 }
+
+                self.games = mergedGames
+                try? saveGames()
+            } else if !self.games.isEmpty {
+                // Om servern var tom men vi har lokala spel: ladda upp alla lokala spel till servern i batch
+                try? await SupabaseSyncService.shared.upsertGames(self.games)
             }
             UserDefaults.standard.set(true, forKey: initialMigrationKey)
         } catch {
@@ -125,7 +137,10 @@ final class LibraryStore: ObservableObject {
         // 2. Synka samlingar från servern
         do {
             let remoteCollections = try await SupabaseSyncService.shared.fetchRemoteCollections()
-            self.collections = remoteCollections
+            if !remoteCollections.isEmpty {
+                self.collections = remoteCollections
+                try? saveCollections()
+            }
         } catch {
             // Ignorera nätverksfel
         }
@@ -352,16 +367,37 @@ final class LibraryStore: ObservableObject {
         return url
     }
 
-    private func gamesURL() throws -> URL {
-        try documentsURL().appendingPathComponent(gamesFileName)
+    private func gamesURL(for profileId: UUID? = nil) throws -> URL {
+        let pid = profileId ?? ProfileManager.shared.activeProfileId
+        let profileFilename = "library_\(pid.uuidString).json"
+        let profileURL = try documentsURL().appendingPathComponent(profileFilename)
+        if FileManager.default.fileExists(atPath: profileURL.path) {
+            return profileURL
+        }
+        let legacyURL = try documentsURL().appendingPathComponent(gamesFileName)
+        if FileManager.default.fileExists(atPath: legacyURL.path) && pid == ProfileManager.shared.profiles.first?.id {
+            return legacyURL
+        }
+        return profileURL
     }
 
-    private func collectionsURL() throws -> URL {
-        try documentsURL().appendingPathComponent(collectionsFileName)
+    private func collectionsURL(for profileId: UUID? = nil) throws -> URL {
+        let pid = profileId ?? ProfileManager.shared.activeProfileId
+        let profileFilename = "collections_\(pid.uuidString).json"
+        let profileURL = try documentsURL().appendingPathComponent(profileFilename)
+        if FileManager.default.fileExists(atPath: profileURL.path) {
+            return profileURL
+        }
+        let legacyURL = try documentsURL().appendingPathComponent(collectionsFileName)
+        if FileManager.default.fileExists(atPath: legacyURL.path) && pid == ProfileManager.shared.profiles.first?.id {
+            return legacyURL
+        }
+        return profileURL
     }
 
     func saveGames() throws {
-        let url = try gamesURL()
+        let pid = ProfileManager.shared.activeProfileId
+        let url = try documentsURL().appendingPathComponent("library_\(pid.uuidString).json")
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
         let data = try encoder.encode(games)
@@ -369,15 +405,16 @@ final class LibraryStore: ObservableObject {
     }
 
     func saveCollections() throws {
-        let url = try collectionsURL()
+        let pid = ProfileManager.shared.activeProfileId
+        let url = try documentsURL().appendingPathComponent("collections_\(pid.uuidString).json")
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
         let data = try encoder.encode(collections)
         try data.write(to: url, options: .atomic)
     }
 
-    func loadGames() throws {
-        let url = try gamesURL()
+    func loadGames(for profileId: UUID? = nil) throws {
+        let url = try gamesURL(for: profileId)
         guard FileManager.default.fileExists(atPath: url.path) else {
             self.games = []
             return
@@ -396,8 +433,8 @@ final class LibraryStore: ObservableObject {
         }
     }
 
-    func loadCollections() throws {
-        let url = try collectionsURL()
+    func loadCollections(for profileId: UUID? = nil) throws {
+        let url = try collectionsURL(for: profileId)
         guard FileManager.default.fileExists(atPath: url.path) else {
             self.collections = []
             return
@@ -405,6 +442,49 @@ final class LibraryStore: ObservableObject {
         let data = try Data(contentsOf: url)
         let decoder = JSONDecoder()
         self.collections = (try? decoder.decode([GameCollection].self, from: data)) ?? []
+    }
+
+    func importAndSyncProfile(userId: UUID) async throws -> Int {
+        try? saveGames()
+        try? saveCollections()
+
+        checkedGameIDsForDates.removeAll()
+
+        let remoteGames = try await SupabaseSyncService.shared.fetchRemoteGames(forUserId: userId)
+        let remoteCollections = (try? await SupabaseSyncService.shared.fetchRemoteCollections(forUserId: userId)) ?? []
+
+        self.games = remoteGames
+        self.collections = remoteCollections
+
+        try? saveGames()
+        try? saveCollections()
+
+        UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+
+        Task {
+            await enrichMissingReleaseDates()
+        }
+
+        return remoteGames.count
+    }
+
+    func switchToProfile(id: UUID) {
+        try? saveGames()
+        try? saveCollections()
+
+        checkedGameIDsForDates.removeAll()
+        do {
+            try loadGames(for: id)
+            try loadCollections(for: id)
+        } catch {
+            self.games = []
+            self.collections = []
+        }
+
+        Task {
+            await syncWithRemote()
+            await enrichMissingReleaseDates()
+        }
     }
 
     // Gruppindelning per plattform (för hyllvy)

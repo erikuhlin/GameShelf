@@ -47,7 +47,11 @@ export function GamingGoalModal({
 
   const targetGames = useMemo(() => {
     const ids = new Set(targetGameIds.map((id) => id.toLowerCase()));
-    return libraryGames.filter((g) => ids.has(g.id.toLowerCase()));
+    return libraryGames.filter(
+      (g) =>
+        ids.has(g.id.toLowerCase()) ||
+        (g.igdb_id !== undefined && g.igdb_id !== null && ids.has(String(g.igdb_id).toLowerCase()))
+    );
   }, [libraryGames, targetGameIds]);
 
   // Tillgängliga biblioteksspel som inte redan är fokusmål
@@ -57,7 +61,11 @@ export function GamingGoalModal({
 
     return libraryGames
       .filter((g) => g.is_owned !== false)
-      .filter((g) => !targetSet.has(g.id.toLowerCase()))
+      .filter(
+        (g) =>
+          !targetSet.has(g.id.toLowerCase()) &&
+          (!g.igdb_id || !targetSet.has(String(g.igdb_id).toLowerCase()))
+      )
       .filter((g) => {
         if (!q) return true;
         return (

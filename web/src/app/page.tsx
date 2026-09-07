@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Game, GameCollection, PlayStatus, PLAY_STATUSES } from '@/types/game';
-import { supabase, mapSupabaseGame, mapSupabaseCollection, normalizeIgdbRating } from '@/lib/supabase';
+import { supabase, mapSupabaseGame, mapSupabaseCollection, normalizeIgdbRating, sanitizeUserGamePayload } from '@/lib/supabase';
 import { getStatusDisplayTitle, inferPlayTypes } from '@/lib/statusHelper';
 import { Header, ViewMode } from '@/components/Header';
 import { ShelfView } from '@/components/ShelfView';
@@ -181,8 +181,18 @@ export default function HomePage() {
           favoriteGenres: Array.isArray(prefs.favoriteGenres) ? prefs.favoriteGenres : ['RPG', 'Action', 'Skräck'],
           playFor: Array.isArray(prefs.playFor) ? prefs.playFor : ['Story', 'Utforskning'],
           favoriteGameIDs: Array.isArray(prefs.favoriteGameIDs) ? prefs.favoriteGameIDs : [],
-          targetGameIDs: Array.isArray(prefs.targetGameIDs) ? prefs.targetGameIDs : [],
-          annualGamingGoal: prefs.annualGamingGoal || 12,
+          targetGameIDs:
+            Array.isArray(data.target_game_ids) && data.target_game_ids.length > 0
+              ? data.target_game_ids
+              : Array.isArray(prefs.targetGameIDs)
+              ? prefs.targetGameIDs
+              : [],
+          annualGamingGoal:
+            data.annual_gaming_goal !== undefined && data.annual_gaming_goal !== null
+              ? Number(data.annual_gaming_goal)
+              : prefs.annualGamingGoal !== undefined && prefs.annualGamingGoal !== null
+              ? Number(prefs.annualGamingGoal)
+              : 12,
           avatarType: data.avatar_url || prefs.avatarType || 'initial',
           avatarCustomImage: data.avatar_url?.startsWith('data:') ? data.avatar_url : undefined,
           playingMood: prefs.playingMood || 'Utforska nya världar',
@@ -203,7 +213,11 @@ export default function HomePage() {
     setProfileName(updated.username);
     saveUserProfile(updated);
 
-    if (pairedUserId) {
+    const activeUserId =
+      pairedUserId ||
+      (typeof window !== 'undefined' ? localStorage.getItem('gameshelf_paired_user_id') : null);
+
+    if (activeUserId) {
       const prefs = {
         age: updated.age,
         platforms: updated.platforms,
@@ -219,10 +233,12 @@ export default function HomePage() {
       };
       try {
         await supabase.from('profiles').upsert({
-          id: pairedUserId,
+          id: activeUserId,
           username: updated.username,
           full_name: JSON.stringify(prefs),
           avatar_url: updated.avatarCustomImage || updated.avatarType,
+          annual_gaming_goal: updated.annualGamingGoal,
+          target_game_ids: updated.targetGameIDs || [],
           updated_at: new Date().toISOString(),
         });
       } catch (err) {
@@ -263,10 +279,23 @@ export default function HomePage() {
               favoriteGenres: Array.isArray(prefs.favoriteGenres) ? prefs.favoriteGenres : ['RPG', 'Action', 'Skräck'],
               playFor: Array.isArray(prefs.playFor) ? prefs.playFor : ['Story', 'Utforskning'],
               favoriteGameIDs: Array.isArray(prefs.favoriteGameIDs) ? prefs.favoriteGameIDs : [],
-              targetGameIDs: Array.isArray(prefs.targetGameIDs) ? prefs.targetGameIDs : [],
-              annualGamingGoal: prefs.annualGamingGoal || 12,
+              targetGameIDs:
+                Array.isArray(data.target_game_ids) && data.target_game_ids.length > 0
+                  ? data.target_game_ids
+                  : Array.isArray(prefs.targetGameIDs)
+                  ? prefs.targetGameIDs
+                  : [],
+              annualGamingGoal:
+                data.annual_gaming_goal !== undefined && data.annual_gaming_goal !== null
+                  ? Number(data.annual_gaming_goal)
+                  : prefs.annualGamingGoal !== undefined && prefs.annualGamingGoal !== null
+                  ? Number(prefs.annualGamingGoal)
+                  : 12,
               avatarType: data.avatar_url || prefs.avatarType || 'initial',
               avatarCustomImage: data.avatar_url?.startsWith('data:') ? data.avatar_url : undefined,
+              playingMood: prefs.playingMood || 'Utforska nya världar',
+              gamerBio: prefs.gamerBio || '',
+              playstyle: Array.isArray(prefs.playstyle) ? prefs.playstyle : ['Singleplayer'],
             };
             setUserProfile(updated);
             setProfileName(updated.username);
@@ -466,6 +495,12 @@ export default function HomePage() {
               }
               if (!game.igdb_id && existing?.igdb_id) {
                 game.igdb_id = existing.igdb_id;
+              }
+              if (existing?.completed_year && !game.completed_year) {
+                game.completed_year = existing.completed_year;
+              }
+              if (existing?.completed_date && !game.completed_date) {
+                game.completed_date = existing.completed_date;
               }
               return game;
             });
@@ -856,20 +891,27 @@ export default function HomePage() {
     const isPlaying = newStatus === 'playing';
     const isCompleted = newStatus === 'completed';
     const currentYear = new Date().getFullYear();
+    const currentGame = games.find((g) => g.id === gameId);
+
+    const updates: Partial<Game> = {
+      status: newStatus,
+      ...(isPlaying ? { is_backlog: false } : {}),
+      ...(isCompleted
+        ? {
+            completed_year: currentGame?.completed_year || currentYear,
+            completed_date: currentGame?.completed_date || new Date().toISOString(),
+            story_progress: 'completed',
+          }
+        : {}),
+    };
 
     setGames((prev) => {
       const next = prev.map((g) =>
         g.id === gameId
           ? {
               ...g,
-              status: newStatus,
-              is_backlog: isPlaying ? false : g.is_backlog,
-              last_played_date: isPlaying
-                ? g.last_played_date || new Date().toISOString()
-                : g.last_played_date,
-              completed_year: isCompleted ? (g.completed_year || currentYear) : g.completed_year,
-              completed_date: isCompleted ? (g.completed_date || new Date().toISOString()) : g.completed_date,
-              story_progress: isCompleted ? 'completed' : g.story_progress,
+              ...updates,
+              updated_at: new Date().toISOString(),
             }
           : g
       );
@@ -880,18 +922,10 @@ export default function HomePage() {
     });
 
     try {
-      const updatePayload: any = {
-        status: newStatus,
-        ...(isPlaying ? { is_backlog: false } : {}),
-      };
-      if (isCompleted) {
-        updatePayload.completed_year = currentYear;
-        updatePayload.completed_date = new Date().toISOString();
-        updatePayload.story_progress = 'completed';
-      }
+      const payload = sanitizeUserGamePayload(updates, currentGame);
       await supabase
         .from('user_games')
-        .update(updatePayload)
+        .update(payload)
         .eq('id', gameId);
     } catch (err) {
       console.error('Failed to update game status:', err);
@@ -905,8 +939,8 @@ export default function HomePage() {
     }
 
     const playTypes = game.play_types || inferPlayTypes(game);
-    const payload = {
-      user_id: pairedUserId,
+    const payload = sanitizeUserGamePayload({
+      user_id: pairedUserId || undefined,
       title: game.title,
       cover_url: game.cover_url || null,
       platforms: game.platforms || [],
@@ -920,9 +954,9 @@ export default function HomePage() {
       rating: null,
       igdb_rating: game.igdb_rating || null,
       estimated_hours: null,
-      notes: null,
+      notes: '',
       todos: [],
-    };
+    });
 
     try {
       const { data, error } = await supabase
@@ -1074,22 +1108,27 @@ export default function HomePage() {
       });
 
       if (guestGamesToMigrate.length > 0) {
-        const payloadToInsert = guestGamesToMigrate.map((g) => ({
-          user_id: userId,
-          title: g.title,
-          cover_url: g.cover_url || null,
-          platforms: g.platforms || [],
-          release_year: g.release_year || null,
-          genres: g.genres || [],
-          developers: g.developers || [],
-          status: g.status || 'Backlog',
-          is_owned: g.is_owned ?? true,
-          rating: g.rating || null,
-          igdb_rating: g.igdb_rating || null,
-          estimated_hours: g.estimated_hours || null,
-          notes: g.notes || '',
-          todos: g.todos || [],
-        }));
+        const payloadToInsert = guestGamesToMigrate.map((g) =>
+          sanitizeUserGamePayload({
+            user_id: userId,
+            title: g.title,
+            cover_url: g.cover_url || null,
+            platforms: g.platforms || [],
+            release_year: g.release_year || null,
+            genres: g.genres || [],
+            developers: g.developers || [],
+            status: g.status || 'Backlog',
+            is_owned: g.is_owned ?? true,
+            rating: g.rating || null,
+            igdb_rating: g.igdb_rating || null,
+            estimated_hours: g.estimated_hours || null,
+            notes: g.notes || '',
+            todos: g.todos || [],
+            completed_year: g.completed_year,
+            completed_date: g.completed_date,
+            story_progress: g.story_progress,
+          })
+        );
 
         await supabase.from('user_games').insert(payloadToInsert);
       }
@@ -1102,8 +1141,9 @@ export default function HomePage() {
 
   const handleAddFromDiscover = async (gameToAdd: Game) => {
     const playTypes = gameToAdd.play_types || inferPlayTypes(gameToAdd);
+    const newGameId = crypto.randomUUID();
     const newGamePayload = {
-      id: crypto.randomUUID(),
+      id: newGameId,
       user_id: pairedUserId || undefined,
       title: gameToAdd.title,
       cover_url: gameToAdd.cover_url || null,
@@ -1125,14 +1165,15 @@ export default function HomePage() {
     };
 
     if (pairedUserId) {
+      const sanitized = sanitizeUserGamePayload(newGamePayload);
       let { data, error } = await supabase
         .from('user_games')
-        .insert([newGamePayload])
+        .insert([sanitized])
         .select()
         .single();
 
       if (error && error.message?.includes('first_release_date')) {
-        const { first_release_date, ...fallbackPayload } = newGamePayload;
+        const { first_release_date, ...fallbackPayload } = sanitized;
         const retry = await supabase.from('user_games').insert([fallbackPayload]).select().single();
         data = retry.data;
       }

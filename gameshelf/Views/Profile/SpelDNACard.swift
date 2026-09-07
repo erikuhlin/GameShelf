@@ -13,13 +13,19 @@ struct SpelDNACard: View {
 
     var body: some View {
         if let p = profile {
-            activeCard(p)
+            VStack(alignment: .leading, spacing: 16) {
+                activeCard(p)
+
+                if !p.tiles.isEmpty {
+                    dnaTilesGrid(p.tiles)
+                }
+            }
         } else {
             emptyCard
         }
     }
 
-    // MARK: - Aktivt Spel-DNA Kort
+    // MARK: - Aktivt Spel-DNA Kort (Hero)
     private func activeCard(_ p: SpelDNAProfile) -> some View {
         ZStack(alignment: .topTrailing) {
             // Mjuk glow i övre högra hörnet
@@ -36,15 +42,15 @@ struct SpelDNACard: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Ikon
                 Text(p.icon)
-                    .font(.system(size: 20))
-                    .frame(width: 38, height: 38)
-                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                    .font(.system(size: 22))
+                    .frame(width: 42, height: 42)
+                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .padding(.bottom, 12)
 
                 // Eyebrow
-                Text("DITT SPEL-DNA")
-                    .font(.system(size: 10.5, weight: .black))
-                    .tracking(1.0)
+                Text("DITT SPEL-DNA • HUVUDARKETYP")
+                    .font(.system(size: 10, weight: .black))
+                    .tracking(1.2)
                     .foregroundStyle(p.accentColor)
                     .padding(.bottom, 4)
 
@@ -94,6 +100,76 @@ struct SpelDNACard: View {
                 .stroke(p.accentColor.opacity(0.35), lineWidth: 1.0)
         )
         .shadow(color: Color.black.opacity(0.35), radius: 10, y: 4)
+    }
+
+    // MARK: - 4 Dynamiska DNA-Rutor
+    private func dnaTilesGrid(_ tiles: [SpelDNATile]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Text("🧬")
+                    .font(.caption)
+                Text("DNA-profil & Dimensioner")
+                    .font(.system(size: 12.5, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                ForEach(tiles) { tile in
+                    dnaTileView(tile)
+                }
+            }
+        }
+    }
+
+    private func dnaTileView(_ tile: SpelDNATile) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(tile.category)
+                    .font(.system(size: 8.5, weight: .black))
+                    .tracking(0.8)
+                    .foregroundStyle(tile.accentColor)
+                    .lineLimit(1)
+
+                Spacer()
+
+                Text(tile.icon)
+                    .font(.system(size: 14))
+            }
+
+            Text(tile.title)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+
+            Text(tile.subtitle)
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundStyle(tile.accentColor)
+                .lineLimit(1)
+
+            Text(tile.detail)
+                .font(.system(size: 10.5))
+                .lineSpacing(2)
+                .foregroundStyle(Color(hex: "#A39E98"))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 2)
+        }
+        .padding(13)
+        .frame(maxWidth: .infinity, minHeight: 110, alignment: .topLeading)
+        .background(
+            LinearGradient(
+                colors: [
+                    tile.accentColor.opacity(0.10),
+                    Color(hex: "#16161B")
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(tile.accentColor.opacity(0.25), lineWidth: 0.8)
+        )
     }
 
     // MARK: - Tomt Kort (< 5 spel)

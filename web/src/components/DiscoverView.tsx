@@ -489,18 +489,33 @@ export function DiscoverView({
     return games.filter(
       (g) =>
         (g.status === 'completed' || (g.status as string) === 'Klar') &&
-        g.is_owned &&
-        (g.completed_year === currentYear || (g.completed_date && new Date(g.completed_date).getFullYear() === currentYear))
+        g.is_owned !== false &&
+        (Number(g.completed_year) === currentYear ||
+          (g.completed_date && new Date(g.completed_date).getFullYear() === currentYear) ||
+          (!g.completed_year && !g.completed_date))
     ).length;
   }, [games, currentYear]);
 
   const targetGames = useMemo(() => {
     const ids = new Set((userProfile?.targetGameIDs || []).map((id) => id.toLowerCase()));
     if (ids.size === 0) return [];
-    return games.filter((g) => ids.has(g.id.toLowerCase()));
+    return games.filter(
+      (g) =>
+        ids.has(g.id.toLowerCase()) ||
+        (g.igdb_id !== undefined && g.igdb_id !== null && ids.has(String(g.igdb_id).toLowerCase()))
+    );
   }, [games, userProfile?.targetGameIDs]);
 
-  const annualGoal = userProfile?.annualGamingGoal || 12;
+  const completedTargetCount = useMemo(() => {
+    return targetGames.filter(
+      (g) => g.status === 'completed' || (g.status as string) === 'Klar'
+    ).length;
+  }, [targetGames]);
+
+  const annualGoal =
+    userProfile?.annualGamingGoal !== undefined && userProfile?.annualGamingGoal !== null
+      ? userProfile.annualGamingGoal
+      : 12;
   const goalProgressPct = Math.min(100, Math.round((completedGamesCount / annualGoal) * 100));
 
   const avatarPreset = userProfile?.avatarType?.startsWith('preset:')
@@ -1028,7 +1043,7 @@ export function DiscoverView({
                 </span>
                 {targetGames.length > 0 && (
                   <span className="text-amber-400 font-semibold">
-                    🎯 {targetGames.filter((g) => g.status === 'completed').length}/{targetGames.length} fokusmål
+                    🎯 {targetGames.length} fokusmål ({completedTargetCount} {completedTargetCount === 1 ? 'klart' : 'klara'})
                   </span>
                 )}
               </div>

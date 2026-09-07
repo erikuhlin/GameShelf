@@ -19,8 +19,29 @@ enum SpelDNAArchetypeID: String, CaseIterable, Identifiable, Sendable {
     case squadStrategist = "squad_strategist"
     case casualCollector = "casual_collector"
     case genreNomad = "genre_nomad"
+    case soulsSurvivor = "souls_survivor"
+    case openWorldWanderer = "open_world_wanderer"
+    case backlogTitan = "backlog_titan"
+    case atmosphereHunter = "atmosphere_hunter"
+    case pixelPurist = "pixel_purist"
+    case zenCultivator = "zen_cultivator"
+    case completionistPrime = "completionist_prime"
 
     var id: String { rawValue }
+}
+
+struct SpelDNATile: Identifiable, Sendable {
+    let id: String
+    let category: String
+    let title: String
+    let subtitle: String
+    let icon: String
+    let accentHex: String
+    let detail: String
+
+    var accentColor: Color {
+        Color(hex: accentHex)
+    }
 }
 
 struct SpelDNAProfile: Identifiable, Sendable {
@@ -30,6 +51,7 @@ struct SpelDNAProfile: Identifiable, Sendable {
     let icon: String
     let accentHex: String
     let supportingStats: [String]
+    var tiles: [SpelDNATile] = []
 
     var id: String { archetypeID.rawValue }
 

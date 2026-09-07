@@ -29,6 +29,15 @@ struct CuratedRecommendation: Identifiable {
 struct LiveDiscoverySection: View {
     @EnvironmentObject var store: LibraryStore
     @EnvironmentObject var profile: ProfileStore
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var genreGridColumns: [GridItem] {
+        if horizontalSizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 160, maximum: 240), spacing: 16)]
+        } else {
+            return [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
+        }
+    }
 
     var refreshTrigger: UUID = UUID()
     var mode: DiscoveryDisplayMode = .all
@@ -119,12 +128,25 @@ struct LiveDiscoverySection: View {
     private var forYouSubSection: some View {
         if !curatedRecommendations.isEmpty || isLoadingRecommended {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 6) {
-                    Image(systemName: "sparkles")
+                HStack {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .foregroundStyle(Color.ds.brandRed)
+                        Text("För dig")
+                            .font(.title3.bold())
+                            .foregroundStyle(.primary)
+                    }
+
+                    Spacer()
+
+                    NavigationLink(destination: ForYouHubView()) {
+                        HStack(spacing: 4) {
+                            Text("Öppna För dig")
+                            Image(systemName: "chevron.right")
+                        }
+                        .font(.caption.bold())
                         .foregroundStyle(Color.ds.brandRed)
-                    Text("För dig")
-                        .font(.title3.bold())
-                        .foregroundStyle(.primary)
+                    }
                 }
 
                 if isLoadingRecommended {
@@ -132,6 +154,37 @@ struct LiveDiscoverySection: View {
                         .padding(.vertical, 20)
                 } else {
                     horizontalCuratedList(items: curatedRecommendations)
+
+                    NavigationLink(destination: ForYouHubView()) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "safari.fill")
+                                .font(.title3)
+                                .foregroundStyle(Color.ds.brandRed)
+                                .padding(8)
+                                .background(Color.ds.brandRed.opacity(0.12), in: Circle())
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Personlig spelupptäckt & Spelminnen")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.primary)
+                                Text("Hitta nya favoriter med Spelkompassen eller återupptäck klassiker du glömt.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(10)
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 4)
                 }
             }
         }
@@ -305,7 +358,7 @@ struct LiveDiscoverySection: View {
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 16)
                 } else {
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)], spacing: 16) {
+                    LazyVGrid(columns: genreGridColumns, spacing: 16) {
                         ForEach(selectedGenreGames, id: \.id) { game in
                             NavigationLink(destination: GameDetailView(igdbID: game.id)) {
                                 VStack(alignment: .leading, spacing: 6) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export const revalidate = 300; // 5 minuters server/edge cache
+export const dynamic = 'force-dynamic';
+export const revalidate = 120; // 2 minuter
 
 interface NewsItem {
   id: string;
@@ -49,7 +50,6 @@ const FEEDS = [
 
   // 4. Officiella & Plattformsspecifika
   { name: 'Xbox Wire', source: 'Xbox Wire', url: 'https://news.xbox.com/en-us/feed/', defaultPlatform: 'Xbox' as const },
-  { name: 'PlayStation Blog', source: 'PlayStation Blog', url: 'https://blog.playstation.com/feed/', defaultPlatform: 'PlayStation' as const },
   { name: 'Nintendo Everything', source: 'Nintendo Everything', url: 'https://nintendoeverything.com/feed/', defaultPlatform: 'Nintendo' as const },
   { name: 'TouchArcade', source: 'TouchArcade', url: 'https://toucharcade.com/feed/' },
 ];
@@ -193,10 +193,10 @@ export async function GET(request: NextRequest) {
     const feedPromises = FEEDS.map(async (feed) => {
       try {
         const res = await fetch(feed.url, {
+          signal: AbortSignal.timeout(3500),
           headers: {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           },
-          next: { revalidate: 300 },
         });
         if (!res.ok) return [];
         const text = await res.text();
@@ -235,11 +235,18 @@ export async function GET(request: NextRequest) {
     const combinedNews = [...reviews.slice(0, 250), ...generalNews.slice(0, 500)];
     combinedNews.sort((a, b) => b.publishedTimestamp - a.publishedTimestamp);
 
-    return NextResponse.json({
-      news: combinedNews,
-      reviewCount: reviews.length,
-      totalCount: combinedNews.length,
-    });
+    return NextResponse.json(
+      {
+        news: combinedNews,
+        reviewCount: reviews.length,
+        totalCount: combinedNews.length,
+      },
+      {
+        headers: {
+          'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=300',
+        },
+      }
+    );
   } catch (error: any) {
     console.error('Error fetching news feeds:', error);
     return NextResponse.json(

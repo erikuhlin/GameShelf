@@ -670,7 +670,52 @@ export function DiscoverView({
     }
   };
 
-  // Hämta nyheter vid flikbyte med persistent arkiverande sammanslagning
+  // Hämta nyheter vid flikbyte eller manuell uppdatering med persistent arkiverande sammanslagning
+  const handleFetchNews = async (forceRefresh = false) => {
+    setIsLoadingNews(true);
+    try {
+      const res = await fetch(`/api/news?t=${Date.now()}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      if (data.news && Array.isArray(data.news) && data.news.length > 0) {
+        let existingArchive: NewsItem[] = [];
+        if (!forceRefresh && typeof window !== 'undefined') {
+          try {
+            const raw = localStorage.getItem('gameshelf_news_archive');
+            if (raw) existingArchive = JSON.parse(raw);
+          } catch (e) {}
+        }
+
+        const merged = [...data.news, ...existingArchive];
+        const seen = new Set<string>();
+        const unique = merged.filter((item) => {
+          const key = item.link || item.title.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+        unique.sort((a, b) => b.publishedTimestamp - a.publishedTimestamp);
+        const finalArchive = unique.slice(0, 1000);
+
+        setNewsItems(finalArchive);
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('gameshelf_news_archive', JSON.stringify(finalArchive));
+          } catch (e) {}
+        }
+      }
+    } catch (e) {
+      console.error('Error loading news:', e);
+    } finally {
+      setIsLoadingNews(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab !== 'news') return;
 
@@ -687,46 +732,7 @@ export function DiscoverView({
       } catch (e) {}
     }
 
-    async function loadNews() {
-      setIsLoadingNews(true);
-      try {
-        const res = await fetch('/api/news');
-        const data = await res.json();
-        if (data.news && Array.isArray(data.news)) {
-          let existingArchive: NewsItem[] = [];
-          if (typeof window !== 'undefined') {
-            try {
-              const raw = localStorage.getItem('gameshelf_news_archive');
-              if (raw) existingArchive = JSON.parse(raw);
-            } catch (e) {}
-          }
-
-          const merged = [...data.news, ...existingArchive];
-          const seen = new Set<string>();
-          const unique = merged.filter((item) => {
-            const key = item.link || item.title.toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          });
-
-          unique.sort((a, b) => b.publishedTimestamp - a.publishedTimestamp);
-          const finalArchive = unique.slice(0, 1000);
-
-          setNewsItems(finalArchive);
-          if (typeof window !== 'undefined') {
-            try {
-              localStorage.setItem('gameshelf_news_archive', JSON.stringify(finalArchive));
-            } catch (e) {}
-          }
-        }
-      } catch (e) {
-        console.error('Error loading news:', e);
-      } finally {
-        setIsLoadingNews(false);
-      }
-    }
-    loadNews();
+    handleFetchNews(false);
   }, [activeTab]);
 
   // Kör spelsnurran
@@ -2379,6 +2385,18 @@ export function DiscoverView({
                   <option value="30d">Senaste månaden</option>
                   <option value="older">Äldre än 30d</option>
                 </select>
+
+                {/* Uppdatera nyheter */}
+                <button
+                  type="button"
+                  onClick={() => handleFetchNews(true)}
+                  disabled={isLoadingNews}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 rounded-xl text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
+                  title="Hämta senaste nyheterna nu"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingNews ? 'animate-spin text-red-500' : ''}`} />
+                  <span className="hidden sm:inline">{isLoadingNews ? 'Hämtar...' : 'Uppdatera'}</span>
+                </button>
               </div>
             </div>
 

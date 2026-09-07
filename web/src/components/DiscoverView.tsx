@@ -147,6 +147,36 @@ export function getPrimaryGenre(genres?: string[], preferredGenre?: string): str
   return GENRE_SWEDISH_NAMES[genres[0].toLowerCase()] || genres[0];
 }
 
+export function getBadgeStyle(badge?: string | null): string {
+  if (!badge) return 'bg-zinc-800 text-zinc-300 border-zinc-700';
+  if (badge.includes('Toppsäljare')) return 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+  if (badge.includes('Twitch')) return 'bg-purple-500/20 text-purple-300 border-purple-500/40';
+  if (badge.includes('Efterlängtat')) return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40';
+  if (badge.includes('Söktrend')) return 'bg-rose-500/20 text-rose-300 border-rose-500/40';
+  if (badge.includes('spelat') || badge.includes('Spelas')) return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+  if (badge.includes('Önskelistas')) return 'bg-blue-500/20 text-blue-300 border-blue-500/40';
+  if (badge.includes('Topprecension')) return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40';
+  if (badge.includes('Mediefokus')) return 'bg-red-500/20 text-red-300 border-red-500/40';
+  if (badge.includes('Hett släpp')) return 'bg-orange-500/20 text-orange-300 border-orange-500/40';
+  return 'bg-zinc-800/90 text-zinc-200 border-zinc-700';
+}
+
+export interface MonthOption {
+  id: string;
+  title: string;
+  startDate?: number;
+  endDate?: number;
+  isMostHyped: boolean;
+}
+
+export const CALENDAR_PLATFORMS = [
+  { id: 'all', label: 'Alla' },
+  { id: 'ps5', label: 'PlayStation' },
+  { id: 'pc', label: 'PC' },
+  { id: 'switch', label: 'Nintendo Switch' },
+  { id: 'xbox', label: 'Xbox Series' },
+];
+
 const PLATFORMS = ['Alla plattformar', 'PlayStation', 'Xbox', 'Nintendo', 'PC'];
 
 export function DiscoverView({
@@ -160,7 +190,7 @@ export function DiscoverView({
   onUpdateProfile,
   onToggleTargetGoal,
 }: DiscoverViewProps) {
-  const [activeTab, setActiveTab] = useState<'discover' | 'news'>('discover');
+  const [activeTab, setActiveTab] = useState<'discover' | 'calendar' | 'news'>('discover');
 
   // Spelmål modal state
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
@@ -186,12 +216,184 @@ export function DiscoverView({
   const [isSpinning, setIsSpinning] = useState(false);
   const [winnerGame, setWinnerGame] = useState<Game | null>(null);
 
+  // --- Releasekalender State (Identiskt med iOS UpcomingReleasesView) ---
+  const [selectedMonthID, setSelectedMonthID] = useState<string>('most_hyped');
+  const [selectedCalendarPlatform, setSelectedCalendarPlatform] = useState<string>('all');
+  const [showAllInMonth, setShowAllInMonth] = useState<boolean>(true);
+  const [calendarGames, setCalendarGames] = useState<Game[]>([]);
+  const [isLoadingCalendar, setIsLoadingCalendar] = useState<boolean>(false);
+
+  // Dynamiska månadsval för releasekalendern (Mest hypade + 6 kommande månader)
+  const monthOptions: MonthOption[] = useMemo(() => {
+    const options: MonthOption[] = [
+      {
+        id: 'most_hyped',
+        title: '🔥 Mest hypade',
+        isMostHyped: true,
+      },
+    ];
+
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('sv-SE', { month: 'short', year: 'numeric' });
+
+    for (let offset = 0; offset < 6; offset++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+      const year = d.getFullYear();
+      const month = d.getMonth();
+      const startOfMonth =
+        offset === 0
+          ? Math.floor(now.getTime() / 1000)
+          : Math.floor(new Date(year, month, 1, 0, 0, 0).getTime() / 1000);
+      const endOfMonth = Math.floor(new Date(year, month + 1, 0, 23, 59, 59).getTime() / 1000);
+
+      const rawTitle = formatter.format(d);
+      const title = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);
+      options.push({
+        id: `month_${year}_${month + 1}`,
+        title,
+        startDate: startOfMonth,
+        endDate: endOfMonth,
+        isMostHyped: false,
+      });
+    }
+
+    return options;
+  }, []);
+
+  const currentMonthOption = useMemo(() => {
+    return monthOptions.find((m) => m.id === selectedMonthID) || monthOptions[0];
+  }, [monthOptions, selectedMonthID]);
+
+  // Hämta spel till releasekalendern vid fliköppning eller filterändring
+  const loadCalendarGames = async () => {
+    const opt = currentMonthOption;
+    const isHyped = opt.isMostHyped;
+    const startTs = opt.startDate;
+    const endTs = opt.endDate;
+
+    let url = `/api/games/discover?category=upcoming&platform=${selectedCalendarPlatform}`;
+    if (isHyped) {
+      url += '&is_hyped=true&limit=40';
+    } else {
+      if (startTs) url += `&start_date=${startTs}`;
+      if (endTs) url += `&end_date=${endTs}`;
+      url += '&limit=150';
+    }
+
+    setIsLoadingCalendar(true);
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (Array.isArray(data.results)) {
+        setCalendarGames(data.results);
+      }
+    } catch (err) {
+      console.error('Failed to load release calendar games:', err);
+    } finally {
+      setIsLoadingCalendar(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'calendar') {
+      loadCalendarGames();
+    }
+  }, [activeTab, selectedMonthID, selectedCalendarPlatform]);
+
+  const displayedCalendarGames = useMemo(() => {
+    if (currentMonthOption.isMostHyped || showAllInMonth || calendarGames.length <= 15) {
+      return calendarGames;
+    }
+    const withHypes = calendarGames.filter((g) => (g.hypes || 0) > 0 || (g.rating || 0) > 0);
+    return withHypes.length > 0 ? withHypes : calendarGames.slice(0, 15);
+  }, [calendarGames, currentMonthOption.isMostHyped, showAllInMonth]);
+
+  // Gruppera spelsläpp per datum (tidslinje i månadsvyn)
+  const groupedCalendarReleases = useMemo(() => {
+    const groups: Record<string, Game[]> = {};
+    const orderMap: Record<string, number> = {};
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+    for (const game of displayedCalendarGames) {
+      if (!game.first_release_date) {
+        const yearKey = game.release_year ? `Kommande ${game.release_year}` : 'Kommande';
+        if (!groups[yearKey]) {
+          groups[yearKey] = [];
+          orderMap[yearKey] = 9999999999999;
+        }
+        groups[yearKey].push(game);
+        continue;
+      }
+
+      const ms =
+        Number(game.first_release_date) < 10000000000
+          ? Number(game.first_release_date) * 1000
+          : Number(game.first_release_date);
+      const dateObj = new Date(ms);
+      const key = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+
+      if (!groups[key]) {
+        groups[key] = [];
+        orderMap[key] = ms;
+      }
+      groups[key].push(game);
+    }
+
+    const sortedKeys = Object.keys(groups).sort((a, b) => (orderMap[a] || 0) - (orderMap[b] || 0));
+
+    const dateFormatter = new Intl.DateTimeFormat('sv-SE', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+
+    return sortedKeys.map((key) => {
+      const gamesInGroup = groups[key];
+      const ms = orderMap[key];
+
+      if (ms >= 9999999999999) {
+        return {
+          dateKey: key,
+          displayDate: key,
+          countdown: '',
+          games: gamesInGroup,
+        };
+      }
+
+      const groupDate = new Date(ms);
+      const groupStart = new Date(groupDate.getFullYear(), groupDate.getMonth(), groupDate.getDate()).getTime();
+      const diffDays = Math.round((groupStart - todayStart) / (1000 * 60 * 60 * 24));
+
+      let countdown = '';
+      if (diffDays === 0) countdown = 'Idag';
+      else if (diffDays === 1) countdown = 'Imorgon';
+      else if (diffDays > 1 && diffDays <= 30) countdown = `Om ${diffDays} dagar`;
+      else if (diffDays > 30) {
+        const months = Math.max(1, Math.round(diffDays / 30.4));
+        countdown = `Om ca ${months} mån`;
+      }
+
+      const rawStr = dateFormatter.format(groupDate);
+      const displayDate = rawStr.charAt(0).toUpperCase() + rawStr.slice(1);
+
+      return {
+        dateKey: key,
+        displayDate,
+        countdown,
+        games: gamesInGroup,
+      };
+    });
+  }, [displayedCalendarGames]);
+
   // --- News State ---
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
   const [isLoadingNews, setIsLoadingNews] = useState(false);
   const [newsSearch, setNewsSearch] = useState('');
   const [selectedNewsCategory, setSelectedNewsCategory] = useState<
-    'all' | 'my_games' | 'reviews' | 'trailers' | 'saved'
+    'all' | 'my_games' | 'reviews' | 'updates' | 'trailers' | 'previews' | 'saved'
   >('all');
   const [selectedNewsPlatform, setSelectedNewsPlatform] = useState<string>('Alla plattformar');
   const [selectedNewsSource, setSelectedNewsSource] = useState<string>('Alla källor');
@@ -593,12 +795,29 @@ export function DiscoverView({
           n.title.toLowerCase().includes(' review') ||
           n.title.toLowerCase().includes('recension')
       );
+    } else if (selectedNewsCategory === 'updates') {
+      result = result.filter(
+        (n) =>
+          n.category === 'Uppdatering' ||
+          n.title.toLowerCase().includes('patch') ||
+          n.title.toLowerCase().includes('update') ||
+          n.title.toLowerCase().includes('uppdatering') ||
+          n.title.toLowerCase().includes('hotfix')
+      );
     } else if (selectedNewsCategory === 'trailers') {
       result = result.filter(
         (n) =>
           n.category === 'Trailer' ||
           n.title.toLowerCase().includes('trailer') ||
           n.title.toLowerCase().includes('gameplay')
+      );
+    } else if (selectedNewsCategory === 'previews') {
+      result = result.filter(
+        (n) =>
+          n.category === 'Förhandstitt' ||
+          n.title.toLowerCase().includes('preview') ||
+          n.title.toLowerCase().includes('hands-on') ||
+          n.title.toLowerCase().includes('förhandstitt')
       );
     } else if (selectedNewsCategory === 'saved') {
       result = result.filter((n) => savedNewsIds.includes(n.id));
@@ -673,12 +892,12 @@ export function DiscoverView({
 
   return (
     <div className="space-y-8 pb-12 animate-in fade-in duration-200">
-      {/* 1. Ren Tab Switcher: Upptäck vs Nyheter */}
+      {/* 1. Ren Tab Switcher: Upptäck vs Releasekalender vs Nyheter */}
       <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
-        <div className="flex items-center bg-zinc-900 border border-zinc-800 p-1 rounded-2xl">
+        <div className="flex items-center bg-zinc-900 border border-zinc-800 p-1 rounded-2xl overflow-x-auto scrollbar-none max-w-full">
           <button
             onClick={() => setActiveTab('discover')}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition whitespace-nowrap cursor-pointer ${
               activeTab === 'discover'
                 ? 'bg-brand-red text-white shadow-sm'
                 : 'text-zinc-400 hover:text-zinc-200'
@@ -689,8 +908,20 @@ export function DiscoverView({
           </button>
 
           <button
+            onClick={() => setActiveTab('calendar')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition whitespace-nowrap cursor-pointer ${
+              activeTab === 'calendar'
+                ? 'bg-brand-red text-white shadow-sm'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Calendar className="w-4 h-4" />
+            <span>Releasekalender</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('news')}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition whitespace-nowrap cursor-pointer ${
               activeTab === 'news'
                 ? 'bg-brand-red text-white shadow-sm'
                 : 'text-zinc-400 hover:text-zinc-200'
@@ -1206,14 +1437,16 @@ export function DiscoverView({
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-brand-red" />
                 <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">
-                  Kommande spelsläpp (Releasekalender)
+                  Kommande spelsläpp
                 </h3>
               </div>
-              <span className="text-xs text-zinc-400 font-medium">
-                {isLoadingDiscover && upcomingGames.length === 0
-                  ? 'Hämtar släpp...'
-                  : `${upcomingGames.length} heta släpp`}
-              </span>
+              <button
+                onClick={() => setActiveTab('calendar')}
+                className="flex items-center gap-1.5 text-xs font-semibold text-brand-red hover:text-red-400 transition cursor-pointer"
+              >
+                <span>Öppna hela releasekalendern</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
 
             {isLoadingDiscover && upcomingGames.length === 0 ? (
@@ -1421,7 +1654,13 @@ export function DiscoverView({
                       {game.title}
                     </h4>
 
-                    <span className="text-[10px] text-zinc-400 mt-0.5 truncate">
+                    {game.badge_text && (
+                      <div className={`my-1 px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-extrabold border truncate text-center shadow-sm ${getBadgeStyle(game.badge_text)}`}>
+                        {game.badge_text}
+                      </div>
+                    )}
+
+                    <span className="text-[10px] text-zinc-400 mt-0.5 truncate block">
                       {game.release_year ? `${game.release_year} • ` : ''}
                       {getPrimaryGenre(game.genres)}
                     </span>
@@ -1737,9 +1976,342 @@ export function DiscoverView({
             </div>
           )}
         </div>
+      ) : activeTab === 'calendar' ? (
+        /* --- DEDIKERAD RELEASEKALENDER (Motsvarande iOS UpcomingReleasesView.swift) --- */
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Kalender Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-zinc-900/90 via-zinc-900/60 to-zinc-950 border border-zinc-800/80 rounded-3xl p-5 sm:p-6 shadow-lg">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-brand-red/10 border border-brand-red/20 flex items-center justify-center text-brand-red flex-shrink-0 shadow-inner">
+                <Calendar className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight">
+                  Releasekalender
+                </h2>
+                <p className="text-xs sm:text-sm text-zinc-400 mt-0.5">
+                  {currentMonthOption.isMostHyped
+                    ? 'De mest efterlängtade och hypade kommande spelsläppen'
+                    : `Spelsläpp under ${currentMonthOption.title}`}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => loadCalendarGames()}
+                disabled={isLoadingCalendar}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 transition disabled:opacity-50 cursor-pointer shadow-sm"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingCalendar ? 'animate-spin text-brand-red' : ''}`} />
+                <span>Uppdatera</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Horisontell Månadsväljare (med "🔥 Mest hypade" först) */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {monthOptions.map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => setSelectedMonthID(opt.id)}
+                className={`px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
+                  selectedMonthID === opt.id
+                    ? 'bg-brand-red text-white shadow-md shadow-brand-red/25'
+                    : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                }`}
+              >
+                <span>{opt.title}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Plattformsväljare + Filter Toggle */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+              {CALENDAR_PLATFORMS.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setSelectedCalendarPlatform(p.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+                    selectedCalendarPlatform === p.id
+                      ? 'bg-white text-zinc-950 font-bold shadow-sm'
+                      : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            {!currentMonthOption.isMostHyped && (
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <button
+                  onClick={() => setShowAllInMonth(!showAllInMonth)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                    showAllInMonth
+                      ? 'bg-zinc-900 border-zinc-800 text-zinc-300'
+                      : 'bg-amber-500/10 border-amber-500/30 text-amber-300 font-bold'
+                  }`}
+                >
+                  {showAllInMonth ? 'Visar alla släpp i månaden' : 'Endast större släpp'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Kalender Innehåll */}
+          {isLoadingCalendar && calendarGames.length === 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pt-2">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                <div
+                  key={i}
+                  className="h-36 rounded-2xl bg-zinc-900/60 border border-zinc-800 animate-pulse flex p-3 gap-3"
+                >
+                  <div className="w-20 h-full rounded-xl bg-zinc-800 flex-shrink-0" />
+                  <div className="flex-1 space-y-2 py-1">
+                    <div className="w-3/4 h-4 bg-zinc-800 rounded" />
+                    <div className="w-1/2 h-3 bg-zinc-800/60 rounded" />
+                    <div className="w-1/3 h-3 bg-zinc-800/40 rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : displayedCalendarGames.length === 0 ? (
+            <div className="text-center py-20 text-zinc-500 border border-dashed border-zinc-800 rounded-3xl p-8 space-y-3">
+              <Calendar className="w-10 h-10 mx-auto opacity-40 text-brand-red" />
+              <p className="text-sm font-semibold text-zinc-300">
+                Inga kommande spelsläpp hittades för det valda filtret.
+              </p>
+              <p className="text-xs text-zinc-500">
+                Prova att byta plattform eller välja en annan månad.
+              </p>
+            </div>
+          ) : currentMonthOption.isMostHyped ? (
+            /* --- Mest Hypade Spel Rutnät --- */
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pt-1">
+              {displayedCalendarGames.map((game, idx) => {
+                const inLibrary = isGameInLibrary(game.igdb_id, game.title);
+                const relDate = game.first_release_date
+                  ? new Date(
+                      Number(game.first_release_date) *
+                        (Number(game.first_release_date) < 10000000000 ? 1000 : 1)
+                    ).toLocaleDateString('sv-SE', {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                    })
+                  : game.release_year
+                  ? String(game.release_year)
+                  : 'Kommande';
+
+                return (
+                  <div
+                    key={game.id}
+                    className="flex flex-col justify-between bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 rounded-2xl p-3 group transition shadow-md relative"
+                  >
+                    <div className="flex gap-3">
+                      {/* Omslag */}
+                      <div
+                        onClick={() => onSelectGame(game)}
+                        className="w-20 sm:w-24 aspect-[3/4] rounded-xl overflow-hidden bg-zinc-950 flex-shrink-0 relative cursor-pointer border border-zinc-800 shadow"
+                      >
+                        {game.cover_url ? (
+                          <img
+                            src={game.cover_url}
+                            alt={game.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Gamepad className="w-6 h-6 text-zinc-600" />
+                          </div>
+                        )}
+                        <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-black bg-black/80 text-amber-400 border border-amber-500/30">
+                          #{idx + 1}
+                        </div>
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0 flex flex-col justify-between">
+                        <div>
+                          {/* Hype badge */}
+                          {game.hypes ? (
+                            <div className="inline-flex items-center gap-1 text-[10px] font-black text-rose-400 mb-1">
+                              <Flame className="w-3 h-3 text-brand-red fill-current" />
+                              <span>{game.hypes} hypes</span>
+                            </div>
+                          ) : null}
+
+                          <h4
+                            onClick={() => onSelectGame(game)}
+                            className="text-sm font-bold text-white group-hover:text-red-400 transition cursor-pointer line-clamp-2 leading-snug"
+                          >
+                            {game.title}
+                          </h4>
+
+                          <p className="text-[11px] text-zinc-400 mt-1 truncate">
+                            {game.developers?.[0] || getPrimaryGenre(game.genres)}
+                          </p>
+                        </div>
+
+                        <div className="mt-2">
+                          <span className="text-[11px] font-bold text-zinc-300 flex items-center gap-1">
+                            <Calendar className="w-3 h-3 text-brand-red" />
+                            {relDate}
+                          </span>
+                          <span className="text-[10px] text-zinc-500 truncate block mt-0.5">
+                            {game.platforms?.slice(0, 3).join(', ') || 'Okänd plattform'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() =>
+                        onAddGame({ ...game, status: 'notStarted', is_owned: false })
+                      }
+                      disabled={inLibrary}
+                      className={`mt-3 w-full py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                        inLibrary
+                          ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-default'
+                          : 'bg-zinc-800 hover:bg-brand-red text-zinc-200 hover:text-white border border-zinc-700 hover:border-brand-red'
+                      }`}
+                    >
+                      {inLibrary ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>I biblioteket</span>
+                        </>
+                      ) : (
+                        <>
+                          <Bookmark className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Lägg till i önskelista</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* --- Månadsvy Grupperad per Datum (Tidslinje med nedräkningar) --- */
+            <div className="space-y-6 pt-1">
+              {groupedCalendarReleases.map((group) => (
+                <div key={group.dateKey} className="space-y-3">
+                  {/* Datumrubrik med Countdown-badge */}
+                  <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-brand-red" />
+                      <h3 className="text-sm sm:text-base font-bold text-white">
+                        {group.displayDate}
+                      </h3>
+                    </div>
+
+                    {group.countdown && (
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                          group.countdown === 'Idag'
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 animate-pulse'
+                            : group.countdown === 'Imorgon'
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            : 'bg-zinc-800/80 text-zinc-300 border-zinc-700'
+                        }`}
+                      >
+                        {group.countdown}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Spelkort för detta datum */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    {group.games.map((game) => {
+                      const inLibrary = isGameInLibrary(game.igdb_id, game.title);
+
+                      return (
+                        <div
+                          key={game.id}
+                          className="flex items-center gap-3.5 p-3 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 group transition shadow-sm"
+                        >
+                          {/* Omslagsbild */}
+                          <div
+                            onClick={() => onSelectGame(game)}
+                            className="w-14 h-20 rounded-xl overflow-hidden bg-zinc-950 flex-shrink-0 cursor-pointer border border-zinc-800 shadow relative"
+                          >
+                            {game.cover_url ? (
+                              <img
+                                src={game.cover_url}
+                                alt={game.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Gamepad className="w-6 h-6 text-zinc-600" />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Spelinfo */}
+                          <div className="flex-1 min-w-0">
+                            <h4
+                              onClick={() => onSelectGame(game)}
+                              className="text-xs sm:text-sm font-bold text-white truncate group-hover:text-red-400 transition cursor-pointer"
+                            >
+                              {game.title}
+                            </h4>
+
+                            <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
+                              {game.developers?.[0] || getPrimaryGenre(game.genres)}
+                            </p>
+
+                            <div className="flex items-center gap-1.5 mt-1 text-[10px] text-zinc-400">
+                              <span className="font-semibold text-zinc-300 truncate">
+                                {game.platforms?.slice(0, 2).join(', ') || 'Multi'}
+                              </span>
+                              {game.hypes && game.hypes > 0 ? (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-amber-400 font-bold">
+                                    🔥 {game.hypes}
+                                  </span>
+                                </>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          {/* Snabbknapp för önskelista */}
+                          <button
+                            onClick={() =>
+                              onAddGame({ ...game, status: 'notStarted', is_owned: false })
+                            }
+                            disabled={inLibrary}
+                            title={inLibrary ? 'I biblioteket' : 'Lägg till i önskelista'}
+                            className={`p-2.5 rounded-xl border transition cursor-pointer flex-shrink-0 ${
+                              inLibrary
+                                ? 'bg-zinc-800/40 text-emerald-400 border-zinc-750 cursor-default'
+                                : 'bg-zinc-800 hover:bg-brand-red text-zinc-300 hover:text-white border-zinc-700'
+                            }`}
+                          >
+                            {inLibrary ? (
+                              <Check className="w-4 h-4 text-emerald-400" />
+                            ) : (
+                              <Bookmark className="w-4 h-4 text-amber-400" />
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       ) : (
         /* --- Avancerad Spelnyhets- & Recensionshub --- */
-        <div className="space-y-6">
+        <div className="space-y-6 animate-in fade-in duration-200">
           {/* Top Controls: Search, Category Tabs, Platform & Source Selectors */}
           <div className="space-y-3">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
@@ -1797,19 +2369,21 @@ export function DiscoverView({
               </div>
             </div>
 
-            {/* Kategori-flikar */}
+            {/* Kategori-flikar (med Uppdateringar och Förhandstittar) */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
               {[
                 { id: 'all', label: 'Alla artiklar' },
                 { id: 'reviews', label: '⭐ Recensioner' },
                 { id: 'my_games', label: '🎮 Från mina spel' },
+                { id: 'updates', label: '🔄 Uppdateringar' },
                 { id: 'trailers', label: '🎬 Trailers & Videor' },
+                { id: 'previews', label: '👁️ Förhandstittar' },
                 { id: 'saved', label: `🔖 Sparade (${savedNewsIds.length})` },
               ].map((f) => (
                 <button
                   key={f.id}
                   onClick={() => setSelectedNewsCategory(f.id as any)}
-                  className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
+                  className={`px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
                     selectedNewsCategory === f.id
                       ? 'bg-brand-red text-white shadow-md shadow-brand-red/20'
                       : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
@@ -1820,6 +2394,57 @@ export function DiscoverView({
               ))}
             </div>
           </div>
+
+          {/* Trendar just nu mini-karusell i nyhetsflödet (identiskt med iOS NewsFeedView) */}
+          {trendingGames.length > 0 && !newsSearch.trim() && selectedNewsCategory === 'all' && (
+            <div className="p-4 rounded-3xl bg-zinc-900/40 border border-zinc-800/70 space-y-2.5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Flame className="w-4 h-4 text-brand-red" />
+                  <span className="text-xs sm:text-sm font-bold text-white">Trendar just nu</span>
+                </div>
+                <button
+                  onClick={() => setActiveTab('discover')}
+                  className="text-xs text-brand-red hover:text-red-400 font-semibold transition cursor-pointer"
+                >
+                  Visa alla →
+                </button>
+              </div>
+
+              <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-zinc-800">
+                {trendingGames.slice(0, 10).map((game) => (
+                  <div
+                    key={game.id}
+                    onClick={() => onSelectGame(game)}
+                    className="flex-shrink-0 w-24 sm:w-28 cursor-pointer group space-y-1.5"
+                  >
+                    <div className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 relative">
+                      {game.cover_url ? (
+                        <img
+                          src={game.cover_url}
+                          alt={game.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Gamepad className="w-5 h-5 text-zinc-600" />
+                        </div>
+                      )}
+                      {game.badge_text && (
+                        <div className="absolute bottom-1 left-1 right-1 px-1 py-0.5 rounded text-[8px] font-black bg-black/80 text-white border border-white/20 truncate text-center">
+                          {game.badge_text}
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-[11px] font-bold text-zinc-200 truncate group-hover:text-red-400 transition">
+                      {game.title}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {isLoadingNews ? (
             <div className="flex flex-col items-center justify-center py-24 text-zinc-400 gap-3">

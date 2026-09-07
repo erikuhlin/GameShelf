@@ -68,6 +68,8 @@ export interface Game {
   hours_played?: number | null;
   progress_note?: string | null;
   note_updated_at?: string | null;
+  badge_text?: string | null;
+  hypes?: number | null;
 }
 
 export interface GameCollection {

@@ -45,6 +45,7 @@ private enum ExploreSheet: Identifiable {
 }
 
 struct ExploreView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @EnvironmentObject var profile: ProfileStore
     @EnvironmentObject var store: LibraryStore
 
@@ -60,6 +61,7 @@ struct ExploreView: View {
     // Startsida State
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
     @State private var selectedHeroIndex: Int = 0
+    @State private var selectedNewsPageIndex: Int = 0
     @State private var selectedDiscoverTab: DiscoverTab = .forYou
     @State private var selectedStarterCategory: Int = 0
     @State private var upcomingGames: [IGDBGame] = []
@@ -871,6 +873,27 @@ struct ExploreView: View {
         .buttonStyle(.plain)
     }
 
+    private var newsDigestItems: [NewsItem] {
+        Array(news.items.prefix(12))
+    }
+
+    private var newsPages: [[NewsItem]] {
+        let items = newsDigestItems
+        guard !items.isEmpty else { return [] }
+        return stride(from: 0, to: items.count, by: 4).map {
+            Array(items[$0..<min($0 + 4, items.count)])
+        }
+    }
+
+    private func badgeForNewsItem(item: NewsItem, globalIndex: Int) -> String {
+        if item.matchedGameTitle != nil { return "Ditt spel" }
+        if globalIndex == 0 { return "Toppnyhet" }
+        if item.kind == .review { return "Recension" }
+        if item.kind == .video { return "Trailer" }
+        if item.kind == .update { return "Uppdatering" }
+        return "Nyhet"
+    }
+
     // MARK: - 3. Zon 2: Spelvärlden idag (Kompakt nyhetsdigest som hel sektion)
     private var newsDigestSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -886,6 +909,12 @@ struct ExploreView: View {
 
                 Spacer()
 
+                if horizontalSizeClass != .regular && newsPages.count > 1 {
+                    Text("\(min(selectedNewsPageIndex + 1, newsPages.count)) av \(newsPages.count)")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+
                 NavigationLink(destination: NewsFeedView()) {
                     Text("Nyhetsmagasinet ›")
                         .font(.caption.bold())
@@ -893,33 +922,53 @@ struct ExploreView: View {
                 }
             }
 
-            // Kurerat 4-korts nyhetsdigest
-            let digestItems = Array(news.items.prefix(4))
-
-            if digestItems.isEmpty {
+            if newsDigestItems.isEmpty {
                 Text("Laddar nyheter...")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 8)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(digestItems.enumerated()), id: \.element.id) { index, item in
+            } else if horizontalSizeClass == .regular {
+                // IPAD: Visa alla nyheter samtidigt i ett fler-kolumners rutnät
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 340, maximum: 650), spacing: 16)], spacing: 12) {
+                    ForEach(Array(newsDigestItems.enumerated()), id: \.element.id) { globalIdx, item in
                         let isPersonal = item.matchedGameTitle != nil
-                        let badge: String = {
-                            if isPersonal { return "Ditt spel" }
-                            if index == 0 { return "Toppnyhet" }
-                            if item.kind == .review { return "Recension" }
-                            if item.kind == .video { return "Trailer" }
-                            if item.kind == .update { return "Uppdatering" }
-                            return "Nyhet"
-                        }()
+                        let badge = badgeForNewsItem(item: item, globalIndex: globalIdx)
 
                         compactNewsRow(item: item, badgeText: badge, isPersonal: isPersonal)
+                            .padding(10)
+                            .background(Color(.tertiarySystemGroupedBackground).opacity(0.5))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                }
+            } else {
+                // IPHONE: Swipebar sidvisning (4 nyheter per sida, upp till 12 nyheter)
+                if newsPages.count == 1 {
+                    VStack(spacing: 0) {
+                        newsPageRows(pageItems: newsPages[0], pageStartIndex: 0)
+                    }
+                } else {
+                    VStack(spacing: 10) {
+                        TabView(selection: $selectedNewsPageIndex) {
+                            ForEach(Array(newsPages.enumerated()), id: \.offset) { pageIndex, pageItems in
+                                VStack(spacing: 0) {
+                                    newsPageRows(pageItems: pageItems, pageStartIndex: pageIndex * 4)
+                                    Spacer(minLength: 0)
+                                }
+                                .tag(pageIndex)
+                                .padding(.horizontal, 1)
+                            }
+                        }
+                        .tabViewStyle(.page(indexDisplayMode: .never))
+                        .frame(height: 350)
 
-                        if index < digestItems.count - 1 {
-                            Divider()
-                                .opacity(0.4)
-                                .padding(.vertical, 8)
+                        // Subtila eleganta sidprickar (Page dots)
+                        HStack(spacing: 6) {
+                            ForEach(0..<newsPages.count, id: \.self) { idx in
+                                Capsule()
+                                    .fill(selectedNewsPageIndex == idx ? Color.red : Color.secondary.opacity(0.35))
+                                    .frame(width: selectedNewsPageIndex == idx ? 16 : 6, height: 6)
+                                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedNewsPageIndex)
+                            }
                         }
                     }
                 }
@@ -933,6 +982,28 @@ struct ExploreView: View {
                 .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
+        .onChange(of: newsPages.count) { _, newCount in
+            if selectedNewsPageIndex >= newCount {
+                selectedNewsPageIndex = max(0, newCount - 1)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func newsPageRows(pageItems: [NewsItem], pageStartIndex: Int) -> some View {
+        ForEach(Array(pageItems.enumerated()), id: \.element.id) { index, item in
+            let globalIdx = pageStartIndex + index
+            let isPersonal = item.matchedGameTitle != nil
+            let badge = badgeForNewsItem(item: item, globalIndex: globalIdx)
+
+            compactNewsRow(item: item, badgeText: badge, isPersonal: isPersonal)
+
+            if index < pageItems.count - 1 {
+                Divider()
+                    .opacity(0.4)
+                    .padding(.vertical, 8)
+            }
+        }
     }
 
     private func compactNewsRow(item: NewsItem, badgeText: String, isPersonal: Bool) -> some View {

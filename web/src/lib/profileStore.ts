@@ -30,10 +30,16 @@ export const DEFAULT_PLATFORMS = [
 export const DEFAULT_GENRES = [
   'RPG',
   'Action',
+  'Soulslike',
   'Skräck',
   'FPS',
   'Äventyr',
+  'Öppen värld',
   'Strategi',
+  'Roguelike',
+  'Survival',
+  'Metroidvania',
+  'JRPG',
   'Simulator',
   'Plattform',
   'Pussel',
@@ -42,6 +48,10 @@ export const DEFAULT_GENRES = [
   'Fighting',
   'Indie',
   'Cozy',
+  'Hack & Slash',
+  'Smygspel',
+  'Berättelsedrivet',
+  'MMO',
 ];
 
 export const DEFAULT_PLAY_FOR = [
@@ -52,6 +62,30 @@ export const DEFAULT_PLAY_FOR = [
   'Avkoppling',
   'Utmaning',
   'Kreativitet',
+  'Samarbete & Gemenskap',
+  'Djup Lore & Världsbygge',
+  'Nostalgi & Retro',
+  '100% Completionism',
+  'Snabba sessioner',
+  'Adrenalin & Puls',
+  'Taktik & Problemlösning',
+];
+
+export const DEFAULT_PLAYSTYLES = [
+  'Singleplayer',
+  'Co-op / Samarbete',
+  'PvP / Multiplayer',
+  'Trophy Hunter',
+  'Casual / Avslappnad',
+];
+
+export const DEFAULT_PLAYING_MOODS = [
+  'Utforska nya världar',
+  'Mysigt & Avkopplande',
+  'Brutal bossutmaning',
+  'Djup story & lore',
+  'Snabba matcher & action',
+  'Klurig taktik & hjärngympa',
 ];
 
 const PROFILE_STORAGE_KEY = 'gameshelf_user_profile';
@@ -66,6 +100,9 @@ export const DEFAULT_PROFILE: UserProfile = {
   avatarType: 'initial',
   annualGamingGoal: 12,
   targetGameIDs: [],
+  playingMood: 'Utforska nya världar',
+  gamerBio: '',
+  playstyle: ['Singleplayer'],
 };
 
 export function loadUserProfile(): UserProfile {

@@ -237,6 +237,8 @@ struct GameDetailView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 110)
+            .frame(maxWidth: 880)
+            .frame(maxWidth: .infinity, alignment: .center)
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
@@ -651,6 +653,14 @@ struct GameDetailView: View {
                             g.isBacklog ? "Ta bort från Backlog" : "Lägg till i Backlog",
                             systemImage: g.isBacklog ? "archivebox.fill" : "archivebox"
                         )
+                    }
+                }
+
+                Section("Placering") {
+                    Button {
+                        moveToWishlist(g)
+                    } label: {
+                        Label("Flytta till önskelista", systemImage: "heart")
                     }
                 }
 
@@ -1087,7 +1097,7 @@ struct GameDetailView: View {
         let genres = r.genres?.map { $0.name } ?? []
         let available = r.platforms?.map { $0.name } ?? []
         let platforms = PlatformMatcher.resolvePlatforms(availableIGDBPlatforms: available, userProfilePlatforms: profile.platforms)
-        let normalizedRating = (r.totalRating ?? 0.0) / 20.0
+        let normalizedRating: Double? = (r.totalRating ?? 0) > 0 ? (r.totalRating! / 10.0) : nil
         let est = r.timeToBeat?.mainStoryHours ?? r.timeToBeat?.mainExtraHours
 
         let newGame = Game(
@@ -1139,6 +1149,7 @@ struct GameDetailView: View {
             }
             notesCard(g)
             collectionsCard(g)
+            moveToWishlistButton(g)
             deleteGameButton(g)
         }
     }
@@ -1628,6 +1639,30 @@ struct GameDetailView: View {
                 }
             }
         }
+    }
+
+    private func moveToWishlistButton(_ g: Game) -> some View {
+        Button {
+            moveToWishlist(g)
+        } label: {
+            Label("Flytta till önskelistan", systemImage: "heart")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.red.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .padding(.top, 4)
+    }
+
+    private func moveToWishlist(_ g: Game) {
+        var copy = g
+        copy.isOwned = false
+        copy.isBacklog = false
+        copy.status = .notStarted
+        updateLocal(copy)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 
     private func deleteGameButton(_ g: Game) -> some View {
@@ -2848,6 +2883,24 @@ struct GameDetailView: View {
             } label: {
                 Image(systemName: "square.and.arrow.up")
             }
+
+            if let g = currentGame, g.isOwned {
+                Menu {
+                    Button {
+                        moveToWishlist(g)
+                    } label: {
+                        Label("Flytta till önskelista", systemImage: "heart")
+                    }
+
+                    Button(role: .destructive) {
+                        showingDeleteConfirmation = true
+                    } label: {
+                        Label("Ta bort från biblioteket", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
         }
     }
 
@@ -3072,7 +3125,7 @@ struct GameDetailView: View {
         let genres = d.genres?.map { $0.name } ?? []
         let available = d.platforms?.map { $0.name } ?? []
         let platforms = PlatformMatcher.resolvePlatforms(availableIGDBPlatforms: available, userProfilePlatforms: profile.platforms)
-        let normalizedRating = (d.totalRating ?? 0.0) / 20.0
+        let normalizedRating: Double? = (d.totalRating ?? 0) > 0 ? (d.totalRating! / 10.0) : nil
         let est = d.timeToBeat?.mainStoryHours ?? d.timeToBeat?.mainExtraHours
         let inferredTypes = Game.inferPlayTypes(
             genres: genres,

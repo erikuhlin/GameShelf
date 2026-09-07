@@ -9,6 +9,7 @@ import SwiftUI
 
 struct AddGameView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @EnvironmentObject var store: LibraryStore
     @EnvironmentObject var profile: ProfileStore
 
@@ -72,6 +73,22 @@ struct AddGameView: View {
             $0.genres.contains(where: { $0.lowercased().contains(q) }) ||
             $0.platforms.contains(where: { $0.lowercased().contains(q) }) ||
             $0.developers.contains(where: { $0.lowercased().contains(q) })
+        }
+    }
+
+    private var matchingOwnedGames: [Game] {
+        matchingLocalGames.filter { $0.isOwned }
+    }
+
+    private var matchingWishlistGames: [Game] {
+        matchingLocalGames.filter { !$0.isOwned }
+    }
+
+    private var smartPresetColumns: [GridItem] {
+        if horizontalSizeClass == .regular {
+            return [GridItem(.adaptive(minimum: 200, maximum: 300), spacing: 12)]
+        } else {
+            return [GridItem(.flexible()), GridItem(.flexible())]
         }
     }
 
@@ -351,10 +368,10 @@ struct AddGameView: View {
     // MARK: - Sökresultat-lista med Universal Multi-Source
     private var searchResultsList: some View {
         List {
-            // 1. I ditt bibliotek
-            if !matchingLocalGames.isEmpty {
+            // 1a. I ditt bibliotek
+            if !matchingOwnedGames.isEmpty {
                 Section {
-                    ForEach(matchingLocalGames) { localGame in
+                    ForEach(matchingOwnedGames) { localGame in
                         NavigationLink(destination: GameDetailView(game: localGame)) {
                             HStack(spacing: 12) {
                                 CoverView(title: localGame.title, url: localGame.coverURL, corner: 8, height: 60)
@@ -367,7 +384,7 @@ struct AddGameView: View {
                                         .lineLimit(1)
 
                                     HStack(spacing: 6) {
-                                        StatusBadge(status: localGame.status)
+                                        StatusBadge(game: localGame)
 
                                         if let rating = localGame.rating {
                                             Text("⭐ \(rating)/10")
@@ -393,12 +410,110 @@ struct AddGameView: View {
                         }
                         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                         .listRowBackground(Color(.secondarySystemGroupedBackground))
+                        .contextMenu {
+                            Button {
+                                var copy = localGame
+                                copy.isOwned = false
+                                copy.isBacklog = false
+                                copy.status = .notStarted
+                                store.update(copy)
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            } label: {
+                                Label("Flytta till önskelista", systemImage: "heart")
+                            }
+
+                            Button(role: .destructive) {
+                                store.delete(localGame)
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            } label: {
+                                Label("Ta bort från biblioteket", systemImage: "trash")
+                            }
+                        }
                     }
                 } header: {
                     HStack {
                         Image(systemName: "books.vertical.fill")
                             .foregroundStyle(.green)
-                        Text("I ditt bibliotek (\(matchingLocalGames.count))")
+                        Text("I ditt bibliotek (\(matchingOwnedGames.count))")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            // 1b. I din önskelista
+            if !matchingWishlistGames.isEmpty {
+                Section {
+                    ForEach(matchingWishlistGames) { wishlistGame in
+                        NavigationLink(destination: GameDetailView(game: wishlistGame)) {
+                            HStack(spacing: 12) {
+                                CoverView(title: wishlistGame.title, url: wishlistGame.coverURL, corner: 8, height: 60)
+                                    .frame(width: 45, height: 60)
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(wishlistGame.title)
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+
+                                    HStack(spacing: 6) {
+                                        StatusBadge(game: wishlistGame)
+
+                                        if wishlistGame.releaseYear > 0 {
+                                            Text(String(wishlistGame.releaseYear))
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowBackground(Color(.secondarySystemGroupedBackground))
+                        .contextMenu {
+                            Button {
+                                var copy = wishlistGame
+                                copy.isOwned = true
+                                copy.isBacklog = true
+                                copy.status = .notStarted
+                                store.update(copy)
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            } label: {
+                                Label("Flytta till biblioteket (Backlog)", systemImage: "archivebox.fill")
+                            }
+
+                            Button {
+                                var copy = wishlistGame
+                                copy.isOwned = true
+                                copy.isBacklog = false
+                                copy.status = .playing
+                                copy.lastPlayedDate = Date()
+                                store.update(copy)
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            } label: {
+                                Label("Flytta till biblioteket (Spelar nu)", systemImage: "play.fill")
+                            }
+
+                            Button(role: .destructive) {
+                                store.delete(wishlistGame)
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            } label: {
+                                Label("Ta bort från önskelistan", systemImage: "trash")
+                            }
+                        }
+                    }
+                } header: {
+                    HStack {
+                        Image(systemName: "heart.fill")
+                            .foregroundStyle(.red)
+                        Text("I din önskelista (\(matchingWishlistGames.count))")
                             .font(.caption.bold())
                             .foregroundStyle(.secondary)
                     }
@@ -526,7 +641,7 @@ struct AddGameView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    LazyVGrid(columns: smartPresetColumns, spacing: 10) {
                         ForEach(SmartSearchPreset.allCases) { preset in
                             Button {
                                 filterConfig = preset.config
@@ -719,6 +834,8 @@ struct AddGameView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
+            .frame(maxWidth: 900)
+            .frame(maxWidth: .infinity, alignment: .center)
         }
     }
 
@@ -737,7 +854,7 @@ struct AddGameView: View {
         let available = game.platforms?.map(\.name) ?? []
         let platforms = PlatformMatcher.resolvePlatforms(availableIGDBPlatforms: available, userProfilePlatforms: profile.platforms)
         let genres = game.genres?.map(\.name) ?? []
-        let normalizedRating = (game.totalRating ?? 0.0) / 20.0
+        let normalizedRating: Double? = (game.totalRating ?? 0) > 0 ? (game.totalRating! / 10.0) : nil
         let est = game.timeToBeat?.mainStoryHours ?? game.timeToBeat?.mainExtraHours
         let inferredTypes = Game.inferPlayTypes(
             genres: genres,
@@ -987,89 +1104,242 @@ private struct IGDBSearchRow: View {
 
             Spacer(minLength: 4)
 
-            // 1-Trycks Snabb-knapp eller Statusbadge
-            if let local = localGame {
-                Menu {
-                    Section("Status") {
-                        ForEach(PlayStatus.allCases) { st in
-                            Button {
-                                updateStatus(st, for: local)
-                            } label: {
-                                HStack {
-                                    if local.status == st {
-                                        Image(systemName: "checkmark")
-                                    }
-                                    Label(
-                                        st.title(for: local.playTypes),
-                                        systemImage: st.icon(for: local.playTypes)
-                                    )
+            Spacer(minLength: 4)
+
+            HStack(spacing: 8) {
+                // 1. Snabbknapp för Önskelista (Hjärta)
+                if let local = localGame {
+                    if local.isOwned {
+                        // Finns i biblioteket: Tryck på hjärtat för att flytta till önskelista
+                        Button {
+                            moveToWishlist(local)
+                        } label: {
+                            Image(systemName: "heart")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.red)
+                                .frame(width: 32, height: 32)
+                                .background(Color.red.opacity(0.1))
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(Color.red.opacity(0.25), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Flytta till önskelista")
+                    } else {
+                        // Finns redan i önskelistan: Fyllt hjärta med meny
+                        Menu {
+                            Section("Önskelista") {
+                                Button {
+                                    moveToLibrary(local, as: .notStarted)
+                                } label: {
+                                    Label("Flytta till biblioteket", systemImage: "books.vertical")
+                                }
+                                Button(role: .destructive) {
+                                    store.delete(local)
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                } label: {
+                                    Label("Ta bort från önskelistan", systemImage: "trash")
                                 }
                             }
-                        }
-                    }
-
-                    Section("Backlog") {
-                        Button {
-                            var copy = local
-                            copy.isBacklog.toggle()
-                            store.update(copy)
                         } label: {
-                            Label(
-                                local.isBacklog ? "Ta bort från Backlog" : "Lägg till i Backlog",
-                                systemImage: local.isBacklog ? "archivebox.fill" : "archivebox"
-                            )
+                            Image(systemName: "heart.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 32, height: 32)
+                                .background(Color.red)
+                                .clipShape(Circle())
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("På önskelistan")
                     }
-                } label: {
-                    StatusBadge(game: local)
-                }
-                .buttonStyle(.plain)
-            } else {
-                Menu {
-                    Button {
-                        onQuickAdd(.backlog)
-                    } label: {
-                        Label("Lägg till i Backlog", systemImage: "archivebox.fill")
-                    }
-
-                    Button {
-                        onQuickAdd(.playing)
-                    } label: {
-                        Label("Lägg till som Spelar nu", systemImage: "play.fill")
-                    }
-
-                    Button {
-                        onQuickAdd(.completed)
-                    } label: {
-                        Label("Lägg till som Genomspelat", systemImage: "checkmark.seal.fill")
-                    }
-
+                } else {
+                    // Ej tillagt: 1-tryck för att direkt lägga till i önskelistan!
                     Button {
                         onQuickAdd(.wishlist)
                     } label: {
-                        Label("Lägg till i Önskelista", systemImage: "heart.fill")
+                        Image(systemName: "heart")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.red)
+                            .frame(width: 32, height: 32)
+                            .background(Color.red.opacity(0.1))
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Color.red.opacity(0.25), lineWidth: 1))
                     }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus")
-                            .font(.caption2.bold())
-                        Text("Lägg till")
-                            .font(.caption2.bold())
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.red)
-                    .foregroundStyle(.white)
-                    .clipShape(Capsule())
-                } primaryAction: {
-                    onQuickAdd(.backlog)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Lägg till i önskelista")
                 }
-                .buttonStyle(.plain)
+
+                // 2. Bibliotek / Status-knapp
+                if let local = localGame {
+                    if local.isOwned {
+                        Menu {
+                            Section("Önskelista") {
+                                Button {
+                                    moveToWishlist(local)
+                                } label: {
+                                    Label("Flytta till önskelista", systemImage: "heart")
+                                }
+                            }
+
+                            Section("Status") {
+                                ForEach(PlayStatus.allCases) { st in
+                                    Button {
+                                        updateStatus(st, for: local)
+                                    } label: {
+                                        HStack {
+                                            if local.status == st {
+                                                Image(systemName: "checkmark")
+                                            }
+                                            Label(
+                                                st.title(for: local.playTypes),
+                                                systemImage: st.icon(for: local.playTypes)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Section("Backlog") {
+                                Button {
+                                    var copy = local
+                                    copy.isBacklog.toggle()
+                                    store.update(copy)
+                                } label: {
+                                    Label(
+                                        local.isBacklog ? "Ta bort från Backlog" : "Lägg till i Backlog",
+                                        systemImage: local.isBacklog ? "archivebox.fill" : "archivebox"
+                                    )
+                                }
+                            }
+
+                            Section {
+                                Button(role: .destructive) {
+                                    store.delete(local)
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                } label: {
+                                    Label("Ta bort från biblioteket", systemImage: "trash")
+                                }
+                            }
+                        } label: {
+                            StatusBadge(game: local)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        // Finns på önskelistan
+                        Menu {
+                            Section("Flytta till biblioteket") {
+                                Button {
+                                    moveToLibrary(local, as: .notStarted)
+                                } label: {
+                                    Label("Lägg i Backlog", systemImage: "archivebox.fill")
+                                }
+                                Button {
+                                    moveToLibrary(local, as: .playing)
+                                } label: {
+                                    Label("Börja spela nu", systemImage: "play.fill")
+                                }
+                                Button {
+                                    moveToLibrary(local, as: .completed)
+                                } label: {
+                                    Label("Har redan klarat", systemImage: "checkmark.seal.fill")
+                                }
+                            }
+
+                            Section {
+                                Button(role: .destructive) {
+                                    store.delete(local)
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                } label: {
+                                    Label("Ta bort från önskelistan", systemImage: "trash")
+                                }
+                            }
+                        } label: {
+                            StatusBadge(game: local)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } else {
+                    Menu {
+                        Button {
+                            onQuickAdd(.backlog)
+                        } label: {
+                            Label("Lägg till i Backlog", systemImage: "archivebox.fill")
+                        }
+
+                        Button {
+                            onQuickAdd(.playing)
+                        } label: {
+                            Label("Lägg till som Spelar nu", systemImage: "play.fill")
+                        }
+
+                        Button {
+                            onQuickAdd(.completed)
+                        } label: {
+                            Label("Lägg till som Genomspelat", systemImage: "checkmark.seal.fill")
+                        }
+
+                        Divider()
+
+                        Button {
+                            onQuickAdd(.wishlist)
+                        } label: {
+                            Label("Lägg till i Önskelista", systemImage: "heart.fill")
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "plus")
+                                .font(.caption2.bold())
+                            Text("Lägg till")
+                                .font(.caption2.bold())
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.red)
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                    } primaryAction: {
+                        onQuickAdd(.backlog)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
         .padding(10)
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func moveToWishlist(_ g: Game) {
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+        var updated = g
+        updated.isOwned = false
+        updated.isBacklog = false
+        updated.status = .notStarted
+        store.update(updated)
+    }
+
+    private func moveToLibrary(_ g: Game, as status: PlayStatus) {
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+        var updated = g
+        updated.isOwned = true
+        updated.status = status
+        if status == .playing {
+            updated.isBacklog = false
+            if updated.lastPlayedDate == nil {
+                updated.lastPlayedDate = Date()
+            }
+        } else if status == .notStarted {
+            updated.isBacklog = true
+        } else if status == .completed {
+            updated.isBacklog = false
+            if updated.completedYear == nil {
+                updated.completedYear = Calendar.current.component(.year, from: Date())
+                updated.completedDate = Date()
+            }
+            updated.storyProgress = .completed
+        }
+        store.update(updated)
     }
 
     private func updateStatus(_ status: PlayStatus, for g: Game) {

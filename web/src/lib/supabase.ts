@@ -17,6 +17,23 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+export function normalizeIgdbRating(val: any): number | undefined {
+  if (val === null || val === undefined) return undefined;
+  const num = Number(val);
+  if (isNaN(num) || num <= 0) return undefined;
+  // Om värdet är > 10 har det sparats på en 0-100 skala (t.ex. 84.5 -> 8.5)
+  if (num > 10) {
+    return Math.round((num / 10) * 10) / 10;
+  }
+  // Om värdet är <= 5.0 beror det oftast på den tidigare iOS-buggen där totalRating (0-100) delades med 20.0
+  // (t.ex. 84 / 20 = 4.2 -> ska vara 8.4 på en 0-10 skala)
+  if (num <= 5.0) {
+    return Math.round((num * 2) * 10) / 10;
+  }
+  // Redan på en 0-10 skala (t.ex. 8.4)
+  return Math.round(num * 10) / 10;
+}
+
 // Database response mapping helpers
 export function mapSupabaseGame(row: any): Game {
   const normalized = normalizePlayStatus(row.status);
@@ -43,7 +60,7 @@ export function mapSupabaseGame(row: any): Game {
     developers: row.developers || [],
     status: normalized.status,
     rating: row.rating ? Math.round(Number(row.rating)) : undefined,
-    igdb_rating: row.igdb_rating ? Math.round(Number(row.igdb_rating) * 10) / 10 : undefined,
+    igdb_rating: normalizeIgdbRating(row.igdb_rating),
     cover_url: row.cover_url,
     igdb_id: row.igdb_id ? Number(row.igdb_id) : undefined,
     first_release_date: row.first_release_date ? Number(row.first_release_date) : undefined,

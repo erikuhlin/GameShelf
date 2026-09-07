@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Game, IGDBSearchResult, PlayStatus } from '@/types/game';
-import { supabase } from '@/lib/supabase';
+import { supabase, normalizeIgdbRating } from '@/lib/supabase';
 import { inferPlayTypes } from '@/lib/statusHelper';
 import { Search, X, Loader2, Plus, Check, Star, Gamepad, Calendar } from 'lucide-react';
 
@@ -77,8 +77,7 @@ export function AddGameModal({
         .filter((c) => c.developer)
         .map((c) => c.company.name);
 
-      const ratingScore = igdbGame.total_rating || igdbGame.rating;
-      const igdbRating = ratingScore ? Math.round((ratingScore / 10) * 10) / 10 : null;
+      const igdbRating = normalizeIgdbRating(igdbGame.igdb_rating ?? igdbGame.total_rating ?? igdbGame.rating) ?? null;
 
       const pairedUserId = typeof window !== 'undefined' ? localStorage.getItem('gameshelf_paired_user_id') : null;
       const choice = INITIAL_OPTIONS.find((o) => o.id === initialChoice) || INITIAL_OPTIONS[0];

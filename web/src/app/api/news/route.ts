@@ -16,13 +16,21 @@ interface NewsItem {
 }
 
 const FEEDS = [
-  // 1. Recensioner & Betyg
+  // 1. Svenska Spelmedier
+  { name: 'Gamereactor Nyheter', source: 'Gamereactor SE', url: 'https://www.gamereactor.se/rss/rss.php?texttype=4' },
+  { name: 'Gamereactor Recensioner', source: 'Gamereactor SE', url: 'https://www.gamereactor.se/rss/rss.php?texttype=2', defaultCategory: 'Recension' as const },
+
+  // 2. Dedikerade Recensioner & Betyg
+  { name: 'IGN Reviews', source: 'IGN', url: 'https://feeds.feedburner.com/ign/reviews', defaultCategory: 'Recension' as const },
+  { name: 'Eurogamer Reviews', source: 'Eurogamer', url: 'https://www.eurogamer.net/feed/reviews', defaultCategory: 'Recension' as const },
   { name: 'Gamespot Reviews', source: 'GameSpot', url: 'https://www.gamespot.com/feeds/reviews/', defaultCategory: 'Recension' as const },
   { name: 'Push Square Reviews', source: 'Push Square', url: 'https://www.pushsquare.com/feeds/reviews', defaultCategory: 'Recension' as const, defaultPlatform: 'PlayStation' as const },
   { name: 'Nintendo Life Reviews', source: 'Nintendo Life', url: 'https://www.nintendolife.com/feeds/reviews', defaultCategory: 'Recension' as const, defaultPlatform: 'Nintendo' as const },
   { name: 'Pure Xbox Reviews', source: 'Pure Xbox', url: 'https://www.purexbox.com/feeds/reviews', defaultCategory: 'Recension' as const, defaultPlatform: 'Xbox' as const },
 
-  // 2. Ledande Spelmedier (Allmänt & Nyheter)
+  // 3. Ledande Globala Spelmedier (Allmänt & Nyheter)
+  { name: 'IGN', source: 'IGN', url: 'https://feeds.feedburner.com/ign/all' },
+  { name: 'Eurogamer', source: 'Eurogamer', url: 'https://www.eurogamer.net/feed' },
   { name: 'PC Gamer', source: 'PC Gamer', url: 'https://www.pcgamer.com/rss/', defaultPlatform: 'PC' as const },
   { name: 'Gamespot Mashup', source: 'GameSpot', url: 'https://www.gamespot.com/feeds/mashup/' },
   { name: 'Push Square', source: 'Push Square', url: 'https://www.pushsquare.com/feeds/latest', defaultPlatform: 'PlayStation' as const },
@@ -33,8 +41,17 @@ const FEEDS = [
   { name: 'Polygon', source: 'Polygon', url: 'https://www.polygon.com/rss/index.xml' },
   { name: 'Kotaku', source: 'Kotaku', url: 'https://kotaku.com/rss' },
   { name: 'VGC', source: 'VGC', url: 'https://www.videogameschronicle.com/feed/' },
+  { name: 'GamesRadar', source: 'GamesRadar+', url: 'https://www.gamesradar.com/rss/' },
+  { name: 'VG247', source: 'VG247', url: 'https://www.vg247.com/feed' },
+  { name: 'PCGamesN', source: 'PCGamesN', url: 'https://www.pcgamesn.com/feed', defaultPlatform: 'PC' as const },
   { name: 'Gematsu', source: 'Gematsu', url: 'https://www.gematsu.com/feed' },
+  { name: 'Siliconera', source: 'Siliconera', url: 'https://www.siliconera.com/feed/' },
+
+  // 4. Officiella & Plattformsspecifika
+  { name: 'Xbox Wire', source: 'Xbox Wire', url: 'https://news.xbox.com/en-us/feed/', defaultPlatform: 'Xbox' as const },
   { name: 'PlayStation Blog', source: 'PlayStation Blog', url: 'https://blog.playstation.com/feed/', defaultPlatform: 'PlayStation' as const },
+  { name: 'Nintendo Everything', source: 'Nintendo Everything', url: 'https://nintendoeverything.com/feed/', defaultPlatform: 'Nintendo' as const },
+  { name: 'TouchArcade', source: 'TouchArcade', url: 'https://toucharcade.com/feed/' },
 ];
 
 function extractImage(itemXml: string): string | null {
@@ -85,7 +102,7 @@ function parseFeedItems(
   const itemRegex = /<item[\s\S]*?<\/item>|<entry[\s\S]*?<\/entry>/gi;
   const matches = xml.match(itemRegex) || [];
 
-  for (const itemXml of matches.slice(0, 20)) {
+  for (const itemXml of matches.slice(0, 50)) {
     try {
       const titleMatch = itemXml.match(/<title[\s\S]*?>([\s\S]*?)<\/title>/i);
       const rawTitle = titleMatch ? cleanText(titleMatch[1]) : '';
@@ -214,8 +231,8 @@ export async function GET(request: NextRequest) {
     const reviews = uniqueNews.filter((item) => item.category === 'Recension');
     const generalNews = uniqueNews.filter((item) => item.category !== 'Recension');
 
-    // Slå ihop alla färska recensioner med de 150 nyaste allmänna nyheterna
-    const combinedNews = [...reviews.slice(0, 100), ...generalNews.slice(0, 150)];
+    // Slå ihop alla färska recensioner med upp till 500 nyaste allmänna nyheter
+    const combinedNews = [...reviews.slice(0, 250), ...generalNews.slice(0, 500)];
     combinedNews.sort((a, b) => b.publishedTimestamp - a.publishedTimestamp);
 
     return NextResponse.json({

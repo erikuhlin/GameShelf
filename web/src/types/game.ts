@@ -98,5 +98,6 @@ export interface IGDBSearchResult {
   platforms?: Array<{ id: number; name: string }>;
   total_rating?: number;
   rating?: number;
+  igdb_rating?: number;
   summary?: string;
 }

@@ -253,7 +253,7 @@ struct AddGamesToCollectionSheet: View {
             // Skapa spelet i biblioteket
             let genres = igdbGame.genres?.map { $0.name } ?? []
             let platforms = igdbGame.platforms?.map { $0.name } ?? []
-            let normalizedRating = (igdbGame.totalRating ?? 0.0) / 20.0
+            let normalizedRating: Double? = (igdbGame.totalRating ?? 0) > 0 ? (igdbGame.totalRating! / 10.0) : nil
             let est = igdbGame.timeToBeat?.mainStoryHours ?? igdbGame.timeToBeat?.mainExtraHours
 
             let newGame = Game(

@@ -6,6 +6,7 @@ import { UserProfile } from '@/types/profile';
 import { resolveGameAlias } from '@/lib/aliasResolver';
 import { StatusBadge } from './StatusBadge';
 import { inferPlayTypes } from '@/lib/statusHelper';
+import { normalizeIgdbRating } from '@/lib/supabase';
 import {
   Search,
   X,
@@ -870,25 +871,38 @@ export function UniversalSearchModal({
               <div className="flex items-center justify-between mb-2.5">
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
                   <Globe className="w-3 h-3 text-brand-red" />
-                  IGDB{igdbResults.length > 0 ? ` · ${igdbResults.length}${hasMore ? '+' : ''}` : ''}
+                  IGDB{currentResults.length > 0 ? ` · ${currentResults.length}${hasMore ? '+' : ''}` : ''}
                 </div>
-                {isLoadingIgdb && <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-red" />}
+                {(isLoadingIgdb || isLoadingFilters) && <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-red" />}
               </div>
 
-              {igdbResults.length > 0 ? (
+              {currentResults.length > 0 ? (
                 <div className="space-y-1.5">
-                  {igdbResults.map((result) => {
+                  {currentResults.map((result) => {
                     const asResult = {
-                      id: result.id, title: result.name,
-                      cover_url: result.cover?.url,
-                      platforms: (result.platforms || []).map((p: any) => p.name),
-                      genres: (result.genres || []).map((g: any) => g.name),
-                      developers: (result.involved_companies || []).filter((c: any) => c.developer).map((c: any) => c.company.name),
-                      release_year: result.first_release_date ? new Date(result.first_release_date * 1000).getFullYear() : null,
+                      id: result.id,
+                      title: result.title || result.name,
+                      cover_url: result.cover_url || result.cover?.url || null,
+                      platforms: Array.isArray(result.platforms)
+                        ? (typeof result.platforms[0] === 'string'
+                            ? result.platforms
+                            : result.platforms.map((p: any) => p.name).filter(Boolean))
+                        : [],
+                      genres: Array.isArray(result.genres)
+                        ? (typeof result.genres[0] === 'string'
+                            ? result.genres
+                            : result.genres.map((g: any) => g.name).filter(Boolean))
+                        : [],
+                      developers: Array.isArray(result.developers)
+                        ? (typeof result.developers[0] === 'string'
+                            ? result.developers
+                            : result.developers.map((d: any) => d.company?.name || d.name || d).filter(Boolean))
+                        : (result.involved_companies || []).filter((c: any) => c.developer && c.company).map((c: any) => c.company.name),
+                      release_year: result.release_year || (result.first_release_date ? new Date(result.first_release_date * 1000).getFullYear() : null),
                       first_release_date: result.first_release_date || null,
-                      igdb_rating: result.total_rating ? Math.round((result.total_rating / 10) * 10) / 10 : null,
+                      igdb_rating: normalizeIgdbRating(result.igdb_rating ?? result.total_rating ?? result.rating) ?? null,
                     };
-                    const inLibrary = isGameInLibrary(result.id, result.name);
+                    const inLibrary = isGameInLibrary(result.id, asResult.title);
                     const inLib = games.find((g) => g.igdb_id === result.id);
                     return (
                       <GameResultCard key={result.id} result={asResult}
@@ -906,7 +920,7 @@ export function UniversalSearchModal({
                     );
                   })}
 
-                  {hasMore && !isLoadingIgdb && (
+                  {hasMore && !isLoadingIgdb && !isLoadingFilters && (
                     <button onClick={handleLoadMore} disabled={isLoadingMore}
                       className="w-full py-3 rounded-2xl border border-zinc-800 text-xs font-semibold text-zinc-600 hover:text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900/40 transition cursor-pointer flex items-center justify-center gap-2"
                     >
@@ -915,7 +929,7 @@ export function UniversalSearchModal({
                   )}
                 </div>
               ) : (
-                !isLoadingIgdb && query.trim().length > 1 && (
+                !isLoadingIgdb && !isLoadingFilters && query.trim().length > 1 && (
                   <p className="text-xs text-zinc-700 py-3 text-center">Inga träffar på IGDB för &ldquo;{query}&rdquo;</p>
                 )
               )}

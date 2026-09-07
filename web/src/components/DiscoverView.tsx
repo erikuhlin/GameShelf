@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Game, PlayStatus } from '@/types/game';
+import { normalizeIgdbRating } from '@/lib/supabase';
 import { StatusBadge } from './StatusBadge';
 import { getStatusDisplayTitle, isMultiplayerOrOngoing } from '@/lib/statusHelper';
 import {
@@ -194,6 +195,9 @@ export function DiscoverView({
   >('all');
   const [selectedNewsPlatform, setSelectedNewsPlatform] = useState<string>('Alla plattformar');
   const [selectedNewsSource, setSelectedNewsSource] = useState<string>('Alla källor');
+  const [selectedNewsTimeRange, setSelectedNewsTimeRange] = useState<
+    'all' | '24h' | '7d' | '30d' | 'older'
+  >('all');
   const [savedNewsIds, setSavedNewsIds] = useState<string[]>([]);
 
   // Ladda sparade bokmärken
@@ -451,16 +455,55 @@ export function DiscoverView({
     }
   };
 
-  // Hämta nyheter vid flikbyte
+  // Hämta nyheter vid flikbyte med persistent arkiverande sammanslagning
   useEffect(() => {
     if (activeTab !== 'news') return;
+
+    // 1. Läs in från lokalt arkiv omedelbart så att användaren ser sparade och tidigare artiklar direkt
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('gameshelf_news_archive');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setNewsItems(parsed);
+          }
+        }
+      } catch (e) {}
+    }
+
     async function loadNews() {
       setIsLoadingNews(true);
       try {
         const res = await fetch('/api/news');
         const data = await res.json();
-        if (data.news) {
-          setNewsItems(data.news);
+        if (data.news && Array.isArray(data.news)) {
+          let existingArchive: NewsItem[] = [];
+          if (typeof window !== 'undefined') {
+            try {
+              const raw = localStorage.getItem('gameshelf_news_archive');
+              if (raw) existingArchive = JSON.parse(raw);
+            } catch (e) {}
+          }
+
+          const merged = [...data.news, ...existingArchive];
+          const seen = new Set<string>();
+          const unique = merged.filter((item) => {
+            const key = item.link || item.title.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+
+          unique.sort((a, b) => b.publishedTimestamp - a.publishedTimestamp);
+          const finalArchive = unique.slice(0, 1000);
+
+          setNewsItems(finalArchive);
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('gameshelf_news_archive', JSON.stringify(finalArchive));
+            } catch (e) {}
+          }
         }
       } catch (e) {
         console.error('Error loading news:', e);
@@ -584,6 +627,24 @@ export function DiscoverView({
       result = result.filter((n) => n.source === selectedNewsSource);
     }
 
+    if (selectedNewsTimeRange !== 'all') {
+      const now = Date.now();
+      const h24 = 24 * 60 * 60 * 1000;
+      const d7 = 7 * 24 * 60 * 60 * 1000;
+      const d30 = 30 * 24 * 60 * 60 * 1000;
+
+      result = result.filter((n) => {
+        const timestamp = n.publishedTimestamp || (n.published ? new Date(n.published).getTime() : 0);
+        if (!timestamp) return false;
+        const age = now - timestamp;
+        if (selectedNewsTimeRange === '24h') return age <= h24;
+        if (selectedNewsTimeRange === '7d') return age <= d7;
+        if (selectedNewsTimeRange === '30d') return age <= d30;
+        if (selectedNewsTimeRange === 'older') return age > d30;
+        return true;
+      });
+    }
+
     return result;
   }, [
     newsItems,
@@ -591,6 +652,7 @@ export function DiscoverView({
     selectedNewsCategory,
     selectedNewsPlatform,
     selectedNewsSource,
+    selectedNewsTimeRange,
     savedNewsIds,
     games,
   ]);
@@ -1342,11 +1404,14 @@ export function DiscoverView({
                           <Gamepad className="w-6 h-6 text-zinc-600" />
                         </div>
                       )}
-                      {game.igdb_rating && (
-                        <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md text-[10px] font-bold text-amber-300 border border-amber-500/30">
-                          ⭐ {game.igdb_rating}
-                        </div>
-                      )}
+                      {(() => {
+                        const r = normalizeIgdbRating(game.igdb_rating);
+                        return r ? (
+                          <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md text-[10px] font-bold text-amber-300 border border-amber-500/30">
+                            ⭐ {r}
+                          </div>
+                        ) : null;
+                      })()}
                     </div>
 
                     <h4
@@ -1503,11 +1568,14 @@ export function DiscoverView({
                               <Gamepad className="w-6 h-6 text-zinc-600" />
                             </div>
                           )}
-                          {game.igdb_rating && (
-                            <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md text-[10px] font-bold text-amber-300 border border-amber-500/30">
-                              ⭐ {game.igdb_rating}
-                            </div>
-                          )}
+                          {(() => {
+                            const r = normalizeIgdbRating(game.igdb_rating);
+                            return r ? (
+                              <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md text-[10px] font-bold text-amber-300 border border-amber-500/30">
+                                ⭐ {r}
+                              </div>
+                            ) : null;
+                          })()}
                         </div>
 
                         <h4
@@ -1711,6 +1779,20 @@ export function DiscoverView({
                       {s}
                     </option>
                   ))}
+                </select>
+
+                {/* Tidsfilter Dropdown */}
+                <select
+                  value={selectedNewsTimeRange}
+                  onChange={(e) => setSelectedNewsTimeRange(e.target.value as any)}
+                  className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-brand-red cursor-pointer"
+                  title="Välj tidsintervall"
+                >
+                  <option value="all">Alla tider</option>
+                  <option value="24h">Senaste 24h</option>
+                  <option value="7d">Senaste veckan</option>
+                  <option value="30d">Senaste månaden</option>
+                  <option value="older">Äldre än 30d</option>
                 </select>
               </div>
             </div>

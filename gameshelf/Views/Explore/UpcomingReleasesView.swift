@@ -777,7 +777,7 @@ struct UpcomingReleasesView: View {
         let available = game.platforms?.map(\.name) ?? []
         let platforms = PlatformMatcher.resolvePlatforms(availableIGDBPlatforms: available)
         let genres = game.genres?.map(\.name) ?? []
-        let normalizedRating = (game.totalRating ?? 0.0) / 20.0
+        let normalizedRating: Double? = (game.totalRating ?? 0) > 0 ? (game.totalRating! / 10.0) : nil
 
         let newGame = Game(
             title: game.name,

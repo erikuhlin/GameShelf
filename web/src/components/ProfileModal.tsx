@@ -24,6 +24,8 @@ import {
   DEFAULT_PLATFORMS,
   DEFAULT_GENRES,
   DEFAULT_PLAY_FOR,
+  DEFAULT_PLAYSTYLES,
+  DEFAULT_PLAYING_MOODS,
   saveUserProfile,
 } from '@/lib/profileStore';
 
@@ -48,6 +50,7 @@ export function ProfileModal({
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(profile.username);
   const [ageInput, setAgeInput] = useState(profile.age.toString());
+  const [bioInput, setBioInput] = useState(profile.gamerBio || '');
   const [isAddingFavorite, setIsAddingFavorite] = useState(false);
   const [favoriteSearch, setFavoriteSearch] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -99,6 +102,24 @@ export function ProfileModal({
     saveUserProfile(updated);
   };
 
+  const handleTogglePlaystyle = (style: string) => {
+    const current = new Set(profile.playstyle || ['Singleplayer']);
+    if (current.has(style)) {
+      current.delete(style);
+    } else {
+      current.add(style);
+    }
+    const updated = { ...profile, playstyle: Array.from(current) };
+    onUpdateProfile(updated);
+    saveUserProfile(updated);
+  };
+
+  const handleSelectMood = (mood: string) => {
+    const updated = { ...profile, playingMood: mood };
+    onUpdateProfile(updated);
+    saveUserProfile(updated);
+  };
+
   const handleToggleGenre = (genre: string) => {
     const current = new Set(profile.favoriteGenres);
     if (current.has(genre)) {
@@ -130,6 +151,7 @@ export function ProfileModal({
       ...profile,
       username: trimmed || profile.username,
       age: isNaN(ageNum) || ageNum <= 0 ? profile.age : ageNum,
+      gamerBio: bioInput.trim(),
     };
     onUpdateProfile(updated);
     saveUserProfile(updated);
@@ -385,27 +407,36 @@ export function ProfileModal({
                   </div>
 
                   {editingName ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={nameInput}
+                          onChange={(e) => setNameInput(e.target.value)}
+                          placeholder="Namn"
+                          className="px-3 py-1 bg-zinc-800 border border-zinc-700 rounded-xl text-sm font-bold text-white outline-none w-32"
+                        />
+                        <input
+                          type="number"
+                          value={ageInput}
+                          onChange={(e) => setAgeInput(e.target.value)}
+                          placeholder="Ålder"
+                          className="px-3 py-1 bg-zinc-800 border border-zinc-700 rounded-xl text-sm font-bold text-white outline-none w-20"
+                        />
+                        <button
+                          onClick={handleSaveIdentity}
+                          className="p-1.5 bg-brand-red text-white rounded-xl text-xs font-bold hover:bg-rose-600 transition"
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                      </div>
                       <input
                         type="text"
-                        value={nameInput}
-                        onChange={(e) => setNameInput(e.target.value)}
-                        placeholder="Namn"
-                        className="px-3 py-1 bg-zinc-800 border border-zinc-700 rounded-xl text-sm font-bold text-white outline-none w-32"
+                        value={bioInput}
+                        onChange={(e) => setBioInput(e.target.value)}
+                        placeholder="Spelar-motto eller favoritcitat"
+                        className="px-3 py-1 bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-zinc-200 outline-none w-64"
                       />
-                      <input
-                        type="number"
-                        value={ageInput}
-                        onChange={(e) => setAgeInput(e.target.value)}
-                        placeholder="Ålder"
-                        className="px-3 py-1 bg-zinc-800 border border-zinc-700 rounded-xl text-sm font-bold text-white outline-none w-20"
-                      />
-                      <button
-                        onClick={handleSaveIdentity}
-                        className="p-1.5 bg-brand-red text-white rounded-xl text-xs font-bold hover:bg-rose-600 transition"
-                      >
-                        <Check className="w-4 h-4" />
-                      </button>
                     </div>
                   ) : (
                     <div>
@@ -415,6 +446,7 @@ export function ProfileModal({
                           onClick={() => {
                             setNameInput(profile.username);
                             setAgeInput(profile.age.toString());
+                            setBioInput(profile.gamerBio || '');
                             setEditingName(true);
                           }}
                           className="p-1 text-zinc-400 hover:text-white transition"
@@ -423,6 +455,11 @@ export function ProfileModal({
                         </button>
                       </div>
                       <span className="text-xs text-zinc-400 font-medium">{profile.age} år</span>
+                      {profile.gamerBio && (
+                        <p className="text-xs text-zinc-400 italic mt-0.5 max-w-sm truncate">
+                          "{profile.gamerBio}"
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -435,58 +472,137 @@ export function ProfileModal({
                 </button>
               </div>
 
-              {/* 2. Spel-DNA Hero-kort */}
-              {spelDNA ? (
-                <div
-                  style={{
-                    boxShadow: `0 0 45px -10px ${spelDNA.accentHex}40`,
-                    borderColor: `${spelDNA.accentHex}40`,
-                  }}
-                  className="relative p-6 bg-gradient-to-br from-zinc-900/95 via-[#13141c] to-zinc-950 border rounded-3xl overflow-hidden"
-                >
-                  {/* Bakgrundsglöd */}
-                  <div
-                    style={{ background: spelDNA.accentHex }}
-                    className="absolute -top-16 -right-16 w-44 h-44 rounded-full opacity-20 blur-3xl pointer-events-none"
-                  />
-
-                  <div className="relative space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-black uppercase tracking-widest text-zinc-400">
-                        Ditt Spel-DNA
-                      </span>
-                      <span className="text-2xl">{spelDNA.icon}</span>
-                    </div>
-
-                    <div>
-                      <h3
-                        style={{ color: spelDNA.accentHex }}
-                        className="text-2xl font-black tracking-tight"
+              {/* Just nu sugen på (Humör) */}
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-zinc-900/60 border border-zinc-800/70 rounded-2xl flex-wrap">
+                <span className="text-xs text-zinc-400 flex items-center gap-1.5 font-medium">
+                  <Sparkles className="w-3.5 h-3.5 text-brand-red" />
+                  Just nu sugen på:
+                </span>
+                <span className="text-xs font-bold text-white bg-zinc-800 px-2.5 py-0.5 rounded-lg border border-zinc-700">
+                  {profile.playingMood || 'Utforska nya världar'}
+                </span>
+                <div className="flex items-center gap-1.5 ml-auto flex-wrap">
+                  {DEFAULT_PLAYING_MOODS.map((mood) => {
+                    const isCurrent = (profile.playingMood || 'Utforska nya världar') === mood;
+                    return (
+                      <button
+                        key={mood}
+                        onClick={() => handleSelectMood(mood)}
+                        className={`text-[11px] px-2 py-0.5 rounded-lg font-medium transition ${
+                          isCurrent
+                            ? 'bg-brand-red text-white'
+                            : 'bg-zinc-950/60 text-zinc-400 hover:text-white border border-zinc-800'
+                        }`}
                       >
-                        {spelDNA.title}
-                      </h3>
-                      <p className="text-xs text-zinc-300 mt-1 leading-relaxed max-w-xl">
-                        {spelDNA.description}
-                      </p>
-                    </div>
+                        {mood}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-                    {/* Stödchips */}
-                    <div className="flex items-center gap-2 pt-2 flex-wrap">
-                      {spelDNA.supportingStats.map((stat, i) => (
-                        <span
-                          key={i}
-                          style={{
-                            borderColor: `${spelDNA.accentHex}50`,
-                            background: `${spelDNA.accentHex}15`,
-                            color: spelDNA.accentHex,
-                          }}
-                          className="px-3 py-1 rounded-full text-xs font-bold border shadow-sm"
-                        >
-                          {stat}
+              {/* 2. Spel-DNA Hero-kort + Dynamiska Rutor */}
+              {spelDNA ? (
+                <div className="space-y-3">
+                  {/* Hero-kort */}
+                  <div
+                    style={{
+                      boxShadow: `0 0 45px -10px ${spelDNA.accentHex}40`,
+                      borderColor: `${spelDNA.accentHex}40`,
+                    }}
+                    className="relative p-6 bg-gradient-to-br from-zinc-900/95 via-[#13141c] to-zinc-950 border rounded-3xl overflow-hidden"
+                  >
+                    {/* Bakgrundsglöd */}
+                    <div
+                      style={{ background: spelDNA.accentHex }}
+                      className="absolute -top-16 -right-16 w-44 h-44 rounded-full opacity-20 blur-3xl pointer-events-none"
+                    />
+
+                    <div className="relative space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-black uppercase tracking-widest text-zinc-400">
+                          Ditt Spel-DNA • Huvudarketyp
                         </span>
-                      ))}
+                        <span className="text-2xl">{spelDNA.icon}</span>
+                      </div>
+
+                      <div>
+                        <h3
+                          style={{ color: spelDNA.accentHex }}
+                          className="text-2xl font-black tracking-tight"
+                        >
+                          {spelDNA.title}
+                        </h3>
+                        <p className="text-xs text-zinc-300 mt-1 leading-relaxed max-w-xl">
+                          {spelDNA.description}
+                        </p>
+                      </div>
+
+                      {/* Stödchips */}
+                      <div className="flex items-center gap-2 pt-2 flex-wrap">
+                        {spelDNA.supportingStats.map((stat, i) => (
+                          <span
+                            key={i}
+                            style={{
+                              borderColor: `${spelDNA.accentHex}50`,
+                              background: `${spelDNA.accentHex}15`,
+                              color: spelDNA.accentHex,
+                            }}
+                            className="px-3 py-1 rounded-full text-xs font-bold border shadow-sm"
+                          >
+                            {stat}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   </div>
+
+                  {/* 4 Dynamiska DNA-rutor (Grid) */}
+                  {spelDNA.tiles && spelDNA.tiles.length > 0 && (
+                    <div className="space-y-2 pt-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-zinc-400">
+                          🧬 DNA-profil & Dimensioner
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {spelDNA.tiles.map((tile) => (
+                          <div
+                            key={tile.id}
+                            style={{
+                              borderColor: `${tile.accentHex}35`,
+                              background: `linear-gradient(135deg, ${tile.accentHex}10, #14151e)`,
+                            }}
+                            className="p-3.5 rounded-2xl border flex flex-col justify-between space-y-2 shadow-sm"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span
+                                style={{ color: tile.accentHex }}
+                                className="text-[9.5px] font-black uppercase tracking-wider"
+                              >
+                                {tile.category}
+                              </span>
+                              <span className="text-sm">{tile.icon}</span>
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-white leading-snug">
+                                {tile.title}
+                              </div>
+                              <div
+                                style={{ color: tile.accentHex }}
+                                className="text-[11px] font-semibold"
+                              >
+                                {tile.subtitle}
+                              </div>
+                            </div>
+                            <p className="text-[11px] text-zinc-400 leading-relaxed">
+                              {tile.detail}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="p-6 bg-zinc-900/40 border border-zinc-800/80 rounded-3xl text-center space-y-2">
@@ -528,10 +644,34 @@ export function ProfileModal({
               </div>
 
               {/* 4. Mina Spelpreferenser */}
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div className="flex items-center gap-2">
                   <Heart className="w-4 h-4 text-brand-red" />
                   <h4 className="text-sm font-bold text-white">Mina spelpreferenser</h4>
+                </div>
+
+                {/* Min spelstil */}
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-zinc-400">Min spelstil</span>
+                  <div className="flex flex-wrap gap-2">
+                    {DEFAULT_PLAYSTYLES.map((style) => {
+                      const isSelected = (profile.playstyle || ['Singleplayer']).includes(style);
+                      return (
+                        <button
+                          key={style}
+                          onClick={() => handleTogglePlaystyle(style)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                            isSelected
+                              ? 'bg-brand-red/20 text-brand-red border border-brand-red/60 shadow-sm'
+                              : 'bg-zinc-900 text-zinc-400 border border-zinc-800 hover:border-zinc-700'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-3 h-3 text-brand-red" />}
+                          <span>{style}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Favoritgenrer */}
@@ -558,7 +698,7 @@ export function ProfileModal({
                 </div>
 
                 {/* Jag spelar helst för */}
-                <div className="space-y-2 pt-2">
+                <div className="space-y-2">
                   <span className="text-xs font-bold text-zinc-400">Jag spelar helst för</span>
                   <div className="flex flex-wrap gap-2">
                     {DEFAULT_PLAY_FOR.map((motive) => {

@@ -86,6 +86,11 @@ interface RemoteDetails {
     mainExtra: number | null;
     completionist: number | null;
   } | null;
+  rating?: number | null;
+  aggregatedRating?: number | null;
+  totalRating?: number | null;
+  ratingCount?: number | null;
+  aggregatedRatingCount?: number | null;
 }
 
 const STORY_MILESTONES: Array<{ id: GameStoryProgress; label: string; line1: string; line2: string }> = [
@@ -230,6 +235,10 @@ export function GameDetailModal({
         }
 
         if (isMounted && detailsData) {
+          const liveRating = detailsData.rating ?? null;
+          const liveAggregated = detailsData.aggregated_rating ?? null;
+          const liveTotal = detailsData.total_rating ?? null;
+
           setRemoteDetails({
             summary: detailsData.summary || detailsData.storyline || '',
             storyline: detailsData.storyline || '',
@@ -245,10 +254,33 @@ export function GameDetailModal({
             collectionName: detailsData.collection?.name || null,
             similarGames: detailsData.similarGames || [],
             timeToBeat: detailsData.timeToBeat || null,
+            rating: liveRating,
+            aggregatedRating: liveAggregated,
+            totalRating: liveTotal,
+            ratingCount: detailsData.rating_count ?? null,
+            aggregatedRatingCount: detailsData.aggregated_rating_count ?? null,
           });
 
           if (date && date !== game?.first_release_date) {
             setLiveReleaseDate(date);
+          }
+
+          // Självläkning: om spelets sparade betyg saknas eller var felaktigt, uppdatera det i bakgrunden
+          const effectiveScore = liveTotal || liveRating;
+          if (effectiveScore && game?.id) {
+            const calculatedRating = Math.round((effectiveScore / 10) * 10) / 10;
+            const currentRating = game.igdb_rating ? Number(game.igdb_rating) : null;
+            if (!currentRating || currentRating <= 5.0 || currentRating > 10) {
+              const updates: Partial<Game> = {
+                igdb_rating: calculatedRating,
+                ...(igdbId && !game.igdb_id ? { igdb_id: igdbId } : {}),
+                updated_at: new Date().toISOString(),
+              };
+              onUpdateGame({ ...game, ...updates });
+              try {
+                supabase.from('user_games').update(updates).eq('id', game.id).then();
+              } catch (_) {}
+            }
           }
         }
       } catch (err) {
@@ -446,6 +478,24 @@ export function GameDetailModal({
         (game.igdb_id && c.game_ids?.includes(String(game.igdb_id)))
     );
   }, [collections, game.id, game.igdb_id]);
+
+  // Beräkna betyg (0–100%) för spelare och kritiker
+  const playerRating: number | null = useMemo(() => {
+    if (remoteDetails?.rating) return Math.round(remoteDetails.rating);
+    if (remoteDetails?.totalRating) return Math.round(remoteDetails.totalRating);
+    if (game?.igdb_rating !== null && game?.igdb_rating !== undefined) {
+      const r = Number(game.igdb_rating);
+      if (r > 10) return Math.round(r);
+      if (r <= 5.0 && r > 0) return Math.round(r * 20);
+      return Math.round(r * 10);
+    }
+    return null;
+  }, [remoteDetails?.rating, remoteDetails?.totalRating, game?.igdb_rating]);
+
+  const criticRating: number | null = useMemo(() => {
+    if (remoteDetails?.aggregatedRating) return Math.round(remoteDetails.aggregatedRating);
+    return null;
+  }, [remoteDetails?.aggregatedRating]);
 
   // Formatera speltidssiffra
   const hoursDisplay = useMemo(() => {
@@ -754,11 +804,25 @@ export function GameDetailModal({
 
               {/* Betygsbrickor */}
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                {game.igdb_rating ? (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-bold">
+                {playerRating ? (
+                  <div
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-bold"
+                    title={remoteDetails?.ratingCount ? `${remoteDetails.ratingCount} spelarbetyg på IGDB` : 'IGDB Spelarbetyg'}
+                  >
                     <span className="text-amber-400">★</span>
-                    <span className="text-zinc-200">{Math.round(game.igdb_rating * 10)}%</span>
+                    <span className="text-zinc-200">{playerRating}%</span>
                     <span className="text-zinc-500 font-normal">Spelare</span>
+                  </div>
+                ) : null}
+
+                {criticRating ? (
+                  <div
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 border border-blue-500/30 text-xs font-bold"
+                    title={remoteDetails?.aggregatedRatingCount ? `${remoteDetails.aggregatedRatingCount} kritikerrecensioner på IGDB` : 'IGDB Kritikerbetyg'}
+                  >
+                    <span className="text-blue-400">✓</span>
+                    <span className="text-blue-300">{criticRating}%</span>
+                    <span className="text-zinc-500 font-normal">Kritiker</span>
                   </div>
                 ) : null}
 
@@ -1678,11 +1742,20 @@ export function GameDetailModal({
                 <div className="divide-y divide-zinc-800/60 text-xs">
                   {/* Betyg */}
                   <div className="py-2.5 flex items-center justify-between">
-                    <span className="text-zinc-500">Betyg</span>
+                    <span className="text-zinc-500">Spelarbetyg</span>
                     <span className="font-semibold text-white">
-                      ★ {game.igdb_rating ? `${Math.round(game.igdb_rating * 10)}% spelare` : 'N/A'}
+                      {playerRating ? `★ ${playerRating}% spelare` : 'N/A'}
                     </span>
                   </div>
+
+                  {criticRating ? (
+                    <div className="py-2.5 flex items-center justify-between">
+                      <span className="text-zinc-500">Kritikerbetyg</span>
+                      <span className="font-semibold text-blue-400">
+                        ✓ {criticRating}% kritiker
+                      </span>
+                    </div>
+                  ) : null}
 
                   {/* Genre */}
                   <div className="py-2.5 flex items-center justify-between">

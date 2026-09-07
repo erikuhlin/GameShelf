@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Game, GameCollection, PlayStatus, PLAY_STATUSES } from '@/types/game';
-import { supabase, mapSupabaseGame, mapSupabaseCollection } from '@/lib/supabase';
+import { supabase, mapSupabaseGame, mapSupabaseCollection, normalizeIgdbRating } from '@/lib/supabase';
 import { getStatusDisplayTitle, inferPlayTypes } from '@/lib/statusHelper';
 import { Header, ViewMode } from '@/components/Header';
 import { ShelfView } from '@/components/ShelfView';
@@ -103,7 +103,11 @@ export default function HomePage() {
         try {
           const parsed = JSON.parse(cachedGames);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setGames(parsed);
+            const normalized = parsed.map((g: any) => ({
+              ...g,
+              igdb_rating: normalizeIgdbRating(g.igdb_rating),
+            }));
+            setGames(normalized);
           }
         } catch (e) {}
       }
@@ -181,6 +185,9 @@ export default function HomePage() {
           annualGamingGoal: prefs.annualGamingGoal || 12,
           avatarType: data.avatar_url || prefs.avatarType || 'initial',
           avatarCustomImage: data.avatar_url?.startsWith('data:') ? data.avatar_url : undefined,
+          playingMood: prefs.playingMood || 'Utforska nya världar',
+          gamerBio: prefs.gamerBio || '',
+          playstyle: Array.isArray(prefs.playstyle) ? prefs.playstyle : ['Singleplayer'],
         };
         setUserProfile(updated);
         setProfileName(updated.username);
@@ -206,6 +213,9 @@ export default function HomePage() {
         targetGameIDs: updated.targetGameIDs || [],
         annualGamingGoal: updated.annualGamingGoal,
         avatarType: updated.avatarType,
+        playingMood: updated.playingMood,
+        gamerBio: updated.gamerBio,
+        playstyle: updated.playstyle,
       };
       try {
         await supabase.from('profiles').upsert({
@@ -408,8 +418,12 @@ export default function HomePage() {
           try {
             const parsed = JSON.parse(cachedGames);
             if (Array.isArray(parsed)) {
-              setGames(parsed);
-              enrichGamesWithReleaseDates(parsed, null);
+              const normalized = parsed.map((g: any) => ({
+                ...g,
+                igdb_rating: normalizeIgdbRating(g.igdb_rating),
+              }));
+              setGames(normalized);
+              enrichGamesWithReleaseDates(normalized, null);
             }
           } catch (e) {}
         }
@@ -744,7 +758,11 @@ export default function HomePage() {
         result.sort((a, b) => b.title.localeCompare(a.title, 'sv'));
         break;
       case 'rating':
-        result.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+        result.sort((a, b) => {
+          const scoreA = a.rating ?? a.igdb_rating ?? 0;
+          const scoreB = b.rating ?? b.igdb_rating ?? 0;
+          return scoreB - scoreA;
+        });
         break;
       case 'releaseYearDesc':
         // Jämför lanseringsdatum kronologiskt fallande (nyast först) baserat på exakt datum
@@ -1525,11 +1543,15 @@ export default function HomePage() {
                                 {game.platforms[0]}
                               </span>
                             )}
-                            {game.rating && (
-                              <span className="text-[10px] font-bold text-amber-400 ml-auto flex items-center gap-0.5">
+                            {game.rating ? (
+                              <span className="text-[10px] font-bold text-amber-400 ml-auto flex items-center gap-0.5" title="Ditt betyg">
                                 ★ {game.rating}
                               </span>
-                            )}
+                            ) : game.igdb_rating ? (
+                              <span className="text-[10px] font-medium text-zinc-400 ml-auto flex items-center gap-0.5" title="IGDB-betyg">
+                                ★ {game.igdb_rating}
+                              </span>
+                            ) : null}
                           </div>
                           <h4 className="text-xs font-bold text-white line-clamp-2 leading-tight group-hover:text-brand-red transition">
                             {game.title}

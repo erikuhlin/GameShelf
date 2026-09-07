@@ -11,7 +11,24 @@ export type SpelDNAArchetypeID =
   | 'retro_archivist'
   | 'squad_strategist'
   | 'casual_collector'
-  | 'genre_nomad';
+  | 'genre_nomad'
+  | 'souls_survivor'
+  | 'open_world_wanderer'
+  | 'backlog_titan'
+  | 'atmosphere_hunter'
+  | 'pixel_purist'
+  | 'zen_cultivator'
+  | 'completionist_prime';
+
+export interface SpelDNATile {
+  id: string;
+  category: string;
+  title: string;
+  subtitle: string;
+  icon: string;
+  accentHex: string;
+  detail: string;
+}
 
 export interface SpelDNAProfile {
   archetypeID: SpelDNAArchetypeID;
@@ -20,6 +37,7 @@ export interface SpelDNAProfile {
   icon: string;
   accentHex: string;
   supportingStats: string[];
+  tiles?: SpelDNATile[];
 }
 
 export interface AvatarPreset {
@@ -40,4 +58,7 @@ export interface UserProfile {
   avatarCustomImage?: string; // Base64 data URL
   annualGamingGoal: number;
   targetGameIDs?: string[];
+  playingMood?: string;
+  gamerBio?: string;
+  playstyle?: string[];
 }

@@ -152,7 +152,8 @@ final class NewsFetcher: ObservableObject {
     private let feedStrings: [String] = [
         // 1. Svenska Spelmedier
         "https://www.gamereactor.se/rss/rss.php?texttype=4", // Nyheter SE
-        "https://www.gamereactor.se/rss/rss.php?texttype=2", // Recensioner SE
+        "https://www.gamereactor.se/rss/rss.php?texttype=1", // Recensioner SE
+        "https://www.gamereactor.se/rss/rss.php?texttype=2", // Förhandstittar SE
 
         // 2. Dedikerade Recensioner & Tester
         "https://feeds.feedburner.com/ign/reviews",
@@ -180,7 +181,6 @@ final class NewsFetcher: ObservableObject {
 
         // 4. Officiella & Plattformsspecifika
         "https://news.xbox.com/en-us/feed/",
-        "https://blog.playstation.com/feed/",
         "https://www.nintendolife.com/feeds/latest",
         "https://nintendoeverything.com/feed/",
         "https://www.pushsquare.com/feeds/latest",
@@ -365,9 +365,13 @@ final class NewsFetcher: ObservableObject {
                 item.kind == .update || tokens.contains(where: { item.title.localizedCaseInsensitiveContains($0) })
             }
         case "Recensioner":
-            let tokens = ["review", "recension", "score", "betyg", "verdict"]
+            let reviewTokens = ["review", "recension", "score", "betyg", "verdict"]
+            let previewTokens = ["preview", "förhandstitt", "hands-on", "first look", "impressions", "sneak peek"]
             list = list.filter { item in
-                item.kind == .review || tokens.contains(where: { item.title.localizedCaseInsensitiveContains($0) })
+                let text = item.title.lowercased()
+                let isPreview = item.kind == .preview || previewTokens.contains { text.contains($0) }
+                if isPreview { return false }
+                return item.kind == .review || reviewTokens.contains { text.contains($0) }
             }
         case "Trailers":
             let tokens = ["trailer", "gameplay", "teaser", "video", "watch"]
@@ -375,9 +379,10 @@ final class NewsFetcher: ObservableObject {
                 item.kind == .video || tokens.contains(where: { item.title.localizedCaseInsensitiveContains($0) })
             }
         case "Förhandstittar":
-            let tokens = ["preview", "förhandstitt", "hands-on", "first look", "impressions"]
+            let previewTokens = ["preview", "förhandstitt", "hands-on", "first look", "impressions", "sneak peek"]
             list = list.filter { item in
-                item.kind == .preview || tokens.contains(where: { item.title.localizedCaseInsensitiveContains($0) })
+                let text = item.title.lowercased()
+                return item.kind == .preview || previewTokens.contains { text.contains($0) }
             }
         default:
             break

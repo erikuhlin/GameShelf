@@ -807,13 +807,27 @@ export function DiscoverView({
     if (selectedNewsCategory === 'my_games') {
       result = result.filter((n) => findMatchingLibraryGame(n.title) !== undefined);
     } else if (selectedNewsCategory === 'reviews') {
-      result = result.filter(
-        (n) =>
+      result = result.filter((n) => {
+        const lower = n.title.toLowerCase();
+        const isPreview =
+          n.category === 'Förhandstitt' ||
+          lower.includes('preview') ||
+          lower.includes('förhandstitt') ||
+          lower.includes('hands-on') ||
+          lower.includes('handson') ||
+          lower.includes('first look') ||
+          lower.includes('sneak peek') ||
+          lower.includes('impressions');
+        if (isPreview) return false;
+        return (
           n.category === 'Recension' ||
-          n.title.toLowerCase().startsWith('review:') ||
-          n.title.toLowerCase().includes(' review') ||
-          n.title.toLowerCase().includes('recension')
-      );
+          lower.startsWith('review:') ||
+          lower.startsWith('recension:') ||
+          lower.includes(' review') ||
+          lower.includes('recension') ||
+          lower.includes('verdict')
+        );
+      });
     } else if (selectedNewsCategory === 'updates') {
       result = result.filter(
         (n) =>
@@ -831,13 +845,19 @@ export function DiscoverView({
           n.title.toLowerCase().includes('gameplay')
       );
     } else if (selectedNewsCategory === 'previews') {
-      result = result.filter(
-        (n) =>
+      result = result.filter((n) => {
+        const lower = n.title.toLowerCase();
+        return (
           n.category === 'Förhandstitt' ||
-          n.title.toLowerCase().includes('preview') ||
-          n.title.toLowerCase().includes('hands-on') ||
-          n.title.toLowerCase().includes('förhandstitt')
-      );
+          lower.includes('preview') ||
+          lower.includes('förhandstitt') ||
+          lower.includes('hands-on') ||
+          lower.includes('handson') ||
+          lower.includes('first look') ||
+          lower.includes('sneak peek') ||
+          lower.includes('impressions')
+        );
+      });
     } else if (selectedNewsCategory === 'saved') {
       result = result.filter((n) => savedNewsIds.includes(n.id));
     }

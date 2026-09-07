@@ -19,7 +19,8 @@ interface NewsItem {
 const FEEDS = [
   // 1. Svenska Spelmedier
   { name: 'Gamereactor Nyheter', source: 'Gamereactor SE', url: 'https://www.gamereactor.se/rss/rss.php?texttype=4' },
-  { name: 'Gamereactor Recensioner', source: 'Gamereactor SE', url: 'https://www.gamereactor.se/rss/rss.php?texttype=2', defaultCategory: 'Recension' as const },
+  { name: 'Gamereactor Recensioner', source: 'Gamereactor SE', url: 'https://www.gamereactor.se/rss/rss.php?texttype=1', defaultCategory: 'Recension' as const },
+  { name: 'Gamereactor Förhandstittar', source: 'Gamereactor SE', url: 'https://www.gamereactor.se/rss/rss.php?texttype=2', defaultCategory: 'Förhandstitt' as const },
 
   // 2. Dedikerade Recensioner & Betyg
   { name: 'IGN Reviews', source: 'IGN', url: 'https://feeds.feedburner.com/ign/reviews', defaultCategory: 'Recension' as const },
@@ -135,25 +136,96 @@ function parseFeedItems(
 
       const image = extractImage(itemXml);
 
-      // Kategori-klassificering
-      let category: NewsItem['category'] = feedConfig.defaultCategory || 'Nyhet';
+      // Extrahera RSS-kategorier
+      const catMatches = itemXml.match(/<category[\s\S]*?>([\s\S]*?)<\/category>/gi) || [];
+      const itemCategories = catMatches.map((c) => cleanText(c).toLowerCase());
+
       const lower = rawTitle.toLowerCase();
-      if (
+      const combinedText = (lower + ' ' + summary.toLowerCase() + ' ' + itemCategories.join(' '));
+
+      // 1. Filtrera bort icke-spel (Bio, filmer, sport, politik & världshändelser)
+      const nonGamingCategories = [
+        'världens nyheter', 'sport', 'filmrecensioner', 'bio', 'filmer', 'film', 'blu-ray', 'tv-serier'
+      ];
+      const isNonGamingCat = itemCategories.some((c) => nonGamingCategories.includes(c.trim()));
+
+      const nonGamingPhrases = [
+        'movie review', 'filmrecension', 'film review', 'tv review', 'episode review', 'series review', 'season review',
+        'toppar biolistan', 'på bio', 'biotoppen', 'box office', 'in theaters', 'coming to theaters',
+        'fall movie preview', 'upcoming movie', 'trailer debut for movie', 'new movie trailer',
+        'directors cut of film', 'netflix movie', 'kriget i ukraina', 'zelensky', 'vladimir putin',
+        'donald trump', 'joe biden', 'kamala harris', 'högerextrema afd', 'valet i ', 'us open',
+        'wimbledon', 'premier league', 'champions league', 'allsvenskan', 'herrsingel', 'damsingel',
+        'tennisens', 'formula 1', 'formel 1'
+      ];
+      const hasNonGamingPhrase = nonGamingPhrases.some((p) => combinedText.includes(p));
+
+      // Undantag om artikeln uttryckligen berör tv-spel
+      const hasGamingSignal =
+        combinedText.includes('video game') ||
+        combinedText.includes('tv-spel') ||
+        combinedText.includes('gameplay') ||
+        combinedText.includes('ps5') ||
+        combinedText.includes('xbox') ||
+        combinedText.includes('nintendo') ||
+        combinedText.includes('steam deck') ||
+        combinedText.includes('speldemo');
+
+      // TV-avsnitt / säsongsrecensioner och rena bio/film-artiklar
+      const isTvOrMovie =
+        /season\s+\d+.*episode\s+\d+/i.test(lower) ||
+        /episode\s+\d+\s+review/i.test(lower) ||
+        /season\s+\d+\s+review/i.test(lower) ||
+        /series\s+review/i.test(lower) ||
+        /movie\s+review/i.test(lower) ||
+        /filmrecension/i.test(lower) ||
+        /film\s+review/i.test(lower) ||
+        (/\bmovies\b/i.test(lower) && (lower.includes('fall') || lower.includes('coming') || lower.includes('best') || lower.includes('watch') || lower.includes('top'))) ||
+        (/\bfilmer\b/i.test(lower) && (lower.includes('bästa') || lower.includes('kommande') || lower.includes('höstens'))) ||
+        lower.includes('box office') ||
+        lower.includes('biolistan') ||
+        lower.includes('biotoppen');
+
+      if ((isNonGamingCat || hasNonGamingPhrase || isTvOrMovie) && !hasGamingSignal) {
+        continue; // Hoppa över icke-spelrelaterade nyheter
+      }
+
+      // 2. Kategori-klassificering med strikt åtskillnad mellan Förhandstitt (Preview) och Recension (Review)
+      const isPreview =
+        lower.includes('preview') ||
+        lower.includes('förhandstitt') ||
+        lower.includes('hands-on') ||
+        lower.includes('handson') ||
+        lower.includes('first look') ||
+        lower.includes('first-look') ||
+        lower.includes('early impressions') ||
+        lower.includes('sneak peek') ||
+        itemCategories.some((c) => c.includes('preview') || c.includes('förhandstitt')) ||
+        feedConfig.defaultCategory === 'Förhandstitt';
+
+      let category: NewsItem['category'] = 'Nyhet';
+
+      if (isPreview) {
+        // Previews får ALDRIG Recension som kategori
+        category = 'Förhandstitt';
+      } else if (
         lower.startsWith('review:') ||
+        lower.startsWith('recension:') ||
         lower.includes(' review') ||
-        lower.includes('recension') ||
+        lower.includes(' recension') ||
         lower.includes('verdict') ||
+        feedConfig.defaultCategory === 'Recension' ||
         feedConfig.name.includes('Reviews')
       ) {
         category = 'Recension';
-      } else if (lower.includes('trailer') || lower.includes('gameplay video')) {
+      } else if (lower.includes('trailer') || lower.includes('gameplay video') || lower.includes('teaser trailer')) {
         category = 'Trailer';
       } else if (lower.includes('guide') || lower.includes('walkthrough') || lower.includes('how to')) {
         category = 'Guide';
-      } else if (lower.includes('patch') || lower.includes('update') || lower.includes('hotfix')) {
+      } else if (lower.includes('patch') || lower.includes('update') || lower.includes('hotfix') || lower.includes('uppdatering')) {
         category = 'Uppdatering';
-      } else if (lower.includes('preview') || lower.includes('hands-on') || lower.includes('förhandstitt')) {
-        category = 'Förhandstitt';
+      } else if (feedConfig.defaultCategory) {
+        category = feedConfig.defaultCategory;
       }
 
       // Plattforms-klassificering

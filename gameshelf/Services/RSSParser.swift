@@ -79,6 +79,17 @@ enum RSSParser: Sendable {
                 currentCategoryBuffer = ""
             }
             if elementName == "item" || elementName == "entry" {
+                if RSSParser.isNonGaming(title: currentTitle, categories: currentCategories, contentHTML: currentContent) {
+                    currentElement = ""
+                    currentTitle = ""
+                    currentLink = ""
+                    currentPubDate = ""
+                    currentImage = ""
+                    currentCategories = []
+                    currentContent = ""
+                    return
+                }
+
                 if currentImage.isEmpty, let img = RSSParser.extractFirstImageURL(fromHTML: currentContent) {
                     currentImage = img
                 }
@@ -113,6 +124,46 @@ enum RSSParser: Sendable {
             if let end = tail[start...].firstIndex(of: "\"") { return String(tail[start..<end]) }
         }
         return nil
+    }
+
+    // Filtrerar bort icke-spelrelaterade nyheter (t.ex. världsnyheter, politik, traditionell sport, film & TV)
+    nonisolated static func isNonGaming(title: String, categories: [String], contentHTML: String) -> Bool {
+        let text = (title + " " + categories.joined(separator: " ") + " " + contentHTML).lowercased()
+        let catsLC = categories.map { $0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) }
+
+        // 1. Kategorier som är icke-spel (främst Gamereactor)
+        let nonGamingCats = ["världens nyheter", "sport", "filmrecensioner", "bio", "filmer", "film", "blu-ray", "tv-serier"]
+        if catsLC.contains(where: { nonGamingCats.contains($0) }) {
+            let hasGamingSignal = text.contains("game") || text.contains("spel") || text.contains("ps5") || text.contains("xbox") || text.contains("nintendo") || text.contains("steam") || text.contains("rpg")
+            if !hasGamingSignal { return true }
+        }
+
+        // 2. Frasfilter för film, biotopp, politik och sport
+        let nonGamingPhrases = [
+            "movie review", "filmrecension", "film review", "tv review", "episode review", "series review", "season review",
+            "toppar biolistan", "på bio", "biotoppen", "box office", "in theaters", "coming to theaters",
+            "fall movie preview", "upcoming movie", "trailer debut for movie", "new movie trailer",
+            "netflix movie", "kriget i ukraina", "zelensky", "vladimir putin", "donald trump",
+            "joe biden", "kamala harris", "högerextrema afd", "valet i ", "us open", "wimbledon",
+            "premier league", "champions league", "allsvenskan", "herrsingel", "damsingel", "tennisens",
+            "formula 1", "formel 1"
+        ]
+        if nonGamingPhrases.contains(where: { text.contains($0) }) {
+            let hasGamingSignal = text.contains("video game") || text.contains("tv-spel") || text.contains("gameplay") || text.contains("ps5") || text.contains("xbox") || text.contains("nintendo") || text.contains("steam deck")
+            if !hasGamingSignal { return true }
+        }
+
+        // 3. TV-avsnitt / rena filmrecensioner
+        let lowerTitle = title.lowercased()
+        if lowerTitle.range(of: #"season\s+\d+.*episode\s+\d+"#, options: .regularExpression) != nil ||
+            lowerTitle.range(of: #"episode\s+\d+\s+review"#, options: .regularExpression) != nil ||
+            lowerTitle.range(of: #"season\s+\d+\s+review"#, options: .regularExpression) != nil ||
+            lowerTitle.contains("box office") || lowerTitle.contains("biolistan") || lowerTitle.contains("biotoppen") {
+            let hasGamingSignal = text.contains("video game") || text.contains("gameplay") || text.contains("ps5") || text.contains("nintendo")
+            if !hasGamingSignal { return true }
+        }
+
+        return false
     }
 
     // Heuristic classification based on title, URL, categories and HTML content

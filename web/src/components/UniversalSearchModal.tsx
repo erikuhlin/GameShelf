@@ -29,7 +29,10 @@ import {
   Calendar,
   Newspaper,
   ExternalLink,
+  Heart,
 } from 'lucide-react';
+
+export type AddChoice = 'backlog' | 'playing' | 'completed' | 'wishlist';
 
 interface UniversalSearchModalProps {
   isOpen: boolean;
@@ -236,7 +239,7 @@ export function UniversalSearchModal({
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<AdvancedFilters>(EMPTY_FILTERS);
   const [addingGameId, setAddingGameId] = useState<number | null>(null);
-  const [addStatus, setAddStatus] = useState<PlayStatus>('notStarted');
+  const [addChoice, setAddChoice] = useState<AddChoice>('backlog');
   const [addCompletedYear, setAddCompletedYear] = useState<number | null>(CURRENT_YEAR);
   const [showAddDropdown, setShowAddDropdown] = useState<number | null>(null);
   const [activePreset, setActivePreset] = useState<string | null>(null);
@@ -471,8 +474,8 @@ export function UniversalSearchModal({
       igdb_rating: r.igdb_rating || null,
       igdb_id: r.id,
       estimated_hours: null,
-      is_owned: false,
-      is_backlog: false,
+      is_owned: true,
+      is_backlog: true,
       play_types: inferPlayTypes({ title: r.title || r.name, genres: r.genres || [] }),
       notes: '',
       todos: [],
@@ -487,20 +490,32 @@ export function UniversalSearchModal({
     );
   };
 
-  const handleAddGame = async (result: any, status: PlayStatus, completedYear: number | null) => {
+  const handleAddGame = async (result: any, choice: AddChoice, completedYear: number | null) => {
     const gameObj = convertResultToGame(result);
-    if (status === 'completed') {
-      gameObj.status = 'completed';
-    } else if (status === 'playing') {
+    if (choice === 'playing') {
       gameObj.status = 'playing';
-    } else {
+      gameObj.is_owned = true;
+      gameObj.is_backlog = false;
+    } else if (choice === 'completed') {
+      gameObj.status = 'completed';
+      gameObj.is_owned = true;
+      gameObj.is_backlog = false;
+      gameObj.completed_year = completedYear;
+      gameObj.completed_date = completedYear ? new Date().toISOString() : null;
+      gameObj.story_progress = 'completed';
+    } else if (choice === 'wishlist') {
       gameObj.status = 'notStarted';
+      gameObj.is_owned = false;
+      gameObj.is_backlog = false;
+    } else {
+      // 'backlog'
+      gameObj.status = 'notStarted';
+      gameObj.is_owned = true;
+      gameObj.is_backlog = true;
     }
-    const isWishlist = status === 'notStarted' && !gameObj.is_owned;
-    gameObj.is_owned = !isWishlist;
-    gameObj.is_backlog = status === 'notStarted' && !isWishlist;
+
     setAddingGameId(result.id);
-    onAddGame(gameObj, status, status === 'completed' ? completedYear : null);
+    onAddGame(gameObj, gameObj.status, choice === 'completed' ? completedYear : null);
     setTimeout(() => setAddingGameId(null), 1200);
     setShowAddDropdown(null);
   };
@@ -783,17 +798,22 @@ export function UniversalSearchModal({
           )}
 
           {currentResults.map((result) => {
-            const inLibrary = isGameInLibrary(result.id, result.title);
-            const inLib = games.find((g) => g.igdb_id === result.id);
+            const inLib = games.find(
+              (g) =>
+                (result.id && g.igdb_id === result.id) ||
+                (result.title && g.title.toLowerCase() === result.title.toLowerCase())
+            );
+            const inLibrary = Boolean(inLib);
+            const isInWishlist = Boolean(inLib && !inLib.is_owned);
             return (
               <GameResultCard key={result.id} result={result}
-                inLibrary={inLibrary} inLibGame={inLib}
+                inLibrary={inLibrary} isInWishlist={isInWishlist} inLibGame={inLib}
                 isAdding={addingGameId === result.id} showDrop={showAddDropdown === result.id}
-                addStatus={addStatus} addCompletedYear={addCompletedYear}
+                addChoice={addChoice} addCompletedYear={addCompletedYear}
                 onSelectGame={() => { if (inLib) { onSelectGame(inLib); onClose(); } }}
                 onToggleDrop={() => setShowAddDropdown(showAddDropdown === result.id ? null : result.id)}
-                onSetStatus={setAddStatus} onSetYear={setAddCompletedYear}
-                onConfirmAdd={() => handleAddGame(result, addStatus, addCompletedYear)}
+                onSetChoice={setAddChoice} onSetYear={setAddCompletedYear}
+                onConfirmAdd={() => handleAddGame(result, addChoice, addCompletedYear)}
               />
             );
           })}
@@ -902,20 +922,25 @@ export function UniversalSearchModal({
                       first_release_date: result.first_release_date || null,
                       igdb_rating: normalizeIgdbRating(result.igdb_rating ?? result.total_rating ?? result.rating) ?? null,
                     };
-                    const inLibrary = isGameInLibrary(result.id, asResult.title);
-                    const inLib = games.find((g) => g.igdb_id === result.id);
+                    const inLib = games.find(
+                      (g) =>
+                        (result.id && g.igdb_id === result.id) ||
+                        (asResult.title && g.title.toLowerCase() === asResult.title.toLowerCase())
+                    );
+                    const inLibrary = Boolean(inLib);
+                    const isInWishlist = Boolean(inLib && inLib.is_owned === false);
                     return (
                       <GameResultCard key={result.id} result={asResult}
-                        inLibrary={inLibrary} inLibGame={inLib}
+                        inLibrary={inLibrary} isInWishlist={isInWishlist} inLibGame={inLib}
                         isAdding={addingGameId === result.id} showDrop={showAddDropdown === result.id}
-                        addStatus={addStatus} addCompletedYear={addCompletedYear}
+                        addChoice={addChoice} addCompletedYear={addCompletedYear}
                         onSelectGame={() => {
                           if (inLib) { saveSearchTerm(query); onSelectGame(inLib); onClose(); }
                           else { saveSearchTerm(query); onSelectGame(convertResultToGame(asResult)); onClose(); }
                         }}
                         onToggleDrop={() => setShowAddDropdown(showAddDropdown === result.id ? null : result.id)}
-                        onSetStatus={setAddStatus} onSetYear={setAddCompletedYear}
-                        onConfirmAdd={() => handleAddGame(asResult, addStatus, addCompletedYear)}
+                        onSetChoice={setAddChoice} onSetYear={setAddCompletedYear}
+                        onConfirmAdd={() => handleAddGame(asResult, addChoice, addCompletedYear)}
                       />
                     );
                   })}
@@ -1130,31 +1155,32 @@ interface GameResultCardProps {
     first_release_date?: number | null;
   };
   inLibrary: boolean;
+  isInWishlist?: boolean;
   inLibGame?: Game;
   isAdding: boolean;
   showDrop: boolean;
-  addStatus: PlayStatus;
+  addChoice: AddChoice;
   addCompletedYear: number | null;
   onSelectGame: () => void;
   onToggleDrop: () => void;
-  onSetStatus: (s: PlayStatus) => void;
+  onSetChoice: (c: AddChoice) => void;
   onSetYear: (y: number | null) => void;
   onConfirmAdd: () => void;
 }
 
-const STATUS_OPTIONS: { label: string; value: PlayStatus; icon: string }[] = [
-  { label: 'Backlog', value: 'notStarted', icon: '📋' },
-  { label: 'Spelar', value: 'playing', icon: '▶️' },
-  { label: 'Klarat', value: 'completed', icon: '🏆' },
-  { label: 'Önskelista', value: 'notStarted', icon: '🎁' },
+const ADD_CHOICES: { id: AddChoice; label: string; icon: string }[] = [
+  { id: 'backlog', label: 'Backlog', icon: '📋' },
+  { id: 'playing', label: 'Spelar', icon: '▶️' },
+  { id: 'completed', label: 'Klarat', icon: '🏆' },
+  { id: 'wishlist', label: 'Önskelista', icon: '🎁' },
 ];
 
 const CY = new Date().getFullYear();
 
 function GameResultCard({
-  result, inLibrary, isAdding, showDrop,
-  addStatus, addCompletedYear,
-  onSelectGame, onToggleDrop, onSetStatus, onSetYear, onConfirmAdd,
+  result, inLibrary, isInWishlist, isAdding, showDrop,
+  addChoice, addCompletedYear,
+  onSelectGame, onToggleDrop, onSetChoice, onSetYear, onConfirmAdd,
 }: GameResultCardProps) {
   return (
     <div className={`rounded-2xl border transition-all overflow-hidden ${
@@ -1185,13 +1211,20 @@ function GameResultCard({
         {/* Åtgärdsknapp */}
         {inLibrary || isAdding ? (
           <div className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold shrink-0 ${
-            isAdding ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' : 'bg-zinc-900 text-zinc-600 border border-zinc-800'
+            isAdding
+              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25'
+              : isInWishlist
+              ? 'bg-red-500/10 text-red-400 border border-red-500/25'
+              : 'bg-zinc-900 text-zinc-400 border border-zinc-800'
           }`}>
-            <Check className="w-3 h-3" />
-            <span className="hidden sm:inline">{isAdding ? 'Tillagd!' : 'I samling'}</span>
+            {isInWishlist && !isAdding ? <Heart className="w-3 h-3 fill-current" /> : <Check className="w-3 h-3" />}
+            <span className="hidden sm:inline">
+              {isAdding ? 'Tillagd!' : isInWishlist ? 'På önskelistan' : 'I samling'}
+            </span>
           </div>
         ) : (
           <button
+            type="button"
             onClick={onToggleDrop}
             className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold shrink-0 transition cursor-pointer ${
               showDrop
@@ -1210,10 +1243,10 @@ function GameResultCard({
       {showDrop && !inLibrary && (
         <div className="border-t border-zinc-800/60 bg-zinc-950/50 p-3 space-y-3">
           <div className="grid grid-cols-4 gap-1.5">
-            {STATUS_OPTIONS.map((opt) => {
-              const active = addStatus === opt.value;
+            {ADD_CHOICES.map((opt) => {
+              const active = addChoice === opt.id;
               return (
-                <button key={opt.label} onClick={() => onSetStatus(opt.value)}
+                <button key={opt.id} type="button" onClick={() => onSetChoice(opt.id)}
                   className={`flex flex-col items-center gap-1 py-2.5 rounded-xl text-[10px] font-bold transition cursor-pointer ${
                     active ? 'bg-brand-red/15 text-red-300 border border-brand-red/30' : 'bg-zinc-900/80 border border-zinc-800 text-zinc-600 hover:text-zinc-300'
                   }`}
@@ -1225,7 +1258,7 @@ function GameResultCard({
             })}
           </div>
 
-          {addStatus === 'completed' && (
+          {addChoice === 'completed' && (
             <div className="flex items-center gap-2">
               <Calendar className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
               <select
@@ -1241,10 +1274,20 @@ function GameResultCard({
             </div>
           )}
 
-          <button onClick={onConfirmAdd}
+          <button
+            type="button"
+            onClick={onConfirmAdd}
             className="w-full py-2.5 rounded-xl bg-brand-red hover:bg-red-700 text-white text-xs font-bold transition cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-brand-red/15"
           >
-            <Plus className="w-3.5 h-3.5" /> Lägg till i biblioteket
+            {addChoice === 'wishlist' ? (
+              <>
+                <Heart className="w-3.5 h-3.5 fill-current" /> Lägg till i önskelistan
+              </>
+            ) : (
+              <>
+                <Plus className="w-3.5 h-3.5" /> Lägg till i biblioteket
+              </>
+            )}
           </button>
         </div>
       )}

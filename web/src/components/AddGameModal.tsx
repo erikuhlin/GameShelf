@@ -106,26 +106,36 @@ export function AddGameModal({
         completed_date: choice.status === 'completed' && completedYear ? new Date().toISOString() : null,
       };
 
-      const sanitizedPayload = sanitizeUserGamePayload(newGamePayload);
-      const { data, error } = await supabase
-        .from('user_games')
-        .insert([sanitizedPayload])
-        .select()
-        .single();
+      let addedGame: Game;
+      if (pairedUserId) {
+        const sanitizedPayload = sanitizeUserGamePayload(newGamePayload);
+        const { data, error } = await supabase
+          .from('user_games')
+          .insert([sanitizedPayload])
+          .select()
+          .single();
 
-      if (error) {
-        console.error('Supabase error inserting game:', error);
-        // Fallback for offline/local simulation if table insertion fails
-        const fallbackGame: Game = {
+        if (error) {
+          console.error('Supabase error inserting game:', error);
+          // Fallback for offline/local simulation if table insertion fails
+          addedGame = {
+            id: crypto.randomUUID(),
+            ...newGamePayload,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          } as any;
+        } else {
+          addedGame = mapSupabaseGame(data);
+        }
+      } else {
+        addedGame = {
           id: crypto.randomUUID(),
           ...newGamePayload,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         } as any;
-        onGameAdded(fallbackGame);
-      } else if (data) {
-        onGameAdded(mapSupabaseGame(data));
       }
+      onGameAdded(addedGame);
     } catch (err: any) {
       console.error('Error in handleAddGame:', err);
       setErrorMessage('Kunde inte lägga till spelet');

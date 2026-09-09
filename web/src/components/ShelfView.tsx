@@ -75,7 +75,7 @@ export function ShelfView({ games, onSelectGame }: ShelfViewProps) {
                     )}
 
                     {/* Önskelista / Backlog märkning */}
-                    {!game.is_owned ? (
+                    {game.is_owned === false && game.status === 'notStarted' && !game.is_backlog ? (
                       <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-purple-950/90 backdrop-blur-md text-purple-300 text-[9px] sm:text-[10px] font-bold border border-purple-500/50 shadow-sm flex items-center gap-1">
                         <span>Önskelista</span>
                       </div>

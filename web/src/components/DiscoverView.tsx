@@ -27,6 +27,7 @@ import {
   Target,
   Hourglass,
   Trophy,
+  Heart,
 } from 'lucide-react';
 import { UserProfile } from '@/types/profile';
 import { AVATAR_PRESETS } from '@/lib/profileStore';
@@ -923,6 +924,14 @@ export function DiscoverView({
     );
   };
 
+  const getMatchingGame = (igdbId?: number | string | null, title?: string) => {
+    return games.find(
+      (g) =>
+        (igdbId && g.igdb_id === Number(igdbId)) ||
+        (title && g.title.toLowerCase() === title.toLowerCase())
+    );
+  };
+
   const cleanArticleTitle = (title: string) => {
     return title.replace(/^Review:\s*/i, '').trim();
   };
@@ -1504,7 +1513,9 @@ export function DiscoverView({
             ) : upcomingGames.length > 0 ? (
               <div className="flex gap-3.5 overflow-x-auto pb-2.5 scrollbar-thin scrollbar-thumb-zinc-800">
                 {upcomingGames.map((game) => {
-                  const inLibrary = isGameInLibrary(game.igdb_id, game.title);
+                  const matching = getMatchingGame(game.igdb_id, game.title);
+                  const inLibrary = Boolean(matching);
+                  const inWishlist = Boolean(matching && matching.is_owned === false);
                   const relDate = game.first_release_date
                     ? new Date(
                         Number(game.first_release_date) *
@@ -1558,7 +1569,7 @@ export function DiscoverView({
 
                       <button
                         onClick={() =>
-                          onAddGame({ ...game, status: 'notStarted', is_owned: false })
+                          onAddGame({ ...game, status: 'notStarted', is_owned: false, is_backlog: false })
                         }
                         disabled={inLibrary}
                         className={`mt-2.5 w-full py-1.5 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 transition ${
@@ -1569,8 +1580,12 @@ export function DiscoverView({
                       >
                         {inLibrary ? (
                           <>
-                            <Check className="w-3 h-3 text-emerald-400" />
-                            <span>I samlingen</span>
+                            {inWishlist ? (
+                              <Heart className="w-3 h-3 fill-current text-brand-red" />
+                            ) : (
+                              <Check className="w-3 h-3 text-emerald-400" />
+                            )}
+                            <span>{inWishlist ? 'På önskelistan' : 'I samlingen'}</span>
                           </>
                         ) : (
                           <>
@@ -1705,7 +1720,9 @@ export function DiscoverView({
                     </span>
 
                     <button
-                      onClick={() => onAddGame(game)}
+                      onClick={() =>
+                        onAddGame({ ...game, is_owned: true, is_backlog: true, status: 'notStarted' })
+                      }
                       disabled={inLibrary}
                       className={`mt-2 w-full py-1 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 transition ${
                         inLibrary
@@ -1869,7 +1886,9 @@ export function DiscoverView({
                         </span>
 
                         <button
-                          onClick={() => onAddGame(game)}
+                          onClick={() =>
+                            onAddGame({ ...game, is_owned: true, is_backlog: true, status: 'notStarted' })
+                          }
                           disabled={inLibrary}
                           className={`mt-2 w-full py-1.5 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 transition ${
                             inLibrary
@@ -2130,7 +2149,9 @@ export function DiscoverView({
             /* --- Mest Hypade Spel Rutnät --- */
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pt-1">
               {displayedCalendarGames.map((game, idx) => {
-                const inLibrary = isGameInLibrary(game.igdb_id, game.title);
+                const matching = getMatchingGame(game.igdb_id, game.title);
+                const inLibrary = Boolean(matching);
+                const inWishlist = Boolean(matching && matching.is_owned === false);
                 const relDate = game.first_release_date
                   ? new Date(
                       Number(game.first_release_date) *
@@ -2209,7 +2230,7 @@ export function DiscoverView({
 
                     <button
                       onClick={() =>
-                        onAddGame({ ...game, status: 'notStarted', is_owned: false })
+                        onAddGame({ ...game, status: 'notStarted', is_owned: false, is_backlog: false })
                       }
                       disabled={inLibrary}
                       className={`mt-3 w-full py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
@@ -2220,8 +2241,12 @@ export function DiscoverView({
                     >
                       {inLibrary ? (
                         <>
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>I biblioteket</span>
+                          {inWishlist ? (
+                            <Heart className="w-3.5 h-3.5 fill-current text-brand-red" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          )}
+                          <span>{inWishlist ? 'På önskelistan' : 'I biblioteket'}</span>
                         </>
                       ) : (
                         <>
@@ -2266,7 +2291,9 @@ export function DiscoverView({
                   {/* Spelkort för detta datum */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
                     {group.games.map((game) => {
-                      const inLibrary = isGameInLibrary(game.igdb_id, game.title);
+                      const matching = getMatchingGame(game.igdb_id, game.title);
+                      const inLibrary = Boolean(matching);
+                      const inWishlist = Boolean(matching && matching.is_owned === false);
 
                       return (
                         <div
@@ -2323,18 +2350,22 @@ export function DiscoverView({
                           {/* Snabbknapp för önskelista */}
                           <button
                             onClick={() =>
-                              onAddGame({ ...game, status: 'notStarted', is_owned: false })
+                              onAddGame({ ...game, status: 'notStarted', is_owned: false, is_backlog: false })
                             }
                             disabled={inLibrary}
-                            title={inLibrary ? 'I biblioteket' : 'Lägg till i önskelista'}
+                            title={inLibrary ? (inWishlist ? 'På önskelistan' : 'I biblioteket') : 'Lägg till i önskelista'}
                             className={`p-2.5 rounded-xl border transition cursor-pointer flex-shrink-0 ${
                               inLibrary
-                                ? 'bg-zinc-800/40 text-emerald-400 border-zinc-750 cursor-default'
+                                ? 'bg-zinc-800/40 border-zinc-750 cursor-default'
                                 : 'bg-zinc-800 hover:bg-brand-red text-zinc-300 hover:text-white border-zinc-700'
                             }`}
                           >
                             {inLibrary ? (
-                              <Check className="w-4 h-4 text-emerald-400" />
+                              inWishlist ? (
+                                <Heart className="w-4 h-4 fill-current text-brand-red" />
+                              ) : (
+                                <Check className="w-4 h-4 text-emerald-400" />
+                              )
                             ) : (
                               <Bookmark className="w-4 h-4 text-amber-400" />
                             )}

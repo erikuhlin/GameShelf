@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Game, GameCollection, PlayStatus, PLAY_STATUSES } from '@/types/game';
-import { supabase, mapSupabaseGame, mapSupabaseCollection, normalizeIgdbRating, sanitizeUserGamePayload } from '@/lib/supabase';
+import { supabase, mapSupabaseGame, mapSupabaseCollection, normalizeIgdbRating, sanitizeUserGamePayload, normalizeLocalGame } from '@/lib/supabase';
 import { getStatusDisplayTitle, inferPlayTypes } from '@/lib/statusHelper';
 import { Header, ViewMode } from '@/components/Header';
 import { ShelfView } from '@/components/ShelfView';
@@ -103,11 +103,9 @@ export default function HomePage() {
         try {
           const parsed = JSON.parse(cachedGames);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            const normalized = parsed.map((g: any) => ({
-              ...g,
-              igdb_rating: normalizeIgdbRating(g.igdb_rating),
-            }));
+            const normalized = parsed.map(normalizeLocalGame);
             setGames(normalized);
+            localStorage.setItem('gameshelf_local_games', JSON.stringify(normalized));
           }
         } catch (e) {}
       }
@@ -447,12 +445,10 @@ export default function HomePage() {
           try {
             const parsed = JSON.parse(cachedGames);
             if (Array.isArray(parsed)) {
-              const normalized = parsed.map((g: any) => ({
-                ...g,
-                igdb_rating: normalizeIgdbRating(g.igdb_rating),
-              }));
+              const normalized = parsed.map(normalizeLocalGame);
               setGames(normalized);
               enrichGamesWithReleaseDates(normalized, null);
+              localStorage.setItem('gameshelf_local_games', JSON.stringify(normalized));
             }
           } catch (e) {}
         }
@@ -487,6 +483,8 @@ export default function HomePage() {
         if (gamesRes.data) {
           setGames((prev) => {
             const existingMap = new Map(prev.map((g) => [g.id, g]));
+            const healedUpdates: { id: string; is_owned: boolean }[] = [];
+
             const mapped = gamesRes.data.map((row: any) => {
               const game = mapSupabaseGame(row);
               const existing = existingMap.get(game.id);
@@ -496,11 +494,24 @@ export default function HomePage() {
               if (!game.igdb_id && existing?.igdb_id) {
                 game.igdb_id = existing.igdb_id;
               }
+
+              // Självläkning: Om raden i Supabase hade felaktigt row.is_owned === false, men spelet egentligen är i ägo
+              if (row.is_owned === false && game.is_owned === true) {
+                healedUpdates.push({ id: game.id, is_owned: true });
+              }
+
               return game;
             });
 
             if (typeof window !== 'undefined') {
               localStorage.setItem('gameshelf_local_games', JSON.stringify(mapped));
+            }
+
+            // Självläkning i bakgrunden till Supabase för felaktiga rader
+            if (healedUpdates.length > 0 && pairedUserId) {
+              healedUpdates.forEach(({ id, is_owned }) => {
+                supabase.from('user_games').update({ is_owned }).eq('id', id).then();
+              });
             }
 
             // Berika saknade spel i bakgrunden
@@ -629,6 +640,7 @@ export default function HomePage() {
   };
   const handleOwnershipChange = (o: 'all' | 'owned' | 'wishlist') => {
     setLibraryOwnershipFilter(o);
+    setSelectedStatus('Alla');
     if (typeof window !== 'undefined') localStorage.setItem('gameshelf_library_ownership', o);
   };
 
@@ -862,7 +874,10 @@ export default function HomePage() {
   // Handlers for game changes
   const handleGameAdded = (newGame: Game) => {
     setGames((prev) => {
-      const next = [newGame, ...prev];
+      const filtered = prev.filter(
+        (g) => g.id !== newGame.id && (!newGame.igdb_id || g.igdb_id !== newGame.igdb_id)
+      );
+      const next = [newGame, ...filtered];
       if (typeof window !== 'undefined') {
         localStorage.setItem('gameshelf_local_games', JSON.stringify(next));
       }
@@ -870,7 +885,113 @@ export default function HomePage() {
     });
   };
 
-  const handleUpdateGame = (updatedGame: Game) => {
+  const handleAddGameToLibraryOrWishlist = async (
+    gameToAdd: Game,
+    statusOverride?: PlayStatus,
+    completedYearOverride?: number | null
+  ) => {
+    let currentUserId: string | null = pairedUserId;
+    if (!currentUserId && typeof window !== 'undefined') {
+      currentUserId = localStorage.getItem('gameshelf_paired_user_id');
+    }
+
+    const finalStatus: PlayStatus = statusOverride || gameToAdd.status || 'notStarted';
+    const isOwned = gameToAdd.is_owned !== undefined ? gameToAdd.is_owned : true;
+    const isBacklog =
+      gameToAdd.is_backlog !== undefined
+        ? gameToAdd.is_backlog
+        : (finalStatus === 'notStarted' && isOwned);
+    const finalCompletedYear =
+      completedYearOverride !== undefined ? completedYearOverride : gameToAdd.completed_year;
+    const playTypes = gameToAdd.play_types || inferPlayTypes(gameToAdd);
+    const newGameId = gameToAdd.id || crypto.randomUUID();
+
+    const newGamePayload: Game = {
+      ...gameToAdd,
+      id: newGameId,
+      user_id: currentUserId || undefined,
+      title: gameToAdd.title,
+      cover_url: gameToAdd.cover_url || null,
+      platforms: gameToAdd.platforms || [],
+      release_year: gameToAdd.release_year || null,
+      first_release_date: gameToAdd.first_release_date || null,
+      genres: gameToAdd.genres || [],
+      developers: gameToAdd.developers || [],
+      status: finalStatus,
+      rating: gameToAdd.rating ?? null,
+      igdb_rating: gameToAdd.igdb_rating ?? null,
+      igdb_id: gameToAdd.igdb_id ?? null,
+      estimated_hours: gameToAdd.estimated_hours ?? null,
+      is_owned: isOwned,
+      is_backlog: isBacklog,
+      play_types: playTypes,
+      notes: gameToAdd.notes || '',
+      todos: gameToAdd.todos || [],
+      completed_year: finalStatus === 'completed' ? finalCompletedYear : null,
+      completed_date:
+        finalStatus === 'completed'
+          ? gameToAdd.completed_date || new Date().toISOString()
+          : null,
+      story_progress:
+        finalStatus === 'completed' ? 'completed' : gameToAdd.story_progress || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    let savedGame = newGamePayload;
+
+    if (currentUserId) {
+      try {
+        const sanitized = sanitizeUserGamePayload(newGamePayload);
+        let { data, error } = await supabase
+          .from('user_games')
+          .insert([sanitized])
+          .select()
+          .single();
+
+        if (error && error.message?.includes('first_release_date')) {
+          const { first_release_date, ...fallbackPayload } = sanitized;
+          const retry = await supabase
+            .from('user_games')
+            .insert([fallbackPayload])
+            .select()
+            .single();
+          data = retry.data;
+          error = retry.error;
+        }
+
+        if (!error && data) {
+          savedGame = mapSupabaseGame(data);
+        } else if (error) {
+          console.error('Error inserting game into Supabase user_games:', error);
+        }
+      } catch (err) {
+        console.error('Exception inserting game into Supabase:', err);
+      }
+    }
+
+    handleGameAdded(savedGame);
+    setSelectedGame((current) => {
+      if (!current) return null;
+      if (current.id === savedGame.id || (savedGame.igdb_id && current.igdb_id === savedGame.igdb_id)) {
+        return savedGame;
+      }
+      return current;
+    });
+    return savedGame;
+  };
+
+  const handleUpdateGame = async (updatedGame: Game) => {
+    // Om spelet inte finns i listan (t.ex. förhandsgranskades från sökning/utforska och flyttas till biblioteket)
+    const exists = games.some(
+      (g) => g.id === updatedGame.id || (updatedGame.igdb_id && g.igdb_id === updatedGame.igdb_id)
+    );
+    if (!exists) {
+      await handleAddGameToLibraryOrWishlist(updatedGame);
+      setSelectedGame(updatedGame);
+      return;
+    }
+
     setGames((prev) => {
       const next = prev.map((g) => (g.id === updatedGame.id ? updatedGame : g));
       if (typeof window !== 'undefined') {
@@ -926,53 +1047,7 @@ export default function HomePage() {
     }
   };
 
-  const handleAddDiscoveryGameToLibrary = async (game: Game) => {
-    let pairedUserId: string | null = null;
-    if (typeof window !== 'undefined') {
-      pairedUserId = localStorage.getItem('gameshelf_paired_user_id');
-    }
-
-    const playTypes = game.play_types || inferPlayTypes(game);
-    const payload = sanitizeUserGamePayload({
-      user_id: pairedUserId || undefined,
-      title: game.title,
-      cover_url: game.cover_url || null,
-      platforms: game.platforms || [],
-      release_year: game.release_year || null,
-      genres: game.genres || [],
-      developers: game.developers || [],
-      status: game.status || 'notStarted',
-      is_owned: game.is_owned ?? false,
-      is_backlog: game.is_backlog ?? false,
-      play_types: playTypes,
-      rating: null,
-      igdb_rating: game.igdb_rating || null,
-      estimated_hours: null,
-      notes: '',
-      todos: [],
-    });
-
-    try {
-      const { data, error } = await supabase
-        .from('user_games')
-        .insert([payload])
-        .select()
-        .single();
-
-      if (!error && data) {
-        handleGameAdded(mapSupabaseGame(data));
-      } else {
-        handleGameAdded({
-          ...game,
-          id: crypto.randomUUID(),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-      }
-    } catch (e) {
-      handleGameAdded(game);
-    }
-  };
+  const handleAddDiscoveryGameToLibrary = handleAddGameToLibraryOrWishlist;
 
   const handleDeleteGame = (gameId: string) => {
     setGames((prev) => {
@@ -1133,60 +1208,7 @@ export default function HomePage() {
     setPairedUserId(userId);
   };
 
-  const handleAddFromDiscover = async (gameToAdd: Game) => {
-    const playTypes = gameToAdd.play_types || inferPlayTypes(gameToAdd);
-    const newGameId = crypto.randomUUID();
-    const newGamePayload = {
-      id: newGameId,
-      user_id: pairedUserId || undefined,
-      title: gameToAdd.title,
-      cover_url: gameToAdd.cover_url || null,
-      platforms: gameToAdd.platforms || [],
-      release_year: gameToAdd.release_year || null,
-      first_release_date: gameToAdd.first_release_date || null,
-      genres: gameToAdd.genres || [],
-      developers: gameToAdd.developers || [],
-      status: (gameToAdd.status || 'notStarted') as PlayStatus,
-      rating: null,
-      igdb_rating: gameToAdd.igdb_rating || null,
-      igdb_id: gameToAdd.igdb_id || null,
-      estimated_hours: null,
-      is_owned: false,
-      is_backlog: false,
-      play_types: playTypes,
-      notes: '',
-      todos: [],
-    };
-
-    if (pairedUserId) {
-      const sanitized = sanitizeUserGamePayload(newGamePayload);
-      let { data, error } = await supabase
-        .from('user_games')
-        .insert([sanitized])
-        .select()
-        .single();
-
-      if (error && error.message?.includes('first_release_date')) {
-        const { first_release_date, ...fallbackPayload } = sanitized;
-        const retry = await supabase.from('user_games').insert([fallbackPayload]).select().single();
-        data = retry.data;
-      }
-    }
-
-    const createdGame: Game = {
-      ...newGamePayload,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    setGames((prev) => {
-      const updated = [createdGame, ...prev];
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('gameshelf_local_games', JSON.stringify(updated));
-      }
-      return updated;
-    });
-  };
+  const handleAddFromDiscover = handleAddGameToLibraryOrWishlist;
 
   const activeCollection = collections.find((c) => c.id === selectedCollectionId);
 
@@ -1636,6 +1658,8 @@ export default function HomePage() {
         collections={collections}
         onToggleCollection={handleToggleCollection}
         onCreateCollection={handleCreateCollectionAndAddGame}
+        libraryGames={games}
+        onAddGame={handleAddGameToLibraryOrWishlist}
         onOpenCompany={(companyId, companyName, role) => {
           setActiveCompanyModal({ id: companyId, name: companyName, role });
         }}
@@ -1718,13 +1742,13 @@ export default function HomePage() {
               developers: newGame.developers,
               platforms: newGame.platforms,
               status: 'notStarted',
-              is_owned: false,
-              is_backlog: false,
+              is_owned: true,
+              is_backlog: true,
               play_types: inferPlayTypes({ title: newGame.title, genres: newGame.genres }),
               notes: '',
               todos: [],
             };
-            await handleAddFromDiscover(gameToAdd);
+            await handleAddGameToLibraryOrWishlist(gameToAdd);
           }}
           onSelectGame={(igdbId) => {
             const local = games.find((g) => g.igdb_id === igdbId);

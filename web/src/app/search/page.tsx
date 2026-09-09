@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { supabase, sanitizeUserGamePayload, mapSupabaseGame } from '@/lib/supabase';
 import { PlayStatus } from '@/types/game';
 import { inferPlayTypes } from '@/lib/statusHelper';
 import {
@@ -90,11 +90,12 @@ export default function SearchPage() {
   const handleAddGame = async (game: SearchResult) => {
     setAddingId(game.id);
     try {
+      const pairedUserId = typeof window !== 'undefined' ? localStorage.getItem('gameshelf_paired_user_id') : null;
       const choice = INITIAL_OPTIONS.find((o) => o.id === initialChoice) || INITIAL_OPTIONS[0];
       const playTypes = inferPlayTypes({ title: game.title, genres: game.genres });
 
-      const payload = {
-        id: crypto.randomUUID(),
+      const newGamePayload = {
+        user_id: pairedUserId,
         title: game.title,
         platforms: game.platforms,
         platform: game.platforms[0] || null,
@@ -111,19 +112,43 @@ export default function SearchPage() {
         play_types: playTypes,
         notes: '',
         todos: [],
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       };
 
-      const { error } = await supabase.from('user_games').insert([payload]);
-      if (error) console.error('Error inserting into user_games:', error);
+      let addedGame: any = null;
+      if (pairedUserId) {
+        const sanitizedPayload = sanitizeUserGamePayload(newGamePayload);
+        const { data, error } = await supabase
+          .from('user_games')
+          .insert([sanitizedPayload])
+          .select()
+          .single();
 
-      if (typeof window !== 'undefined') {
+        if (error) {
+          console.error('Error inserting into user_games:', error);
+          addedGame = {
+            id: crypto.randomUUID(),
+            ...newGamePayload,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+        } else {
+          addedGame = mapSupabaseGame(data);
+        }
+      } else {
+        addedGame = {
+          id: crypto.randomUUID(),
+          ...newGamePayload,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+      }
+
+      if (typeof window !== 'undefined' && addedGame) {
         const cached = localStorage.getItem('gameshelf_local_games');
         const existing = cached ? JSON.parse(cached) : [];
         localStorage.setItem(
           'gameshelf_local_games',
-          JSON.stringify([payload, ...existing.filter((g: any) => g.igdb_id !== game.id)])
+          JSON.stringify([addedGame, ...existing.filter((g: any) => g.igdb_id !== game.id)])
         );
       }
 

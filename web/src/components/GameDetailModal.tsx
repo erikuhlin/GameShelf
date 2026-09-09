@@ -60,6 +60,8 @@ interface GameDetailModalProps {
   onOpenCompany?: (companyId: number, companyName: string, role: 'developer' | 'publisher') => void;
   isTargetGoal?: boolean;
   onToggleTargetGoal?: (gameId: string) => void;
+  libraryGames?: Game[];
+  onAddGame?: (game: Game) => void;
 }
 
 interface RemoteDetails {
@@ -113,10 +115,20 @@ export function GameDetailModal({
   onOpenCompany,
   isTargetGoal,
   onToggleTargetGoal,
+  libraryGames,
+  onAddGame,
 }: GameDetailModalProps) {
   if (!isOpen || !game) return null;
 
-  const isOwned = game.is_owned === true;
+  const matchingGame = libraryGames?.find(
+    (g) => g.id === game.id || (game.igdb_id && g.igdb_id === game.igdb_id)
+  );
+  const isInLibrary = Boolean(matchingGame);
+  const effectiveGame = matchingGame || game;
+  const isWishlist = isInLibrary ? effectiveGame.is_owned === false : false;
+  const isOwned = isInLibrary ? effectiveGame.is_owned !== false : false;
+  const isPreview = !isInLibrary;
+
   const [activeTab, setActiveTab] = useState<'myPlay' | 'facts'>(isOwned ? 'myPlay' : 'facts');
 
   // Formulär & speldata state
@@ -306,6 +318,15 @@ export function GameDetailModal({
       updated_at: new Date().toISOString(),
     };
 
+    if (isPreview) {
+      if (onAddGame) {
+        onAddGame(updatedGame);
+      } else {
+        onUpdateGame(updatedGame);
+      }
+      return;
+    }
+
     onUpdateGame(updatedGame);
 
     try {
@@ -395,7 +416,7 @@ export function GameDetailModal({
     });
   };
 
-  // Snabbväljare för Flytta till Biblioteket
+  // Snabbväljare för Flytta till Biblioteket / Lägg till i biblioteket
   const handleMoveToLibraryChoice = (choice: 'playing' | 'backlog' | 'completed') => {
     const currentYear = new Date().getFullYear();
     const nowIso = new Date().toISOString();
@@ -430,13 +451,62 @@ export function GameDetailModal({
       story_progress: newStoryProg,
     };
 
-    saveGameUpdates(updates);
+    setStatus(newStatus);
+    setIsBacklog(newIsBacklog);
+    setCompletedYear(newCompletedYear);
+
+    if (isPreview) {
+      const fullGame: Game = {
+        ...game,
+        ...updates,
+      };
+      if (onAddGame) {
+        onAddGame(fullGame);
+      } else {
+        onUpdateGame(fullGame);
+      }
+    } else {
+      saveGameUpdates(updates);
+    }
     setShowMovePicker(false);
     setActiveTab('myPlay');
   };
 
-  // Ta bort från biblioteket
+  // Flytta till Önskelistan (från biblioteket)
+  const handleMoveToWishlist = () => {
+    const updates: Partial<Game> = {
+      is_owned: false,
+      is_backlog: false,
+      status: 'notStarted',
+    };
+    saveGameUpdates(updates);
+    setActiveTab('facts');
+  };
+
+  // Lägg till i önskelistan (förhandsgranskat spel som inte finns i samlingen)
+  const handleAddToWishlist = () => {
+    const wishlistGame: Game = {
+      ...game,
+      is_owned: false,
+      is_backlog: false,
+      status: 'notStarted',
+    };
+    setStatus('notStarted');
+    setIsBacklog(false);
+    if (onAddGame) {
+      onAddGame(wishlistGame);
+    } else {
+      onUpdateGame(wishlistGame);
+    }
+    setActiveTab('facts');
+  };
+
+  // Ta bort från biblioteket / önskelistan
   const handleDelete = async () => {
+    if (isPreview) {
+      onClose();
+      return;
+    }
     try {
       await supabase.from('user_games').delete().eq('id', game.id);
       onDeleteGame(game.id);
@@ -893,8 +963,41 @@ export function GameDetailModal({
 
           {/* ===== STATE-BASERADE HANDLINGSRADER ===== */}
 
-          {/* 1. Önskelista state: Status-strip + Flytta till Biblioteket */}
-          {!isOwned && (
+          {/* 1. Förhandsgranskning (spelet finns inte i biblioteket eller önskelistan än) */}
+          {isPreview && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between px-4 py-3 bg-zinc-900/60 border border-zinc-800 rounded-xl text-xs">
+                <div className="flex items-center gap-2 text-zinc-400 font-medium">
+                  <Bookmark className="w-4 h-4 text-zinc-500" />
+                  <span>Det här spelet finns inte i din samling än</span>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowMovePicker(true)}
+                  className="flex-1 py-3 px-4 bg-brand-red hover:bg-red-700 text-white font-bold text-sm rounded-xl transition shadow-lg shadow-brand-red/20 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Lägg till i biblioteket</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleAddToWishlist}
+                  className="py-3 px-4 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-red-400 border border-zinc-800 rounded-xl transition cursor-pointer flex items-center gap-2 font-semibold text-sm"
+                  title="Lägg till i önskelistan"
+                >
+                  <Heart className="w-4 h-4 fill-current text-brand-red" />
+                  <span>Önskelista</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 2. Önskelista state: Status-strip + Flytta till Biblioteket */}
+          {isWishlist && (
             <div className="space-y-3">
               <div className="flex items-center justify-between px-4 py-3 bg-red-950/20 border border-red-900/40 rounded-xl text-xs">
                 <div className="flex items-center gap-2 text-brand-red font-semibold">
@@ -930,7 +1033,7 @@ export function GameDetailModal({
             </div>
           )}
 
-          {/* 2. I biblioteket: Snabbkontroller + Flikar */}
+          {/* 3. I biblioteket: Snabbkontroller + Flikar */}
           {isOwned && (
             <div className="space-y-4">
               {/* Snabbkontroller (Status, Plattform, Betyg) */}
@@ -950,6 +1053,17 @@ export function GameDetailModal({
                     <option value="abandoned">❌ Avbrutet</option>
                   </select>
                 </div>
+
+                {/* Flytta till önskelistan knapp */}
+                <button
+                  type="button"
+                  onClick={handleMoveToWishlist}
+                  title="Flytta detta spel till önskelistan"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-950 hover:bg-zinc-850 text-zinc-400 hover:text-red-400 border border-zinc-700/80 rounded-lg text-xs font-semibold transition cursor-pointer"
+                >
+                  <Heart className="w-3.5 h-3.5 text-zinc-500 hover:text-red-400" />
+                  <span className="hidden sm:inline">Flytta till önskelista</span>
+                </button>
 
                 {/* Klarat år selector när status är Klar */}
                 {(status === 'completed' || storyProgress === 'completed') && (

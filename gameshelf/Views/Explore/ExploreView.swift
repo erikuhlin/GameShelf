@@ -147,19 +147,19 @@ struct ExploreView: View {
                         // 2. Zon 1: Ditt Spel (Hero / Multi-game switcher ELLER Spelslumpare om noll aktiva)
                         heroSection
 
-                        // 3. Zon 2: Spelvärlden idag (4 kurerade nyheter)
-                        newsDigestSection
+                        // 3. Önskeliste-nedräkning (om sparade kommande spel finns)
+                        if let nextGame = nextWishlistRelease {
+                            wishlistCountdownCard(game: nextGame)
+                        }
 
-                        // 4. Zon 3: Upptäck & Utforska (Konsoliderad flikad hub)
+                        // 4. Zon 2: Upptäck & Utforska (Konsoliderad flikad hub)
                         discoverSection
 
                         // 5. Releasekalender (Kommande spelsläpp)
                         upcomingReleasesTeaserSection
 
-                        // 6. Önskeliste-nedräkning (om sparade kommande spel finns)
-                        if let nextGame = nextWishlistRelease {
-                            wishlistCountdownCard(game: nextGame)
-                        }
+                        // 6. Zon 3: Spelvärlden idag (kurerade nyheter)
+                        newsDigestSection
                     }
 
                     Spacer(minLength: 30)
@@ -371,8 +371,8 @@ struct ExploreView: View {
                         showingGamingGoalSheet = true
                     } label: {
                         Text("Hantera")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                            .font(.caption.bold())
+                            .foregroundStyle(Color.yellow)
                     }
                 }
 
@@ -477,7 +477,9 @@ struct ExploreView: View {
                 Text(game.title)
                     .font(.subheadline.bold())
                     .foregroundStyle(.primary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .minimumScaleFactor(0.85)
 
                 if totalTodos > 0 {
                     Text("\(doneTodos)/\(totalTodos) delmål klara")
@@ -1232,7 +1234,8 @@ struct ExploreView: View {
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundStyle(.orange)
                     } else if let genre = game.genres?.first?.name {
-                        Text(genre)
+                        let cleanGenre = genre.replacingOccurrences(of: "Role-playing (RPG)", with: "RPG")
+                        Text(cleanGenre)
                             .font(.system(size: 9))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -2076,7 +2079,8 @@ struct SelectFocusGameView: View {
                                 Text(game.title)
                                     .font(.subheadline.bold())
                                     .foregroundStyle(.primary)
-                                    .lineLimit(1)
+                                    .lineLimit(2)
+                                    .minimumScaleFactor(0.85)
                                 Text(game.platforms.joined(separator: ", "))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)

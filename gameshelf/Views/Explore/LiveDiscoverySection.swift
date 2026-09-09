@@ -128,24 +128,26 @@ struct LiveDiscoverySection: View {
     private var forYouSubSection: some View {
         if !curatedRecommendations.isEmpty || isLoadingRecommended {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    HStack(spacing: 6) {
-                        Image(systemName: "sparkles")
-                            .foregroundStyle(Color.ds.brandRed)
-                        Text("För dig")
-                            .font(.title3.bold())
-                            .foregroundStyle(.primary)
-                    }
-
-                    Spacer()
-
-                    NavigationLink(destination: ForYouHubView()) {
-                        HStack(spacing: 4) {
-                            Text("Öppna För dig")
-                            Image(systemName: "chevron.right")
+                if mode != .forYouOnly {
+                    HStack {
+                        HStack(spacing: 6) {
+                            Image(systemName: "sparkles")
+                                .foregroundStyle(Color.ds.brandRed)
+                            Text("För dig")
+                                .font(.title3.bold())
+                                .foregroundStyle(.primary)
                         }
-                        .font(.caption.bold())
-                        .foregroundStyle(Color.ds.brandRed)
+
+                        Spacer()
+
+                        NavigationLink(destination: ForYouHubView()) {
+                            HStack(spacing: 4) {
+                                Text("Öppna För dig")
+                                Image(systemName: "chevron.right")
+                            }
+                            .font(.caption.bold())
+                            .foregroundStyle(Color.ds.brandRed)
+                        }
                     }
                 }
 
@@ -400,7 +402,7 @@ struct LiveDiscoverySection: View {
                                                 .foregroundStyle(.secondary)
                                                 .lineLimit(1)
                                                 .minimumScaleFactor(0.85)
-                                        } else if let platform = game.platforms?.first?.name {
+                                        } else if let platform = resolvedPlatform(for: game) {
                                             Text(PlatformMatcher.shortName(platform))
                                                 .font(.caption2)
                                                 .foregroundStyle(.secondary)
@@ -456,6 +458,12 @@ struct LiveDiscoverySection: View {
         }
     }
 
+    private func resolvedPlatform(for game: IGDBGame) -> String? {
+        guard let available = game.platforms?.map(\.name), !available.isEmpty else { return nil }
+        let resolved = PlatformMatcher.resolvePlatforms(availableIGDBPlatforms: available)
+        return resolved.first ?? available.first
+    }
+
     private func horizontalCuratedList(items: [CuratedRecommendation]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 14) {
@@ -475,8 +483,8 @@ struct LiveDiscoverySection: View {
                                     .background(Color.ds.brandRed.opacity(0.9), in: Capsule())
                                     .foregroundStyle(.white)
                                     .lineLimit(1)
-                                    .minimumScaleFactor(0.75)
-                                    .frame(maxWidth: 95, alignment: .leading)
+                                    .minimumScaleFactor(0.7)
+                                    .frame(maxWidth: 97, alignment: .leading)
                                     .padding(4)
 
                                 if let rating = game.totalRating, rating > 0 {
@@ -510,7 +518,7 @@ struct LiveDiscoverySection: View {
                                     .minimumScaleFactor(0.75)
                                     .frame(height: 34, alignment: .topLeading)
 
-                                if let platform = game.platforms?.first?.name {
+                                if let platform = resolvedPlatform(for: game) {
                                     Text(PlatformMatcher.shortName(platform))
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
@@ -625,7 +633,7 @@ struct LiveDiscoverySection: View {
                                         }
                                         .buttonStyle(.plain)
                                     }
-                                } else if let platform = game.platforms?.first?.name {
+                                } else if let platform = resolvedPlatform(for: game) {
                                     Text(PlatformMatcher.shortName(platform))
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
@@ -714,7 +722,7 @@ struct LiveDiscoverySection: View {
             }
 
             let shortTitle = refGame.title.components(separatedBy: ":").first?.trimmingCharacters(in: .whitespaces) ?? refGame.title
-            let badgeText = "\(ref.badgePrefix): \(shortTitle.prefix(13))"
+            let badgeText = "\(ref.badgePrefix): \(shortTitle)"
 
             for g in refResults {
                 seenIDs.insert(g.id)

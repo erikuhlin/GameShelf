@@ -48,8 +48,14 @@ struct PlatformMatcher {
             return matched
         }
 
-        // 2. Fallback: Inget matchade (t.ex. ett äldre SNES/PS1-spel när profilen bara har PS5)
-        // Då sätter vi spelets första/primära plattform så att spelet alltid har en giltig plattform
+        // 2. Fallback: Inget matchade användarens profil
+        // Prioritera vanliga moderna plattformar framför nedlagda/nischade som Stadia, Ouya etc.
+        let priorityList = ["PlayStation 5", "PC (Microsoft Windows)", "Xbox Series X|S", "Nintendo Switch", "PlayStation 4", "Xbox One"]
+        for p in priorityList {
+            if let found = availableIGDBPlatforms.first(where: { isMatch(igdb: $0.lowercased(), user: p.lowercased()) }) {
+                return [found]
+            }
+        }
         return [availableIGDBPlatforms.first!]
     }
 

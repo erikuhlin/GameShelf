@@ -407,7 +407,7 @@ struct ExploreView: View {
                                     Spacer(minLength: 4)
                                 }
                                 .padding(10)
-                                .frame(width: 250)
+                                .frame(width: 250, height: 90, alignment: .leading)
                                 .background(Color(.tertiarySystemGroupedBackground))
                                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 .overlay(
@@ -438,23 +438,10 @@ struct ExploreView: View {
         let doneTodos = game.todos.filter { $0.isDone }.count
 
         return HStack(spacing: 12) {
-            if let url = game.coverURL {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } else {
-                        Color.gray.opacity(0.2)
-                    }
-                }
+            CoverView(title: game.title, url: game.coverURL, corner: 10, height: 64)
                 .frame(width: 48, height: 64)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
-                )
-            }
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text("MÅL")
                         .font(.system(size: 9, weight: .black))
@@ -480,15 +467,13 @@ struct ExploreView: View {
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                     .minimumScaleFactor(0.85)
+                    .frame(height: 34, alignment: .topLeading)
 
                 if totalTodos > 0 {
                     Text("\(doneTodos)/\(totalTodos) delmål klara")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                } else if !game.platforms.isEmpty {
-                    Text(game.platforms.prefix(2).joined(separator: ", "))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
 
@@ -499,7 +484,7 @@ struct ExploreView: View {
                 .foregroundStyle(Color(.tertiaryLabel))
         }
         .padding(10)
-        .frame(width: 250)
+        .frame(width: 250, height: 90, alignment: .leading)
         .background(Color(.tertiarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(

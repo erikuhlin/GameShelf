@@ -1450,15 +1450,9 @@ struct PlayingNowCard: View {
                 if game.isMultiplayerOrOngoing {
                     // Multiplayer / Ongoing vy
                     VStack(alignment: .leading, spacing: 1) {
-                        if let hours = game.estimatedHours, hours > 0 {
-                            Text("\(hours)h totalt")
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text("Aktiv multiplayer")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
+                        Text("Aktiv multiplayer")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
 
                         if let lastPlayed = game.lastPlayedFormatted {
                             Text(lastPlayed)
@@ -1467,30 +1461,19 @@ struct PlayingNowCard: View {
                         }
                     }
                 } else {
-                    // Singleplayer vy: Framsteg & speltid
+                    // Singleplayer vy: Framsteg
                     if let progress = todoProgress {
                         VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 4) {
-                                if let pct = progressPercent {
-                                    Text("\(pct)% framsteg")
-                                        .font(.system(size: 9, weight: .semibold))
-                                        .foregroundStyle(.primary)
-                                }
-                                if let hours = game.estimatedHours, hours > 0 {
-                                    Text("• \(hours)h spelat")
-                                        .font(.system(size: 9))
-                                        .foregroundStyle(.secondary)
-                                }
+                            if let pct = progressPercent {
+                                Text("\(pct)% framsteg")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundStyle(.primary)
                             }
 
                             ProgressView(value: Double(progress.completed), total: Double(progress.total))
                                 .tint(.green)
                                 .scaleEffect(x: 1, y: 0.7, anchor: .center)
                         }
-                    } else if let hours = game.estimatedHours, hours > 0 {
-                        Text("\(hours)h spelat")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
                     } else {
                         Text("I din aktiva rotation")
                             .font(.caption2)

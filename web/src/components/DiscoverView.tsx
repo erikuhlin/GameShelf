@@ -1153,11 +1153,11 @@ export function DiscoverView({
                           )}
                         </div>
 
-                        <h3 className="text-sm font-bold text-white line-clamp-2 leading-snug group-hover:text-amber-400 transition-colors">
+                        <h3 className="text-sm font-bold text-white line-clamp-2 leading-snug group-hover:text-amber-400 transition-colors min-h-[2.5rem]">
                           {game.title}
                         </h3>
 
-                        {totalTodos > 0 ? (
+                        {totalTodos > 0 && (
                           <div className="space-y-1">
                             <div className="flex items-center justify-between text-[11px] text-zinc-400">
                               <span>Delmål:</span>
@@ -1172,10 +1172,6 @@ export function DiscoverView({
                               />
                             </div>
                           </div>
-                        ) : (
-                          <p className="text-[11px] text-zinc-400 truncate">
-                            {game.platforms?.join(', ') || 'Inget format angivet'}
-                          </p>
                         )}
                       </div>
                     </div>

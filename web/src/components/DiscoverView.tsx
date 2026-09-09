@@ -226,15 +226,20 @@ export function DiscoverView({
 
   // Dynamiska månadsval för releasekalendern (Mest hypade + 6 kommande månader)
   const monthOptions: MonthOption[] = useMemo(() => {
+    const now = new Date();
+    const localMidnight = Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime() / 1000);
+    const utcMidnight = Math.floor(new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)).getTime() / 1000);
+    const startOfToday = Math.min(localMidnight, utcMidnight);
+
     const options: MonthOption[] = [
       {
         id: 'most_hyped',
         title: '🔥 Mest hypade',
+        startDate: startOfToday,
         isMostHyped: true,
       },
     ];
 
-    const now = new Date();
     const formatter = new Intl.DateTimeFormat('sv-SE', { month: 'short', year: 'numeric' });
 
     for (let offset = 0; offset < 6; offset++) {
@@ -243,7 +248,7 @@ export function DiscoverView({
       const month = d.getMonth();
       const startOfMonth =
         offset === 0
-          ? Math.floor(now.getTime() / 1000)
+          ? startOfToday
           : Math.floor(new Date(year, month, 1, 0, 0, 0).getTime() / 1000);
       const endOfMonth = Math.floor(new Date(year, month + 1, 0, 23, 59, 59).getTime() / 1000);
 
@@ -1516,6 +1521,20 @@ export function DiscoverView({
                   const matching = getMatchingGame(game.igdb_id, game.title);
                   const inLibrary = Boolean(matching);
                   const inWishlist = Boolean(matching && matching.is_owned === false);
+                  const isToday = game.first_release_date
+                    ? (() => {
+                        const ms =
+                          Number(game.first_release_date) *
+                          (Number(game.first_release_date) < 10000000000 ? 1000 : 1);
+                        const d = new Date(ms);
+                        const today = new Date();
+                        return (
+                          d.getFullYear() === today.getFullYear() &&
+                          d.getMonth() === today.getMonth() &&
+                          d.getDate() === today.getDate()
+                        );
+                      })()
+                    : false;
                   const relDate = game.first_release_date
                     ? new Date(
                         Number(game.first_release_date) *
@@ -1532,9 +1551,15 @@ export function DiscoverView({
                       className="flex-shrink-0 w-36 sm:w-44 flex flex-col group bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden p-2.5 transition hover:border-zinc-700 relative"
                     >
                       {/* Datum-badge */}
-                      {relDate && (
-                        <div className="absolute top-4 left-4 z-10 px-2 py-0.5 rounded-md text-[10px] font-black shadow-md backdrop-blur-md bg-red-600/90 text-white border border-red-400/40 capitalize">
-                          {relDate}
+                      {(isToday || relDate) && (
+                        <div
+                          className={`absolute top-4 left-4 z-10 px-2 py-0.5 rounded-md text-[10px] font-black shadow-md backdrop-blur-md capitalize ${
+                            isToday
+                              ? 'bg-emerald-600 text-white border border-emerald-400 animate-pulse'
+                              : 'bg-red-600/90 text-white border border-red-400/40'
+                          }`}
+                        >
+                          {isToday ? 'Idag' : relDate}
                         </div>
                       )}
 
@@ -2152,6 +2177,20 @@ export function DiscoverView({
                 const matching = getMatchingGame(game.igdb_id, game.title);
                 const inLibrary = Boolean(matching);
                 const inWishlist = Boolean(matching && matching.is_owned === false);
+                const isToday = game.first_release_date
+                  ? (() => {
+                      const ms =
+                        Number(game.first_release_date) *
+                        (Number(game.first_release_date) < 10000000000 ? 1000 : 1);
+                      const d = new Date(ms);
+                      const today = new Date();
+                      return (
+                        d.getFullYear() === today.getFullYear() &&
+                        d.getMonth() === today.getMonth() &&
+                        d.getDate() === today.getDate()
+                      );
+                    })()
+                  : false;
                 const relDate = game.first_release_date
                   ? new Date(
                       Number(game.first_release_date) *
@@ -2217,9 +2256,22 @@ export function DiscoverView({
                         </div>
 
                         <div className="mt-2">
-                          <span className="text-[11px] font-bold text-zinc-300 flex items-center gap-1">
-                            <Calendar className="w-3 h-3 text-brand-red" />
-                            {relDate}
+                          <span
+                            className={`text-[11px] font-bold flex items-center gap-1 ${
+                              isToday ? 'text-emerald-400 font-extrabold' : 'text-zinc-300'
+                            }`}
+                          >
+                            {isToday ? (
+                              <>
+                                <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse" />
+                                <span>Släpps idag!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Calendar className="w-3 h-3 text-brand-red" />
+                                <span>{relDate}</span>
+                              </>
+                            )}
                           </span>
                           <span className="text-[10px] text-zinc-500 truncate block mt-0.5">
                             {game.platforms?.slice(0, 3).join(', ') || 'Okänd plattform'}

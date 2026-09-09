@@ -53,12 +53,13 @@ struct UpcomingReleasesView: View {
         var options: [MonthOption] = []
         let cal = Calendar.current
         let now = Date()
+        let startOfToday = cal.startOfDay(for: now)
 
         // 1. Startsida: Mest hypade & största kommande spelen
         options.append(MonthOption(
             id: "most_hyped",
             title: "🔥 Mest hypade",
-            startDate: now,
+            startDate: startOfToday,
             endDate: nil,
             isMostHyped: true
         ))
@@ -80,7 +81,7 @@ struct UpcomingReleasesView: View {
                 options.append(MonthOption(
                     id: id,
                     title: title,
-                    startDate: offset == 0 ? now : startOfMonth,
+                    startDate: offset == 0 ? startOfToday : startOfMonth,
                     endDate: endOfMonth,
                     isMostHyped: false
                 ))
@@ -806,7 +807,8 @@ struct UpcomingReleasesView: View {
         }
 
         let isHyped = currentOption?.isMostHyped ?? true
-        let startDate = currentOption?.startDate ?? Date()
+        let startOfToday = Calendar.current.startOfDay(for: Date())
+        let startDate = currentOption?.startDate ?? startOfToday
         let endDate = currentOption?.endDate
 
         let selectedPlatform = platforms.first(where: { $0.id == selectedPlatformID })
@@ -815,7 +817,7 @@ struct UpcomingReleasesView: View {
         do {
             let fetched = try await IGDBService.shared.fetchUpcomingReleases(
                 platformIDs: platformIDs,
-                fromDate: isHyped ? Date() : startDate,
+                fromDate: isHyped ? startOfToday : startDate,
                 toDate: isHyped ? nil : endDate,
                 sortByHype: isHyped,
                 minHype: isHyped ? 2 : nil,

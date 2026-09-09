@@ -464,10 +464,16 @@ struct TrendingGameResult: Sendable {
         guard let url = URL(string: "https://api.igdb.com/v4/games") else {
             throw URLError(.badURL)
         }
-        let nowTimestamp = Int(Date().timeIntervalSince1970)
+        let cal = Calendar.current
+        let localStart = cal.startOfDay(for: Date())
+        var utcCal = Calendar(identifier: .gregorian)
+        utcCal.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+        let utcStart = utcCal.startOfDay(for: Date())
+        let startOfTodayTimestamp = Int(min(localStart, utcStart).timeIntervalSince1970)
+
         let bodyString = """
         fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, hypes;
-        where first_release_date > \(nowTimestamp) & cover != null & (hypes > 3 | total_rating_count > 0);
+        where first_release_date >= \(startOfTodayTimestamp) & cover != null & (hypes > 3 | total_rating_count > 0);
         sort first_release_date asc;
         limit \(limit);
         """
@@ -656,7 +662,14 @@ struct TrendingGameResult: Sendable {
             throw URLError(.badURL)
         }
 
-        let fromTs = Int(fromDate.timeIntervalSince1970)
+        let cal = Calendar.current
+        let localStart = cal.startOfDay(for: fromDate)
+        var utcCal = Calendar(identifier: .gregorian)
+        utcCal.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+        let utcStart = utcCal.startOfDay(for: fromDate)
+        let effectiveFrom = min(localStart, utcStart)
+
+        let fromTs = Int(effectiveFrom.timeIntervalSince1970)
         var conditions: [String] = [
             "first_release_date >= \(fromTs)",
             "cover != null"

@@ -81,6 +81,9 @@ export async function GET(request: NextRequest) {
   const excludeIds = new Set(excludeIdsParam.split(',').map((id) => Number(id.trim())).filter(Boolean));
 
   const nowSeconds = Math.floor(Date.now() / 1000);
+  const localMidnight = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
+  const utcMidnight = Math.floor(new Date().setUTCHours(0, 0, 0, 0) / 1000);
+  const todayStartTs = Math.min(localMidnight, utcMidnight);
   const cacheKey = `${category}_${genreParam || ''}_${sortParam}_${eraParam}_${platformParam}_${startDateParam || ''}_${endDateParam || ''}_${isHypedParam}_${limitParam}`;
 
   // 1. Svara omedelbart om cachat i minnet
@@ -192,8 +195,8 @@ export async function GET(request: NextRequest) {
               let finalScore = meta.score;
               const release = game.first_release_date || 0;
 
-              if (release > nowSeconds || release === 0) {
-                finalScore *= 1.4; // Kommande efterlängtat spel
+              if (release >= todayStartTs || release === 0) {
+                finalScore *= 1.4; // Kommande efterlängtat spel eller släpps idag
               } else if (release > oneYearAgo) {
                 finalScore *= 1.35; // Släppt senaste 12 månaderna
               } else if (release > threeYearsAgo) {
@@ -205,7 +208,7 @@ export async function GET(request: NextRequest) {
               // Normalisera betyg
               const ratingScore = game.total_rating || game.rating;
               const igdbRating = ratingScore ? Math.round((ratingScore / 10) * 10) / 10 : null;
-              const isUpcoming = (game.first_release_date || 0) > nowSeconds;
+              const isUpcoming = (game.first_release_date || 0) >= todayStartTs;
 
               // Skapa dagsaktuell, informativ badgeText baserat på faktiska mätpunkter
               let badgeText = '🔥 Trendar just nu';
@@ -327,7 +330,7 @@ export async function GET(request: NextRequest) {
     else if (category === 'upcoming') {
       const conditions: string[] = ['cover != null'];
 
-      const startTs = startDateParam ? Math.floor(Number(startDateParam)) : nowSeconds;
+      const startTs = startDateParam ? Math.floor(Number(startDateParam)) : todayStartTs;
       conditions.push(`first_release_date >= ${startTs}`);
 
       if (endDateParam) {

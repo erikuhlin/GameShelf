@@ -142,7 +142,7 @@ struct GameDetailView: View {
 
     private var isUpcomingGame: Bool {
         if let targetDate = effectiveReleaseDate {
-            return targetDate > Date()
+            return targetDate >= Calendar.current.startOfDay(for: Date())
         }
         if let year = effectiveReleaseYear, year > Calendar.current.component(.year, from: Date()) {
             return true

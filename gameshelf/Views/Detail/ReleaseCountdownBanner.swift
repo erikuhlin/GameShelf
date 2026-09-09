@@ -13,8 +13,8 @@ struct ReleaseCountdownBanner: View {
 
     var body: some View {
         if let targetDate = releaseDate {
-            if targetDate > Date() {
-                if targetDate.isYearPlaceholderDate {
+            if targetDate >= Calendar.current.startOfDay(for: Date()) {
+                if targetDate > Date() && targetDate.isYearPlaceholderDate {
                     let year = releaseYear ?? Calendar.current.component(.year, from: targetDate)
                     futureYearCard(year: year > 0 ? year : nil)
                 } else {

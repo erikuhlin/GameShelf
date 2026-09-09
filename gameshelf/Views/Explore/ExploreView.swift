@@ -93,12 +93,13 @@ struct ExploreView: View {
     private var nextWishlistRelease: Game? {
         let now = Date()
         let currentYear = Calendar.current.component(.year, from: now)
+        let startOfToday = Calendar.current.startOfDay(for: now)
         return store.games
             .filter { game in
                 guard !game.isOwned else { return false }
                 guard game.isUnreleased else { return false }
                 if let releaseDate = game.releaseDate {
-                    return releaseDate > now
+                    return releaseDate >= startOfToday
                 }
                 return game.releaseYear >= currentYear
             }
@@ -1269,7 +1270,7 @@ struct ExploreView: View {
 
             let fetched = try await IGDBService.shared.fetchUpcomingReleases(
                 platformIDs: platformIDs,
-                fromDate: Date(),
+                fromDate: Calendar.current.startOfDay(for: Date()),
                 limit: 12
             )
 

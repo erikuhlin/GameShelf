@@ -141,7 +141,7 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
 
     var isUnreleased: Bool {
         if let date = releaseDate {
-            return date > Date()
+            return date >= Calendar.current.startOfDay(for: Date())
         }
         if let year = releaseYear, year > Calendar.current.component(.year, from: Date()) {
             return true

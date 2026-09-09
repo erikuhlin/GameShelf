@@ -81,9 +81,8 @@ export async function GET(request: NextRequest) {
   const excludeIds = new Set(excludeIdsParam.split(',').map((id) => Number(id.trim())).filter(Boolean));
 
   const nowSeconds = Math.floor(Date.now() / 1000);
-  const localMidnight = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
-  const utcMidnight = Math.floor(new Date().setUTCHours(0, 0, 0, 0) / 1000);
-  const todayStartTs = Math.min(localMidnight, utcMidnight);
+  const now = new Date();
+  const todayStartTs = Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0) / 1000);
   const cacheKey = `${category}_${genreParam || ''}_${sortParam}_${eraParam}_${platformParam}_${startDateParam || ''}_${endDateParam || ''}_${isHypedParam}_${limitParam}`;
 
   // 1. Svara omedelbart om cachat i minnet

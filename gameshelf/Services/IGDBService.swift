@@ -465,11 +465,11 @@ struct TrendingGameResult: Sendable {
             throw URLError(.badURL)
         }
         let cal = Calendar.current
-        let localStart = cal.startOfDay(for: Date())
+        let comps = cal.dateComponents([.year, .month, .day], from: Date())
         var utcCal = Calendar(identifier: .gregorian)
         utcCal.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
-        let utcStart = utcCal.startOfDay(for: Date())
-        let startOfTodayTimestamp = Int(min(localStart, utcStart).timeIntervalSince1970)
+        let todayUtc = utcCal.date(from: comps) ?? Date()
+        let startOfTodayTimestamp = Int(todayUtc.timeIntervalSince1970)
 
         let bodyString = """
         fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, hypes;
@@ -663,11 +663,10 @@ struct TrendingGameResult: Sendable {
         }
 
         let cal = Calendar.current
-        let localStart = cal.startOfDay(for: fromDate)
+        let fromComps = cal.dateComponents([.year, .month, .day], from: fromDate)
         var utcCal = Calendar(identifier: .gregorian)
         utcCal.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
-        let utcStart = utcCal.startOfDay(for: fromDate)
-        let effectiveFrom = min(localStart, utcStart)
+        let effectiveFrom = utcCal.date(from: fromComps) ?? fromDate
 
         let fromTs = Int(effectiveFrom.timeIntervalSince1970)
         var conditions: [String] = [
@@ -676,8 +675,15 @@ struct TrendingGameResult: Sendable {
         ]
 
         if let toDate = toDate {
-            let toTs = Int(toDate.timeIntervalSince1970)
-            conditions.append("first_release_date <= \(toTs)")
+            let toComps = cal.dateComponents([.year, .month, .day], from: toDate)
+            if let targetDate = utcCal.date(from: toComps),
+               let endOfDayUtc = utcCal.date(bySettingHour: 23, minute: 59, second: 59, of: targetDate) {
+                let toTs = Int(endOfDayUtc.timeIntervalSince1970)
+                conditions.append("first_release_date <= \(toTs)")
+            } else {
+                let toTs = Int(toDate.timeIntervalSince1970)
+                conditions.append("first_release_date <= \(toTs)")
+            }
         }
 
         if let minHype = minHype {

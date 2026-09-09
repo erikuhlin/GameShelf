@@ -227,9 +227,7 @@ export function DiscoverView({
   // Dynamiska månadsval för releasekalendern (Mest hypade + 6 kommande månader)
   const monthOptions: MonthOption[] = useMemo(() => {
     const now = new Date();
-    const localMidnight = Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime() / 1000);
-    const utcMidnight = Math.floor(new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)).getTime() / 1000);
-    const startOfToday = Math.min(localMidnight, utcMidnight);
+    const startOfToday = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0) / 1000);
 
     const options: MonthOption[] = [
       {
@@ -249,8 +247,8 @@ export function DiscoverView({
       const startOfMonth =
         offset === 0
           ? startOfToday
-          : Math.floor(new Date(year, month, 1, 0, 0, 0).getTime() / 1000);
-      const endOfMonth = Math.floor(new Date(year, month + 1, 0, 23, 59, 59).getTime() / 1000);
+          : Math.floor(Date.UTC(year, month, 1, 0, 0, 0) / 1000);
+      const endOfMonth = Math.floor(Date.UTC(year, month + 1, 0, 23, 59, 59) / 1000);
 
       const rawTitle = formatter.format(d);
       const title = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);

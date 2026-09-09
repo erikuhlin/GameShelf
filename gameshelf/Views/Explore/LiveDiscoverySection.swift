@@ -471,41 +471,24 @@ struct LiveDiscoverySection: View {
                     let game = item.game
                     NavigationLink(destination: GameDetailView(igdbID: game.id)) {
                         VStack(alignment: .leading, spacing: 8) {
-                            ZStack(alignment: .topLeading) {
+                            ZStack(alignment: .bottomTrailing) {
                                 CoverView(title: game.name, url: game.coverURL, corner: 12, height: 140)
                                     .frame(width: 105, height: 140)
                                     .shadow(color: .black.opacity(0.18), radius: 5, x: 0, y: 3)
 
-                                Text(item.matchedReason)
-                                    .font(.system(size: 8, weight: .bold))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2.5)
-                                    .background(Color.ds.brandRed.opacity(0.9), in: Capsule())
-                                    .foregroundStyle(.white)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.7)
-                                    .frame(maxWidth: 97, alignment: .leading)
-                                    .padding(4)
-
                                 if let rating = game.totalRating, rating > 0 {
-                                    VStack {
-                                        Spacer()
-                                        HStack {
-                                            Spacer()
-                                            HStack(spacing: 2) {
-                                                Image(systemName: "star.fill")
-                                                    .font(.system(size: 7))
-                                                    .foregroundStyle(.yellow)
-                                                Text(String(format: "%.0f", rating))
-                                                    .font(.system(size: 9, weight: .bold))
-                                                    .foregroundStyle(.white)
-                                            }
-                                            .padding(.horizontal, 4)
-                                            .padding(.vertical, 2)
-                                            .background(.black.opacity(0.75), in: Capsule())
-                                            .padding(4)
-                                        }
+                                    HStack(spacing: 2) {
+                                        Image(systemName: "star.fill")
+                                            .font(.system(size: 7))
+                                            .foregroundStyle(.yellow)
+                                        Text(String(format: "%.0f", rating))
+                                            .font(.system(size: 9, weight: .bold))
+                                            .foregroundStyle(.white)
                                     }
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 2)
+                                    .background(.black.opacity(0.75), in: Capsule())
+                                    .padding(4)
                                 }
                             }
 

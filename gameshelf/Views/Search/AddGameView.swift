@@ -372,7 +372,12 @@ struct AddGameView: View {
             if !matchingOwnedGames.isEmpty {
                 Section {
                     ForEach(matchingOwnedGames) { localGame in
-                        NavigationLink(destination: GameDetailView(game: localGame)) {
+                        ZStack(alignment: .leading) {
+                            NavigationLink(destination: GameDetailView(game: localGame)) {
+                                EmptyView()
+                            }
+                            .opacity(0)
+
                             HStack(spacing: 12) {
                                 CoverView(title: localGame.title, url: localGame.coverURL, corner: 8, height: 60)
                                     .frame(width: 45, height: 60)
@@ -390,21 +395,19 @@ struct AddGameView: View {
                                             Text("⭐ \(rating)/10")
                                                 .font(.caption2.bold())
                                                 .foregroundStyle(.yellow)
+                                                .layoutPriority(1)
                                         }
 
                                         if localGame.releaseYear > 0 {
                                             Text(String(localGame.releaseYear))
                                                 .font(.caption2)
                                                 .foregroundStyle(.secondary)
+                                                .layoutPriority(1)
                                         }
                                     }
                                 }
 
                                 Spacer()
-
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(.tertiary)
                             }
                             .padding(.vertical, 4)
                         }
@@ -445,7 +448,12 @@ struct AddGameView: View {
             if !matchingWishlistGames.isEmpty {
                 Section {
                     ForEach(matchingWishlistGames) { wishlistGame in
-                        NavigationLink(destination: GameDetailView(game: wishlistGame)) {
+                        ZStack(alignment: .leading) {
+                            NavigationLink(destination: GameDetailView(game: wishlistGame)) {
+                                EmptyView()
+                            }
+                            .opacity(0)
+
                             HStack(spacing: 12) {
                                 CoverView(title: wishlistGame.title, url: wishlistGame.coverURL, corner: 8, height: 60)
                                     .frame(width: 45, height: 60)
@@ -463,15 +471,12 @@ struct AddGameView: View {
                                             Text(String(wishlistGame.releaseYear))
                                                 .font(.caption2)
                                                 .foregroundStyle(.secondary)
+                                                .layoutPriority(1)
                                         }
                                     }
                                 }
 
                                 Spacer()
-
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(.tertiary)
                             }
                             .padding(.vertical, 4)
                         }
@@ -528,7 +533,12 @@ struct AddGameView: View {
                         $0.title.lowercased() == game.name.lowercased()
                     })
 
-                    NavigationLink(value: game.id) {
+                    ZStack(alignment: .leading) {
+                        NavigationLink(value: game.id) {
+                            EmptyView()
+                        }
+                        .opacity(0)
+
                         IGDBSearchRow(
                             igdbGame: game,
                             localGame: localGame,
@@ -555,29 +565,39 @@ struct AddGameView: View {
                             .foregroundStyle(.red)
                     }
                 }
+                .padding(.vertical, 8)
             } footer: {
-                if hasMoreResults {
-                    HStack {
-                        Spacer()
-                        if isLoadingMore {
-                            ProgressView()
-                                .tint(.red)
-                        } else {
-                            Button {
-                                Task { await performSearchAsync(loadMore: true) }
-                            } label: {
-                                Label("Ladda fler resultat", systemImage: "arrow.down.circle")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.red)
+                VStack(spacing: 0) {
+                    if hasMoreResults {
+                        HStack {
+                            Spacer()
+                            if isLoadingMore {
+                                ProgressView()
+                                    .tint(.red)
+                            } else {
+                                Button {
+                                    Task { await performSearchAsync(loadMore: true) }
+                                } label: {
+                                    Label("Ladda fler resultat", systemImage: "arrow.down.circle")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.red)
+                                }
                             }
+                            Spacer()
                         }
-                        Spacer()
+                        .padding(.vertical, 12)
                     }
-                    .padding(.vertical, 12)
+
+                    // Extra utrymme i botten så att sista sökträffen inte täcks av den flytande tab-baren
+                    Color.clear
+                        .frame(height: 55)
                 }
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
             }
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden)
     }
 
     // MARK: - Utforska-vy (När man inte söker)
@@ -1074,7 +1094,7 @@ private struct IGDBSearchRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(igdbGame.name)
-                    .font(.subheadline.bold())
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -1082,19 +1102,27 @@ private struct IGDBSearchRow: View {
                 HStack(spacing: 4) {
                     if let year = igdbGame.releaseYear, year > 0 {
                         Text(String(year))
+                            .layoutPriority(2)
                     }
                     if let rating = igdbGame.totalRating, rating > 0 {
                         Text("•")
+                            .foregroundStyle(.tertiary)
                         HStack(spacing: 2) {
                             Image(systemName: "star.fill")
                                 .font(.system(size: 9))
                                 .foregroundStyle(.yellow)
                             Text(String(format: "%.1f", rating / 10))
                         }
+                        .layoutPriority(2)
                     }
                     if let genres = igdbGame.genres, !genres.isEmpty {
                         Text("•")
-                        Text(genres.prefix(1).map(\.name).joined(separator: ", "))
+                            .foregroundStyle(.tertiary)
+                        let rawGenre = genres[0].name
+                        let cleanGenre = (rawGenre == "Role-playing (RPG)") ? "RPG" : (rawGenre == "Turn-based strategy (TBS)" ? "TBS" : rawGenre)
+                        Text(cleanGenre)
+                            .lineLimit(1)
+                            .layoutPriority(1)
                     }
                 }
                 .font(.caption2)
@@ -1102,75 +1130,12 @@ private struct IGDBSearchRow: View {
                 .lineLimit(1)
             }
 
-            Spacer(minLength: 4)
-
-            Spacer(minLength: 4)
+            Spacer(minLength: 6)
 
             HStack(spacing: 8) {
-                // 1. Snabbknapp för Önskelista (Hjärta)
                 if let local = localGame {
                     if local.isOwned {
-                        // Finns i biblioteket: Tryck på hjärtat för att flytta till önskelista
-                        Button {
-                            moveToWishlist(local)
-                        } label: {
-                            Image(systemName: "heart")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(.red)
-                                .frame(width: 32, height: 32)
-                                .background(Color.red.opacity(0.1))
-                                .clipShape(Circle())
-                                .overlay(Circle().stroke(Color.red.opacity(0.25), lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Flytta till önskelista")
-                    } else {
-                        // Finns redan i önskelistan: Fyllt hjärta med meny
-                        Menu {
-                            Section("Önskelista") {
-                                Button {
-                                    moveToLibrary(local, as: .notStarted)
-                                } label: {
-                                    Label("Flytta till biblioteket", systemImage: "books.vertical")
-                                }
-                                Button(role: .destructive) {
-                                    store.delete(local)
-                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                } label: {
-                                    Label("Ta bort från önskelistan", systemImage: "trash")
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "heart.fill")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .frame(width: 32, height: 32)
-                                .background(Color.red)
-                                .clipShape(Circle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("På önskelistan")
-                    }
-                } else {
-                    // Ej tillagt: 1-tryck för att direkt lägga till i önskelistan!
-                    Button {
-                        onQuickAdd(.wishlist)
-                    } label: {
-                        Image(systemName: "heart")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.red)
-                            .frame(width: 32, height: 32)
-                            .background(Color.red.opacity(0.1))
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(Color.red.opacity(0.25), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Lägg till i önskelista")
-                }
-
-                // 2. Bibliotek / Status-knapp
-                if let local = localGame {
-                    if local.isOwned {
+                        // Finns i biblioteket: Visa statusbadge med redigeringsmeny
                         Menu {
                             Section("Önskelista") {
                                 Button {
@@ -1224,7 +1189,7 @@ private struct IGDBSearchRow: View {
                         }
                         .buttonStyle(.plain)
                     } else {
-                        // Finns på önskelistan
+                        // Finns på önskelistan: Visa Önskelista-badge med flytt-meny
                         Menu {
                             Section("Flytta till biblioteket") {
                                 Button {
@@ -1258,6 +1223,23 @@ private struct IGDBSearchRow: View {
                         .buttonStyle(.plain)
                     }
                 } else {
+                    // Ej tillagt i bibliotek eller önskelista:
+                    // 1. Snabbknapp: Önskelista
+                    Button {
+                        onQuickAdd(.wishlist)
+                    } label: {
+                        Image(systemName: "heart")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.red)
+                            .frame(width: 32, height: 32)
+                            .background(Color.red.opacity(0.1))
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Color.red.opacity(0.25), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Lägg till i önskelista")
+
+                    // 2. Snabbknapp: Lägg till i bibliotek
                     Menu {
                         Button {
                             onQuickAdd(.backlog)
@@ -1287,15 +1269,17 @@ private struct IGDBSearchRow: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "plus")
-                                .font(.caption2.bold())
+                                .font(.system(size: 10, weight: .bold))
                             Text("Lägg till")
                                 .font(.caption2.bold())
+                                .lineLimit(1)
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(Color.red)
                         .foregroundStyle(.white)
                         .clipShape(Capsule())
+                        .fixedSize(horizontal: true, vertical: false)
                     } primaryAction: {
                         onQuickAdd(.backlog)
                     }

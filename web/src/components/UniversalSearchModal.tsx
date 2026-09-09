@@ -1197,20 +1197,20 @@ function GameResultCard({
 
         {/* Info */}
         <div onClick={onSelectGame} className="flex-1 min-w-0 cursor-pointer">
-          <h4 className="text-sm font-semibold text-zinc-200 hover:text-white transition truncate leading-tight">{result.title}</h4>
-          <p className="text-[11px] text-zinc-500 mt-0.5 truncate">
+          <h4 className="text-sm font-semibold text-zinc-200 hover:text-white transition line-clamp-1 leading-tight">{result.title}</h4>
+          <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
             {result.release_year || 'TBA'}
-            {result.genres?.[0] && ` · ${result.genres[0]}`}
-            {result.igdb_rating && <span className="text-amber-400/70 ml-1">★ {result.igdb_rating}</span>}
+            {result.genres?.[0] && ` · ${result.genres[0] === 'Role-playing (RPG)' ? 'RPG' : result.genres[0] === 'Turn-based strategy (TBS)' ? 'TBS' : result.genres[0]}`}
+            {result.igdb_rating && <span className="text-amber-400 font-medium ml-1">★ {result.igdb_rating}</span>}
           </p>
           {result.platforms && result.platforms.length > 0 && (
-            <p className="text-[10px] text-zinc-700 truncate mt-0.5">{result.platforms.slice(0, 2).join(' · ')}</p>
+            <p className="text-[10px] text-zinc-400 truncate mt-0.5">{result.platforms.slice(0, 3).join(' · ')}</p>
           )}
         </div>
 
         {/* Åtgärdsknapp */}
         {inLibrary || isAdding ? (
-          <div className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold shrink-0 ${
+          <div className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold shrink-0 whitespace-nowrap ${
             isAdding
               ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25'
               : isInWishlist
@@ -1218,22 +1218,22 @@ function GameResultCard({
               : 'bg-zinc-900 text-zinc-400 border border-zinc-800'
           }`}>
             {isInWishlist && !isAdding ? <Heart className="w-3 h-3 fill-current" /> : <Check className="w-3 h-3" />}
-            <span className="hidden sm:inline">
-              {isAdding ? 'Tillagd!' : isInWishlist ? 'På önskelistan' : 'I samling'}
+            <span>
+              {isAdding ? 'Tillagd!' : isInWishlist ? 'Önskelista' : 'I samling'}
             </span>
           </div>
         ) : (
           <button
             type="button"
             onClick={onToggleDrop}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold shrink-0 transition cursor-pointer ${
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold shrink-0 whitespace-nowrap transition cursor-pointer ${
               showDrop
                 ? 'bg-brand-red text-white shadow-sm shadow-brand-red/30'
-                : 'bg-zinc-900 border border-zinc-800 text-zinc-500 hover:text-brand-red hover:border-brand-red/40'
+                : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
             }`}
           >
             <Plus className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Lägg till</span>
+            <span>Lägg till</span>
             <ChevronDown className={`w-3 h-3 transition-transform ${showDrop ? 'rotate-180' : ''}`} />
           </button>
         )}

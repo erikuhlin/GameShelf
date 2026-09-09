@@ -288,7 +288,7 @@ export default function SearchPage() {
                   {/* Add button */}
                   <div className="mt-3">
                     {isAdded ? (
-                      <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-800 text-emerald-400 text-xs font-semibold border border-zinc-700">
+                      <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-800 text-emerald-400 text-xs font-semibold border border-zinc-700 whitespace-nowrap">
                         <Check className="w-3.5 h-3.5 stroke-[3]" />
                         I din samling
                       </span>
@@ -296,7 +296,7 @@ export default function SearchPage() {
                       <button
                         onClick={() => handleAddGame(game)}
                         disabled={isAdding}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-brand-red hover:bg-brand-redPressed text-white text-xs font-semibold shadow-md transition transform active:scale-95"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-brand-red hover:bg-brand-redPressed text-white text-xs font-semibold shadow-md transition transform active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
                       >
                         {isAdding ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -304,9 +304,9 @@ export default function SearchPage() {
                           <Plus className="w-3.5 h-3.5" />
                         )}
                         <span>
-                          Lägg till (
-                          {INITIAL_OPTIONS.find((o) => o.id === initialChoice)?.label}
-                          )
+                          {initialChoice === 'wishlist'
+                            ? 'Önskelista'
+                            : `Lägg till (${INITIAL_OPTIONS.find((o) => o.id === initialChoice)?.label.replace('I min ', '')})`}
                         </span>
                       </button>
                     )}

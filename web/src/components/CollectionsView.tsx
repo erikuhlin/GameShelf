@@ -205,7 +205,7 @@ export function CollectionsView({
                 </div>
 
                 <div className="p-3">
-                  <h3 className="font-semibold text-xs text-zinc-100 group-hover:text-brand-red transition line-clamp-1">
+                  <h3 className="font-semibold text-xs text-zinc-100 group-hover:text-brand-red transition line-clamp-2 leading-snug min-h-[2rem]">
                     {game.title}
                   </h3>
                   <p className="text-[11px] text-zinc-500 mt-0.5 truncate">

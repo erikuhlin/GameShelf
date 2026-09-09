@@ -196,7 +196,8 @@ struct CompanyGamesView: View {
                                 Text(userGame.title)
                                     .font(.caption.bold())
                                     .foregroundStyle(.primary)
-                                    .lineLimit(1)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
 
                                 if userGame.releaseYear > 0 {
                                     Text("\(userGame.releaseYear)")

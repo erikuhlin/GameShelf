@@ -1155,7 +1155,7 @@ export function DiscoverView({
                           )}
                         </div>
 
-                        <h3 className="text-sm font-bold text-white truncate group-hover:text-amber-400 transition-colors">
+                        <h3 className="text-sm font-bold text-white line-clamp-2 leading-snug group-hover:text-amber-400 transition-colors">
                           {game.title}
                         </h3>
 
@@ -1261,7 +1261,7 @@ export function DiscoverView({
                           Spelar nu
                         </span>
                       </div>
-                      <h4 className="text-xs sm:text-sm font-bold text-white truncate group-hover:text-red-400 transition">
+                      <h4 className="text-xs sm:text-sm font-bold text-white line-clamp-2 leading-snug group-hover:text-red-400 transition">
                         {game.title}
                       </h4>
                       <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
@@ -1314,7 +1314,7 @@ export function DiscoverView({
                       </span>
                     </div>
 
-                    <h3 className="text-base sm:text-xl font-black text-white group-hover:text-red-400 transition truncate">
+                    <h3 className="text-base sm:text-xl font-black text-white group-hover:text-red-400 transition line-clamp-2 leading-tight">
                       {nextWishlistRelease.title}
                     </h3>
 
@@ -1584,7 +1584,7 @@ export function DiscoverView({
 
                       <h4
                         onClick={() => onSelectGame(game)}
-                        className="text-xs font-bold text-zinc-100 truncate cursor-pointer hover:text-red-400 transition"
+                        className="text-xs font-bold text-zinc-100 line-clamp-2 leading-snug min-h-[2rem] cursor-pointer hover:text-red-400 transition"
                       >
                         {game.title}
                       </h4>
@@ -1729,7 +1729,7 @@ export function DiscoverView({
 
                     <h4
                       onClick={() => onSelectGame(game)}
-                      className="text-xs font-bold text-zinc-100 truncate cursor-pointer hover:text-red-400 transition"
+                      className="text-xs font-bold text-zinc-100 line-clamp-2 leading-snug min-h-[2rem] cursor-pointer hover:text-red-400 transition"
                     >
                       {game.title}
                     </h4>
@@ -1901,7 +1901,7 @@ export function DiscoverView({
 
                         <h4
                           onClick={() => onSelectGame(game)}
-                          className="text-xs sm:text-sm font-bold text-zinc-100 truncate cursor-pointer hover:text-red-400 transition"
+                          className="text-xs sm:text-sm font-bold text-zinc-100 line-clamp-2 leading-snug min-h-[2.25rem] cursor-pointer hover:text-red-400 transition"
                         >
                           {game.title}
                         </h4>
@@ -2376,7 +2376,7 @@ export function DiscoverView({
                           <div className="flex-1 min-w-0">
                             <h4
                               onClick={() => onSelectGame(game)}
-                              className="text-xs sm:text-sm font-bold text-white truncate group-hover:text-red-400 transition cursor-pointer"
+                              className="text-xs sm:text-sm font-bold text-white line-clamp-2 leading-snug group-hover:text-red-400 transition cursor-pointer"
                             >
                               {game.title}
                             </h4>
@@ -2572,7 +2572,7 @@ export function DiscoverView({
                         </div>
                       )}
                     </div>
-                    <p className="text-[11px] font-bold text-zinc-200 truncate group-hover:text-red-400 transition">
+                    <p className="text-[11px] font-bold text-zinc-200 line-clamp-2 leading-snug min-h-[2rem] group-hover:text-red-400 transition">
                       {game.title}
                     </p>
                   </div>

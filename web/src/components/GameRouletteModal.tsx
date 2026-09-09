@@ -356,7 +356,7 @@ export function GameRouletteModal({
 
               {/* Game Info Details */}
               <div className="mt-5 text-center max-w-sm px-2">
-                <h4 className="text-lg font-bold text-white truncate">
+                <h4 className="text-lg font-bold text-white line-clamp-2 leading-snug">
                   {displayedGame?.title || 'Snurrar...'}
                 </h4>
                 <div className="flex items-center justify-center gap-2 mt-1 text-xs text-zinc-400">

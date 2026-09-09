@@ -386,7 +386,8 @@ struct AddGameView: View {
                                     Text(localGame.title)
                                         .font(.subheadline.bold())
                                         .foregroundStyle(.primary)
-                                        .lineLimit(1)
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
 
                                     HStack(spacing: 6) {
                                         StatusBadge(game: localGame)
@@ -462,7 +463,8 @@ struct AddGameView: View {
                                     Text(wishlistGame.title)
                                         .font(.subheadline.bold())
                                         .foregroundStyle(.primary)
-                                        .lineLimit(1)
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
 
                                     HStack(spacing: 6) {
                                         StatusBadge(game: wishlistGame)

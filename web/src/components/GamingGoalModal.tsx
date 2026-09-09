@@ -251,7 +251,7 @@ export function GamingGoalModal({
                             </span>
                           )}
                         </div>
-                        <h4 className="text-sm font-bold text-white truncate">
+                        <h4 className="text-sm font-bold text-white line-clamp-2 leading-snug">
                           {game.title}
                         </h4>
                         <p className="text-[11px] text-zinc-400 truncate">
@@ -348,7 +348,7 @@ export function GamingGoalModal({
                                 )}
                               </div>
                               <div className="min-w-0">
-                                <h5 className="text-xs font-bold text-white truncate group-hover:text-amber-400 transition-colors">
+                                <h5 className="text-xs font-bold text-white line-clamp-2 leading-snug group-hover:text-amber-400 transition-colors">
                                   {game.title}
                                 </h5>
                                 <p className="text-[10px] text-zinc-400 truncate">

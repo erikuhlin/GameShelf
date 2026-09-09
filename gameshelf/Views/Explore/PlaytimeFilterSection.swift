@@ -126,7 +126,8 @@ struct PlaytimeFilterSection: View {
                                         Text(game.title)
                                             .font(.caption.bold())
                                             .foregroundStyle(.primary)
-                                            .lineLimit(1)
+                                            .lineLimit(2)
+                                            .multilineTextAlignment(.leading)
 
                                         StatusBadge(game: game)
                                     }

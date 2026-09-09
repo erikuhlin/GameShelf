@@ -856,7 +856,7 @@ export function UniversalSearchModal({
                       }
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h4 className="text-sm font-semibold text-zinc-300 group-hover:text-white transition truncate">{game.title}</h4>
+                      <h4 className="text-sm font-semibold text-zinc-300 group-hover:text-white transition line-clamp-2 leading-snug">{game.title}</h4>
                       <div className="flex items-center gap-2 mt-0.5">
                         <StatusBadge game={game} />
                         {game.release_year && <span className="text-[11px] text-zinc-600">{game.release_year}</span>}
@@ -1197,7 +1197,7 @@ function GameResultCard({
 
         {/* Info */}
         <div onClick={onSelectGame} className="flex-1 min-w-0 cursor-pointer">
-          <h4 className="text-sm font-semibold text-zinc-200 hover:text-white transition line-clamp-1 leading-tight">{result.title}</h4>
+          <h4 className="text-sm font-semibold text-zinc-200 hover:text-white transition line-clamp-2 leading-snug">{result.title}</h4>
           <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
             {result.release_year || 'TBA'}
             {result.genres?.[0] && ` · ${result.genres[0] === 'Role-playing (RPG)' ? 'RPG' : result.genres[0] === 'Turn-based strategy (TBS)' ? 'TBS' : result.genres[0]}`}

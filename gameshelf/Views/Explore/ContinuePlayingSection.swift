@@ -54,7 +54,8 @@ struct ContinuePlayingSection: View {
                                         Text(game.title)
                                             .font(.subheadline.bold())
                                             .foregroundStyle(.primary)
-                                            .lineLimit(1)
+                                            .lineLimit(2)
+                                            .multilineTextAlignment(.leading)
 
                                         StatusBadge(game: game)
                                     }

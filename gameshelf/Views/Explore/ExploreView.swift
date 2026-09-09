@@ -647,7 +647,8 @@ struct ExploreView: View {
                                             Text(game.title)
                                                 .font(.subheadline.bold())
                                                 .foregroundStyle(.primary)
-                                                .lineLimit(1)
+                                                .lineLimit(2)
+                                                .multilineTextAlignment(.leading)
                                             Text(game.status == .completed ? "Klarat! 🏆" : game.statusDisplayTitle)
                                                 .font(.caption)
                                                 .foregroundStyle(game.status == .completed ? .green : .secondary)
@@ -1219,7 +1220,8 @@ struct ExploreView: View {
                 Text(game.name)
                     .font(.caption.bold())
                     .foregroundStyle(.primary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
 
                 HStack {
                     if let hypes = game.hypes, hypes > 0 {
@@ -1335,7 +1337,8 @@ struct ExploreView: View {
                     Text(game.title)
                         .font(.subheadline.bold())
                         .foregroundStyle(.primary)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
                 }
 
                 Spacer()

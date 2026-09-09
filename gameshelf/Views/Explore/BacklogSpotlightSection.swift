@@ -40,7 +40,8 @@ struct BacklogSpotlightSection: View {
                                         Text(game.title)
                                             .font(.subheadline.bold())
                                             .foregroundStyle(.primary)
-                                            .lineLimit(1)
+                                            .lineLimit(2)
+                                            .multilineTextAlignment(.leading)
 
                                         if let est = game.estimatedHours, est > 0 {
                                             Text("⏱️ ~\(est) timmar")

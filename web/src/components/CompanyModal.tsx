@@ -289,7 +289,7 @@ export function CompanyModal({
                         </div>
 
                         <div className="p-3">
-                          <h4 className="text-xs font-bold text-zinc-100 truncate group-hover:text-white">
+                          <h4 className="text-xs font-bold text-zinc-100 line-clamp-2 leading-snug min-h-[2rem] group-hover:text-white">
                             {game.title}
                           </h4>
                           {game.release_year && (

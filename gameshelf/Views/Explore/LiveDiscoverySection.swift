@@ -389,7 +389,8 @@ struct LiveDiscoverySection: View {
                                         Text(game.name)
                                             .font(.subheadline.bold())
                                             .foregroundStyle(.primary)
-                                            .lineLimit(1)
+                                            .lineLimit(2)
+                                            .multilineTextAlignment(.leading)
 
                                         if let year = game.releaseYear {
                                             Text("\(String(year)) • \(selectedGenre.name)")
@@ -499,7 +500,8 @@ struct LiveDiscoverySection: View {
                                 Text(game.name)
                                     .font(.subheadline.bold())
                                     .foregroundStyle(.primary)
-                                    .lineLimit(1)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
 
                                 if let platform = game.platforms?.first?.name {
                                     Text(platform)
@@ -574,7 +576,8 @@ struct LiveDiscoverySection: View {
                                 Text(game.name)
                                     .font(.subheadline.bold())
                                     .foregroundStyle(.primary)
-                                    .lineLimit(1)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
 
                                 if showReleaseDate, let dateStr = game.releaseDateFormatted {
                                     HStack(spacing: 4) {

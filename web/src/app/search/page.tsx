@@ -257,7 +257,7 @@ export default function SearchPage() {
                 <div className="flex-1 min-w-0 flex flex-col justify-between h-full">
                   <div>
                     <div className="flex items-start justify-between gap-2">
-                      <h4 className="font-bold text-sm text-zinc-100 truncate">{game.title}</h4>
+                      <h4 className="font-bold text-sm text-zinc-100 line-clamp-2 leading-snug">{game.title}</h4>
                       {game.igdb_rating && (
                         <span className="text-[11px] px-1.5 py-0.5 rounded bg-zinc-800 text-amber-300 border border-zinc-700 flex items-center gap-1 font-semibold flex-shrink-0">
                           <Star className="w-2.5 h-2.5 fill-current" />

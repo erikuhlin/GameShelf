@@ -3488,7 +3488,8 @@ private struct LibraryStatusSheetView: View {
                 Text(title)
                     .font(.headline)
                     .foregroundStyle(.primary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
 
                 Spacer()
             }

@@ -699,7 +699,8 @@ struct ForYouHubView: View {
                 Text(game.name)
                     .font(.headline)
                     .foregroundStyle(.primary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
 
                 Text("\(game.releaseYear.map(String.init) ?? "Okänt") • \(item.platformLabel)")
                     .font(.caption)

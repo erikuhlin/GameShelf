@@ -122,4 +122,26 @@ struct PlatformMatcher {
 
         return false
     }
+
+    /// Returnerar ett kompakt, snyggt plattformsnamn anpassat för kort och kompakta etiketter
+    static func shortName(_ name: String) -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = trimmed.lowercased()
+
+        if lower.contains("windows") || lower == "pc (microsoft windows)" { return "PC" }
+        if lower.contains("playstation 5") || lower == "ps5" { return "PS5" }
+        if lower.contains("playstation 4") || lower == "ps4" { return "PS4" }
+        if lower.contains("playstation 3") || lower == "ps3" { return "PS3" }
+        if lower.contains("playstation 2") || lower == "ps2" { return "PS2" }
+        if lower.contains("playstation") { return "PlayStation" }
+        if lower.contains("series x") || lower.contains("series s") || lower.contains("xbox series") { return "XSX|S" }
+        if lower.contains("xbox one") { return "Xbox One" }
+        if lower.contains("xbox 360") { return "Xbox 360" }
+        if lower == "xbox" { return "Xbox" }
+        if lower.contains("switch") { return "Switch" }
+        if lower.contains("mac") || lower.contains("macos") { return "Mac" }
+        if lower.contains("ios") || lower.contains("iphone") || lower.contains("ipad") { return "iOS" }
+        if lower.contains("android") { return "Android" }
+        return trimmed
+    }
 }

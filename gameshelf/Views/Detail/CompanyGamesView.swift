@@ -198,6 +198,8 @@ struct CompanyGamesView: View {
                                     .foregroundStyle(.primary)
                                     .lineLimit(2)
                                     .multilineTextAlignment(.leading)
+                                    .minimumScaleFactor(0.75)
+                                    .frame(height: 32, alignment: .topLeading)
 
                                 if userGame.releaseYear > 0 {
                                     Text("\(userGame.releaseYear)")
@@ -205,7 +207,7 @@ struct CompanyGamesView: View {
                                         .foregroundStyle(.secondary)
                                 }
                             }
-                            .frame(width: 95)
+                            .frame(width: 95, alignment: .leading)
                         }
                         .buttonStyle(.plain)
                     }
@@ -364,6 +366,8 @@ struct CompanyGamesView: View {
                     .foregroundStyle(.primary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
+                    .minimumScaleFactor(0.75)
+                    .frame(height: 32, alignment: .topLeading)
 
                 HStack(spacing: 4) {
                     if let year = game.releaseYear, year > 0 {

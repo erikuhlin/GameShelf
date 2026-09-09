@@ -826,6 +826,7 @@ struct ExploreView: View {
                         .foregroundStyle(.primary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
+                        .minimumScaleFactor(0.85)
 
                     if game.isMultiplayerOrOngoing {
                         VStack(alignment: .leading, spacing: 2) {
@@ -1149,7 +1150,7 @@ struct ExploreView: View {
                                     .multilineTextAlignment(.center)
                             }
                             .padding(.horizontal, 10)
-                            .frame(width: 120, height: 185)
+                            .frame(width: 120, height: 196)
                             .background(Color(.tertiarySystemGroupedBackground).opacity(0.7))
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
@@ -1222,6 +1223,8 @@ struct ExploreView: View {
                     .foregroundStyle(.primary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
+                    .minimumScaleFactor(0.75)
+                    .frame(height: 32, alignment: .topLeading)
 
                 HStack {
                     if let hypes = game.hypes, hypes > 0 {
@@ -1243,6 +1246,7 @@ struct ExploreView: View {
                             .foregroundStyle(.red)
                     }
                 }
+                .frame(height: 14)
             }
             .frame(width: 125, alignment: .leading)
         }
@@ -1339,6 +1343,7 @@ struct ExploreView: View {
                         .foregroundStyle(.primary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
+                        .minimumScaleFactor(0.85)
                 }
 
                 Spacer()

@@ -128,6 +128,8 @@ struct PlaytimeFilterSection: View {
                                             .foregroundStyle(.primary)
                                             .lineLimit(2)
                                             .multilineTextAlignment(.leading)
+                                            .minimumScaleFactor(0.75)
+                                            .frame(height: 32, alignment: .topLeading)
 
                                         StatusBadge(game: game)
                                     }

@@ -52,10 +52,12 @@ struct ContinuePlayingSection: View {
 
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(game.title)
-                                            .font(.subheadline.bold())
+                                            .font(.system(size: 13, weight: .bold))
                                             .foregroundStyle(.primary)
                                             .lineLimit(2)
                                             .multilineTextAlignment(.leading)
+                                            .minimumScaleFactor(0.75)
+                                            .frame(height: 34, alignment: .topLeading)
 
                                         StatusBadge(game: game)
                                     }

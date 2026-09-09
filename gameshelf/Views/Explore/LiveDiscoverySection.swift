@@ -387,21 +387,25 @@ struct LiveDiscoverySection: View {
 
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(game.name)
-                                            .font(.subheadline.bold())
+                                            .font(.system(size: 13, weight: .bold))
                                             .foregroundStyle(.primary)
                                             .lineLimit(2)
                                             .multilineTextAlignment(.leading)
+                                            .minimumScaleFactor(0.75)
+                                            .frame(height: 34, alignment: .topLeading)
 
                                         if let year = game.releaseYear {
                                             Text("\(String(year)) • \(selectedGenre.name)")
                                                 .font(.caption2)
                                                 .foregroundStyle(.secondary)
                                                 .lineLimit(1)
+                                                .minimumScaleFactor(0.85)
                                         } else if let platform = game.platforms?.first?.name {
-                                            Text(platform)
+                                            Text(PlatformMatcher.shortName(platform))
                                                 .font(.caption2)
                                                 .foregroundStyle(.secondary)
                                                 .lineLimit(1)
+                                                .minimumScaleFactor(0.85)
                                         }
                                     }
                                 }
@@ -471,6 +475,7 @@ struct LiveDiscoverySection: View {
                                     .background(Color.ds.brandRed.opacity(0.9), in: Capsule())
                                     .foregroundStyle(.white)
                                     .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
                                     .frame(maxWidth: 95, alignment: .leading)
                                     .padding(4)
 
@@ -498,16 +503,19 @@ struct LiveDiscoverySection: View {
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(game.name)
-                                    .font(.subheadline.bold())
+                                    .font(.system(size: 13, weight: .bold))
                                     .foregroundStyle(.primary)
                                     .lineLimit(2)
                                     .multilineTextAlignment(.leading)
+                                    .minimumScaleFactor(0.75)
+                                    .frame(height: 34, alignment: .topLeading)
 
                                 if let platform = game.platforms?.first?.name {
-                                    Text(platform)
+                                    Text(PlatformMatcher.shortName(platform))
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
+                                        .minimumScaleFactor(0.85)
                                 }
                             }
                             .frame(width: 105, alignment: .leading)
@@ -574,10 +582,12 @@ struct LiveDiscoverySection: View {
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(game.name)
-                                    .font(.subheadline.bold())
+                                    .font(.system(size: 13, weight: .bold))
                                     .foregroundStyle(.primary)
                                     .lineLimit(2)
                                     .multilineTextAlignment(.leading)
+                                    .minimumScaleFactor(0.75)
+                                    .frame(height: 34, alignment: .topLeading)
 
                                 if showReleaseDate, let dateStr = game.releaseDateFormatted {
                                     HStack(spacing: 4) {
@@ -585,6 +595,7 @@ struct LiveDiscoverySection: View {
                                             .font(.caption2.bold())
                                             .foregroundStyle(.red)
                                             .lineLimit(1)
+                                            .minimumScaleFactor(0.85)
 
                                         Spacer()
 
@@ -615,10 +626,11 @@ struct LiveDiscoverySection: View {
                                         .buttonStyle(.plain)
                                     }
                                 } else if let platform = game.platforms?.first?.name {
-                                    Text(platform)
+                                    Text(PlatformMatcher.shortName(platform))
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
+                                        .minimumScaleFactor(0.85)
                                 }
                             }
                             .frame(width: 105, alignment: .leading)

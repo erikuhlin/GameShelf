@@ -541,6 +541,7 @@ struct ForYouHubView: View {
                     .foregroundStyle(.primary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
+                    .minimumScaleFactor(0.75)
                     .frame(width: 105, height: 32, alignment: .topLeading)
 
                 HStack {

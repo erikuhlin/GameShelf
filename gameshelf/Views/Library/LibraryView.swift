@@ -90,6 +90,7 @@ struct LibraryView: View {
     @State private var groupByYear: Bool = true
     @State private var collapsedYears: Set<Int> = []
     @State private var isSearching = false
+    @State private var isPlayingNowCollapsed = false
 
     // Adaptiva kolumner för Poster Grid (3 på iPhone, 5–8 på iPad)
     private var posterGridColumns: [GridItem] {
@@ -320,6 +321,26 @@ struct LibraryView: View {
         return result
     }
 
+    private var currentYearGroups: [LibraryYearGroup] {
+        selectedTab == .owned ? groupedOwnedGames : groupedWishlistGames
+    }
+
+    private var areAllYearsCollapsed: Bool {
+        let allYears = Set(currentYearGroups.map(\.year))
+        return !allYears.isEmpty && collapsedYears.isSuperset(of: allYears)
+    }
+
+    private func toggleCollapseAllYears() {
+        let allYears = Set(currentYearGroups.map(\.year))
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            if areAllYearsCollapsed {
+                collapsedYears.removeAll()
+            } else {
+                collapsedYears = allYears
+            }
+        }
+    }
+
     private func sortComparator(_ g1: Game, _ g2: Game) -> Bool {
         switch selectedSort {
         case .dateAdded:
@@ -473,7 +494,7 @@ struct LibraryView: View {
                     }
                 }
                 .padding(.top, 8)
-                .padding(.bottom, 56) // Extra marginal så sista raden scrollas helt ovanför flytande tab-baren
+                .padding(.bottom, 110) // Extra marginal så sista raden scrollas helt ovanför flytande tab-baren
             }
             .refreshable {
                 await profile.syncWithRemote()
@@ -522,6 +543,209 @@ struct LibraryView: View {
         }
     }
 
+    // MARK: - Subtoolbar Helpers
+    @ViewBuilder
+    private var platformFilterMenu: some View {
+        if availablePlatforms.count > 1 {
+            Menu {
+                Section("Filtrera Plattform (Välj flera)") {
+                    Button {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            clearPlatforms()
+                        }
+                    } label: {
+                        Label("Alla plattformar", systemImage: selectedPlatformIDs.isEmpty ? "checkmark" : "")
+                    }
+
+                    ForEach(availablePlatforms.filter { $0.id != "all" }) { plat in
+                        let isSelected = selectedPlatformIDs.contains(plat.id)
+                        Button {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                togglePlatform(plat.id)
+                            }
+                        } label: {
+                            Label(plat.name, systemImage: isSelected ? "checkmark.circle.fill" : "circle")
+                        }
+                        .menuActionDismissBehavior(.disabled)
+                    }
+                }
+            } label: {
+                HStack(spacing: 3.5) {
+                    Image(systemName: !selectedPlatformIDs.isEmpty ? "gamecontroller.fill" : "gamecontroller")
+                        .font(.system(size: 10, weight: .bold))
+
+                    if let summary = platformFilterSummary {
+                        Text(summary)
+                            .font(.caption.weight(.bold))
+                            .lineLimit(1)
+                    }
+
+                    if !selectedPlatformIDs.isEmpty {
+                        Text("\(selectedPlatformIDs.count)")
+                            .font(.system(size: 8.5, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 14, height: 14)
+                            .background(Color.red, in: Circle())
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5.5)
+                .background(!selectedPlatformIDs.isEmpty ? Color.red.opacity(0.12) : Color(.secondarySystemGroupedBackground), in: Capsule())
+                .foregroundStyle(!selectedPlatformIDs.isEmpty ? Color.red : Color.primary)
+                .overlay(Capsule().stroke(!selectedPlatformIDs.isEmpty ? Color.red.opacity(0.3) : Color.white.opacity(0.12), lineWidth: 0.8))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    private var sortMenu: some View {
+        Menu {
+            Section("Sortera efter") {
+                ForEach(SortOption.allCases) { option in
+                    Button {
+                        selectedSort = option
+                    } label: {
+                        Label(option.rawValue, systemImage: iconForSort(option))
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 9.5, weight: .bold))
+                    .foregroundStyle(Color.red)
+
+                Text(shortSortTitle(selectedSort))
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5.5)
+            .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+            .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 0.8))
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var collapseAllYearsButton: some View {
+        if groupByYear {
+            Button {
+                toggleCollapseAllYears()
+            } label: {
+                Image(systemName: areAllYearsCollapsed ? "rectangle.expand.vertical" : "rectangle.compress.vertical")
+                    .font(.system(size: 10, weight: .bold))
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 5.5)
+                    .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+                    .foregroundStyle(areAllYearsCollapsed ? Color.red : Color.secondary)
+                    .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 0.8))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func subToolbar(gameCount: Int) -> some View {
+        HStack(alignment: .center, spacing: 6) {
+            if isSearching || !searchText.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.red)
+
+                    TextField("Filtrera i samlingen...", text: $searchText)
+                        .font(.subheadline)
+                        .textFieldStyle(.plain)
+                        .autocorrectionDisabled()
+
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Button("Klar") {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            isSearching = false
+                            searchText = ""
+                        }
+                    }
+                    .font(.caption.bold())
+                    .foregroundStyle(.red)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+                .overlay(Capsule().stroke(Color.red.opacity(0.35), lineWidth: 0.8))
+            } else {
+                Text("\(gameCount) spel")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+
+                Spacer(minLength: 4)
+
+                // 1. Sök
+                Button {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        isSearching = true
+                    }
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 11, weight: .bold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5.5)
+                        .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+                        .foregroundStyle(Color.primary)
+                        .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 0.8))
+                }
+                .buttonStyle(.plain)
+
+                // 2. Dedikerad Plattform
+                platformFilterMenu
+
+                // 3. Årsvy vs Rutnät
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        groupByYear.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 3.5) {
+                        Image(systemName: groupByYear ? "calendar" : "square.grid.3x3.fill")
+                            .font(.system(size: 10, weight: .bold))
+                        Text(groupByYear ? "Årsvy" : "Rutnät")
+                            .font(.caption.weight(.bold))
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5.5)
+                    .background(groupByYear ? Color.red.opacity(0.12) : Color(.secondarySystemGroupedBackground), in: Capsule())
+                    .foregroundStyle(groupByYear ? Color.red : Color.primary)
+                    .overlay(Capsule().stroke(groupByYear ? Color.red.opacity(0.25) : Color.white.opacity(0.12), lineWidth: 0.8))
+                }
+                .buttonStyle(.plain)
+
+                // 4. Fäll ihop/ut alla år i Årsvy
+                collapseAllYearsButton
+
+                // 5. Sortering
+                sortMenu
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 2)
+    }
+
     // MARK: - Sektion: I ägo (Spelar nu + Poster Grid)
     @ViewBuilder
     private var ownedSection: some View {
@@ -539,22 +763,39 @@ struct LibraryView: View {
                         Text("(\(playingNowGames.count))")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                isPlayingNowCollapsed.toggle()
+                            }
+                        } label: {
+                            Image(systemName: isPlayingNowCollapsed ? "chevron.down" : "chevron.up")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.secondary)
+                                .padding(5)
+                                .background(Color(.secondarySystemGroupedBackground), in: Circle())
+                        }
+                        .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 16)
 
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            ForEach(playingNowGames) { game in
-                                NavigationLink(destination: GameDetailView(game: game)) {
-                                    PlayingNowCard(game: game)
-                                }
-                                .buttonStyle(.plain)
-                                .contextMenu {
-                                    gameContextMenu(for: game)
+                    if !isPlayingNowCollapsed {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(playingNowGames) { game in
+                                    NavigationLink(destination: GameDetailView(game: game)) {
+                                        PlayingNowCard(game: game)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .contextMenu {
+                                        gameContextMenu(for: game)
+                                    }
                                 }
                             }
+                            .padding(.horizontal, 16)
                         }
-                        .padding(.horizontal, 16)
                     }
                 }
             }
@@ -562,166 +803,7 @@ struct LibraryView: View {
             // Huvudrutnät: Mina spel i ägo
             VStack(alignment: .leading, spacing: 10) {
                 if !ownedGames.isEmpty || isSearching || !searchText.isEmpty {
-                    HStack(alignment: .center, spacing: 8) {
-                        if isSearching || !searchText.isEmpty {
-                            // Kompakt integrerad filtreringsremsa som tar över raden utan att ta extra vertikalt utrymme
-                            HStack(spacing: 6) {
-                                Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(Color.red)
-
-                                TextField("Filtrera i samlingen...", text: $searchText)
-                                    .font(.subheadline)
-                                    .textFieldStyle(.plain)
-                                    .autocorrectionDisabled()
-
-                                if !searchText.isEmpty {
-                                    Button {
-                                        searchText = ""
-                                    } label: {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-
-                                Button("Klar") {
-                                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                        isSearching = false
-                                        searchText = ""
-                                    }
-                                }
-                                .font(.caption.bold())
-                                .foregroundStyle(.red)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(Color(.secondarySystemGroupedBackground), in: Capsule())
-                            .overlay(Capsule().stroke(Color.red.opacity(0.35), lineWidth: 0.8))
-                        } else {
-                            let titleText: String = {
-                                switch selectedStatusFilter {
-                                case .all: return "Alla (\(ownedGames.count))"
-                                case .playing: return "Spelar nu (\(ownedGames.count))"
-                                case .notStarted: return "Inte påbörjat (\(ownedGames.count))"
-                                case .paused: return "Pausat (\(ownedGames.count))"
-                                case .completed: return "Genomspelat (\(ownedGames.count))"
-                                case .abandoned: return "Avbrutet (\(ownedGames.count))"
-                                }
-                            }()
-
-                            Text(titleText)
-                                .font(.caption.bold())
-                                .foregroundStyle(.secondary)
-
-                            Spacer()
-
-                            // 1. Kompakt sökknapp
-                            Button {
-                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                    isSearching = true
-                                }
-                            } label: {
-                                Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .padding(.horizontal, 9)
-                                    .padding(.vertical, 5.5)
-                                    .background(Color(.secondarySystemGroupedBackground), in: Capsule())
-                                    .foregroundStyle(Color.primary)
-                                    .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 0.8))
-                            }
-                            .buttonStyle(.plain)
-
-                            // 2. Växlare för Årsvy vs Rutnät
-                            Button {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    groupByYear.toggle()
-                                }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: groupByYear ? "calendar" : "square.grid.3x3.fill")
-                                        .font(.system(size: 10, weight: .bold))
-                                    Text(groupByYear ? "Årsvy" : "Rutnät")
-                                        .font(.caption.weight(.bold))
-                                        .lineLimit(1)
-                                }
-                                .padding(.horizontal, 9)
-                                .padding(.vertical, 5.5)
-                                .background(groupByYear ? Color.red.opacity(0.12) : Color(.secondarySystemGroupedBackground), in: Capsule())
-                                .foregroundStyle(groupByYear ? Color.red : Color.primary)
-                                .overlay(Capsule().stroke(groupByYear ? Color.red.opacity(0.25) : Color.white.opacity(0.12), lineWidth: 0.8))
-                            }
-                            .buttonStyle(.plain)
-
-                            // 3. Sortera & Filtrera Plattform (Flerval med bibehållen meny!)
-                            Menu {
-                                if availablePlatforms.count > 1 {
-                                    Section("Filtrera Plattform (Välj flera)") {
-                                        Button {
-                                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                                clearPlatforms()
-                                            }
-                                        } label: {
-                                            Label("Alla plattformar", systemImage: selectedPlatformIDs.isEmpty ? "checkmark" : "")
-                                        }
-
-                                        ForEach(availablePlatforms.filter { $0.id != "all" }) { plat in
-                                            let isSelected = selectedPlatformIDs.contains(plat.id)
-                                            Button {
-                                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                                    togglePlatform(plat.id)
-                                                }
-                                            } label: {
-                                                Label(plat.name, systemImage: isSelected ? "checkmark.circle.fill" : "circle")
-                                            }
-                                            .menuActionDismissBehavior(.disabled)
-                                        }
-                                    }
-                                }
-
-                                Section("Sortera efter") {
-                                    ForEach(SortOption.allCases) { option in
-                                        Button {
-                                            selectedSort = option
-                                        } label: {
-                                            Label(option.rawValue, systemImage: iconForSort(option))
-                                        }
-                                    }
-                                }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: !selectedPlatformIDs.isEmpty ? "line.3.horizontal.decrease.circle.fill" : "arrow.up.arrow.down")
-                                        .font(.system(size: 9.5, weight: .bold))
-                                        .foregroundStyle(Color.red)
-
-                                    Text(shortSortTitle(selectedSort))
-                                        .font(.caption.weight(.bold))
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(1)
-
-                                    if !selectedPlatformIDs.isEmpty {
-                                        Text("\(selectedPlatformIDs.count)")
-                                            .font(.system(size: 9, weight: .bold))
-                                            .foregroundStyle(.white)
-                                            .frame(width: 14, height: 14)
-                                            .background(Color.red, in: Circle())
-                                    }
-
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 7, weight: .bold))
-                                        .foregroundStyle(.secondary)
-                                }
-                                .padding(.horizontal, 9)
-                                .padding(.vertical, 5.5)
-                                .background(!selectedPlatformIDs.isEmpty ? Color.red.opacity(0.12) : Color(.secondarySystemGroupedBackground), in: Capsule())
-                                .overlay(Capsule().stroke(!selectedPlatformIDs.isEmpty ? Color.red.opacity(0.3) : Color.white.opacity(0.16), lineWidth: 0.8))
-                                .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 2)
+                    subToolbar(gameCount: ownedGames.count)
                 }
 
                 if !ownedGames.isEmpty {
@@ -783,7 +865,7 @@ struct LibraryView: View {
                         LazyVGrid(columns: posterGridColumns, spacing: 14) {
                             ForEach(ownedGames) { game in
                                 NavigationLink(destination: GameDetailView(game: game)) {
-                                    LibraryPosterCard(game: game, showYearBadge: true)
+                                    LibraryPosterCard(game: game, showYearBadge: false)
                                 }
                                 .buttonStyle(.plain)
                                 .contextMenu {
@@ -808,155 +890,10 @@ struct LibraryView: View {
     private var wishlistSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             if !wishlistGames.isEmpty || isSearching || !searchText.isEmpty {
-                HStack(alignment: .center, spacing: 8) {
-                    if isSearching || !searchText.isEmpty {
-                        HStack(spacing: 6) {
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(Color.red)
+                subToolbar(gameCount: wishlistGames.count)
+            }
 
-                            TextField("Filtrera i önskelistan...", text: $searchText)
-                                .font(.subheadline)
-                                .textFieldStyle(.plain)
-                                .autocorrectionDisabled()
-
-                            if !searchText.isEmpty {
-                                Button {
-                                    searchText = ""
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                            Button("Klar") {
-                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                    isSearching = false
-                                    searchText = ""
-                                }
-                            }
-                            .font(.caption.bold())
-                            .foregroundStyle(.red)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Color(.secondarySystemGroupedBackground), in: Capsule())
-                        .overlay(Capsule().stroke(Color.red.opacity(0.35), lineWidth: 0.8))
-                    } else {
-                        Text("Önskelista (\(wishlistGames.count))")
-                            .font(.caption.bold())
-                            .foregroundStyle(.secondary)
-
-                        Spacer()
-
-                        // 1. Kompakt sökknapp
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                isSearching = true
-                            }
-                        } label: {
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 11, weight: .bold))
-                                .padding(.horizontal, 9)
-                                .padding(.vertical, 5.5)
-                                .background(Color(.secondarySystemGroupedBackground), in: Capsule())
-                                .foregroundStyle(Color.primary)
-                                .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 0.8))
-                        }
-                        .buttonStyle(.plain)
-
-                        // 2. Växlare för Årsvy vs Rutnät
-                        Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                groupByYear.toggle()
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: groupByYear ? "calendar" : "square.grid.3x3.fill")
-                                    .font(.system(size: 10, weight: .bold))
-                                Text(groupByYear ? "Årsvy" : "Rutnät")
-                                    .font(.caption.weight(.bold))
-                                    .lineLimit(1)
-                            }
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 5.5)
-                            .background(groupByYear ? Color.red.opacity(0.12) : Color(.secondarySystemGroupedBackground), in: Capsule())
-                            .foregroundStyle(groupByYear ? Color.red : Color.primary)
-                            .overlay(Capsule().stroke(groupByYear ? Color.red.opacity(0.25) : Color.white.opacity(0.12), lineWidth: 0.8))
-                        }
-                        .buttonStyle(.plain)
-
-                        // 3. Sortera & Filtrera Plattform (Flerval)
-                        Menu {
-                            if availablePlatforms.count > 1 {
-                                Section("Filtrera Plattform (Välj flera)") {
-                                    Button {
-                                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                            clearPlatforms()
-                                        }
-                                    } label: {
-                                        Label("Alla plattformar", systemImage: selectedPlatformIDs.isEmpty ? "checkmark" : "")
-                                    }
-
-                                    ForEach(availablePlatforms.filter { $0.id != "all" }) { plat in
-                                        let isSelected = selectedPlatformIDs.contains(plat.id)
-                                        Button {
-                                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                                togglePlatform(plat.id)
-                                            }
-                                        } label: {
-                                            Label(plat.name, systemImage: isSelected ? "checkmark.circle.fill" : "circle")
-                                        }
-                                        .menuActionDismissBehavior(.disabled)
-                                    }
-                                }
-                            }
-
-                            Section("Sortera efter") {
-                                ForEach(SortOption.allCases) { option in
-                                    Button {
-                                        selectedSort = option
-                                    } label: {
-                                        Label(option.rawValue, systemImage: iconForSort(option))
-                                    }
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: !selectedPlatformIDs.isEmpty ? "line.3.horizontal.decrease.circle.fill" : "arrow.up.arrow.down")
-                                    .font(.system(size: 9.5, weight: .bold))
-                                    .foregroundStyle(Color.red)
-
-                                Text(shortSortTitle(selectedSort))
-                                    .font(.caption.weight(.bold))
-                                    .foregroundStyle(.primary)
-                                    .lineLimit(1)
-
-                                if !selectedPlatformIDs.isEmpty {
-                                    Text("\(selectedPlatformIDs.count)")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .foregroundStyle(.white)
-                                        .frame(width: 14, height: 14)
-                                        .background(Color.red, in: Circle())
-                                }
-
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 7, weight: .bold))
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 5.5)
-                            .background(!selectedPlatformIDs.isEmpty ? Color.red.opacity(0.12) : Color(.secondarySystemGroupedBackground), in: Capsule())
-                            .overlay(Capsule().stroke(!selectedPlatformIDs.isEmpty ? Color.red.opacity(0.3) : Color.white.opacity(0.16), lineWidth: 0.8))
-                            .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 2)
-
+            if !wishlistGames.isEmpty {
                 if groupByYear {
                     // Årsvy med tidslinjesektioner för önskelistan
                     LazyVStack(alignment: .leading, spacing: 20) {
@@ -1014,7 +951,7 @@ struct LibraryView: View {
                     LazyVGrid(columns: posterGridColumns, spacing: 14) {
                         ForEach(wishlistGames) { game in
                             NavigationLink(destination: GameDetailView(game: game)) {
-                                LibraryPosterCard(game: game, showWishlistInfo: true, showYearBadge: true)
+                                LibraryPosterCard(game: game, showWishlistInfo: true, showYearBadge: false)
                             }
                             .buttonStyle(.plain)
                             .contextMenu {
@@ -1322,7 +1259,7 @@ struct LibraryPosterCard: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     let game: Game
     var showWishlistInfo: Bool = false
-    var showYearBadge: Bool = true
+    var showYearBadge: Bool = false
 
     private var posterHeight: CGFloat {
         horizontalSizeClass == .regular ? 205 : 155
@@ -1336,7 +1273,7 @@ struct LibraryPosterCard: View {
 
                 // Badges Overlay
                 HStack(alignment: .top) {
-                    // Vänster badge: Årtal (döljs i årsvy så det inte blir tår på tår)
+                    // Vänster badge: Årtal (döljs som standard så omslagen hålls rena)
                     if showYearBadge && game.releaseYear > 0 {
                         Text(String(game.releaseYear))
                             .font(.system(size: 8, weight: .medium))
@@ -1379,6 +1316,7 @@ struct LibraryPosterCard: View {
             Text(game.title)
                 .font(.caption.weight(.semibold))
                 .lineLimit(2)
+                .minimumScaleFactor(0.85)
                 .multilineTextAlignment(.leading)
                 .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity, minHeight: 32, alignment: .topLeading)

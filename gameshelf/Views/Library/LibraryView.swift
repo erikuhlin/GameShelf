@@ -216,14 +216,6 @@ struct LibraryView: View {
         }
     }
 
-    private var platformFilterSummary: String? {
-        if selectedPlatformIDs.isEmpty { return nil }
-        if selectedPlatformIDs.count == 1, let first = selectedPlatformIDs.first, let plat = availablePlatforms.first(where: { $0.id == first }) {
-            return plat.name.components(separatedBy: " ").first ?? plat.name
-        }
-        return "\(selectedPlatformIDs.count) konsoler"
-    }
-
     private func togglePlatform(_ id: String) {
         if selectedPlatformIDs.contains(id) {
             selectedPlatformIDs.remove(id)
@@ -570,15 +562,9 @@ struct LibraryView: View {
                     }
                 }
             } label: {
-                HStack(spacing: 3.5) {
+                HStack(spacing: 3) {
                     Image(systemName: !selectedPlatformIDs.isEmpty ? "gamecontroller.fill" : "gamecontroller")
                         .font(.system(size: 10, weight: .bold))
-
-                    if let summary = platformFilterSummary {
-                        Text(summary)
-                            .font(.caption.weight(.bold))
-                            .lineLimit(1)
-                    }
 
                     if !selectedPlatformIDs.isEmpty {
                         Text("\(selectedPlatformIDs.count)")
@@ -588,7 +574,7 @@ struct LibraryView: View {
                             .background(Color.red, in: Circle())
                     }
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 7)
                 .padding(.vertical, 5.5)
                 .background(!selectedPlatformIDs.isEmpty ? Color.red.opacity(0.12) : Color(.secondarySystemGroupedBackground), in: Capsule())
                 .foregroundStyle(!selectedPlatformIDs.isEmpty ? Color.red : Color.primary)
@@ -611,7 +597,7 @@ struct LibraryView: View {
                 }
             }
         } label: {
-            HStack(spacing: 3) {
+            HStack(spacing: 2.5) {
                 Image(systemName: "arrow.up.arrow.down")
                     .font(.system(size: 9.5, weight: .bold))
                     .foregroundStyle(Color.red)
@@ -620,12 +606,9 @@ struct LibraryView: View {
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 7, weight: .bold))
-                    .foregroundStyle(.secondary)
+                    .fixedSize()
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 7)
             .padding(.vertical, 5.5)
             .background(Color(.secondarySystemGroupedBackground), in: Capsule())
             .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 0.8))
@@ -651,99 +634,160 @@ struct LibraryView: View {
         }
     }
 
-    private func subToolbar(gameCount: Int) -> some View {
-        HStack(alignment: .center, spacing: 6) {
-            if isSearching || !searchText.isEmpty {
+    @ViewBuilder
+    private var activeFilterChips: some View {
+        if !selectedPlatformIDs.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color.red)
+                    ForEach(availablePlatforms.filter { selectedPlatformIDs.contains($0.id) }) { plat in
+                        HStack(spacing: 4) {
+                            Image(systemName: plat.icon)
+                                .font(.system(size: 8.5, weight: .bold))
+                                .foregroundStyle(Color.red)
 
-                    TextField("Filtrera i samlingen...", text: $searchText)
-                        .font(.subheadline)
-                        .textFieldStyle(.plain)
-                        .autocorrectionDisabled()
+                            Text(plat.name)
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
 
-                    if !searchText.isEmpty {
+                            Button {
+                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                    togglePlatform(plat.id)
+                                }
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3.5)
+                        .background(Color.red.opacity(0.12), in: Capsule())
+                        .overlay(Capsule().stroke(Color.red.opacity(0.25), lineWidth: 0.8))
+                    }
+
+                    if selectedPlatformIDs.count > 1 {
                         Button {
-                            searchText = ""
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                clearPlatforms()
+                            }
                         } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.caption)
+                            Text("Rensa alla")
+                                .font(.caption2.weight(.bold))
                                 .foregroundStyle(.secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3.5)
                         }
                         .buttonStyle(.plain)
                     }
-
-                    Button("Klar") {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                            isSearching = false
-                            searchText = ""
-                        }
-                    }
-                    .font(.caption.bold())
-                    .foregroundStyle(.red)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Color(.secondarySystemGroupedBackground), in: Capsule())
-                .overlay(Capsule().stroke(Color.red.opacity(0.35), lineWidth: 0.8))
-            } else {
-                Text("\(gameCount) spel")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-
-                Spacer(minLength: 4)
-
-                // 1. Sök
-                Button {
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                        isSearching = true
-                    }
-                } label: {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 11, weight: .bold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5.5)
-                        .background(Color(.secondarySystemGroupedBackground), in: Capsule())
-                        .foregroundStyle(Color.primary)
-                        .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 0.8))
-                }
-                .buttonStyle(.plain)
-
-                // 2. Dedikerad Plattform
-                platformFilterMenu
-
-                // 3. Årsvy vs Rutnät
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        groupByYear.toggle()
-                    }
-                } label: {
-                    HStack(spacing: 3.5) {
-                        Image(systemName: groupByYear ? "calendar" : "square.grid.3x3.fill")
-                            .font(.system(size: 10, weight: .bold))
-                        Text(groupByYear ? "Årsvy" : "Rutnät")
-                            .font(.caption.weight(.bold))
-                            .lineLimit(1)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5.5)
-                    .background(groupByYear ? Color.red.opacity(0.12) : Color(.secondarySystemGroupedBackground), in: Capsule())
-                    .foregroundStyle(groupByYear ? Color.red : Color.primary)
-                    .overlay(Capsule().stroke(groupByYear ? Color.red.opacity(0.25) : Color.white.opacity(0.12), lineWidth: 0.8))
-                }
-                .buttonStyle(.plain)
-
-                // 4. Fäll ihop/ut alla år i Årsvy
-                collapseAllYearsButton
-
-                // 5. Sortering
-                sortMenu
+                .padding(.horizontal, 16)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 2)
+    }
+
+    private func subToolbar(gameCount: Int) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 5) {
+                if isSearching || !searchText.isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Color.red)
+
+                        TextField("Filtrera i samlingen...", text: $searchText)
+                            .font(.subheadline)
+                            .textFieldStyle(.plain)
+                            .autocorrectionDisabled()
+
+                        if !searchText.isEmpty {
+                            Button {
+                                searchText = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        Button("Klar") {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                isSearching = false
+                                searchText = ""
+                            }
+                        }
+                        .font(.caption.bold())
+                        .foregroundStyle(.red)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+                    .overlay(Capsule().stroke(Color.red.opacity(0.35), lineWidth: 0.8))
+                } else {
+                    Text("\(gameCount) spel")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .layoutPriority(1)
+
+                    Spacer(minLength: 2)
+
+                    // 1. Sök
+                    Button {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            isSearching = true
+                        }
+                    } label: {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 10.5, weight: .bold))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 5.5)
+                            .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+                            .foregroundStyle(Color.primary)
+                            .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 0.8))
+                    }
+                    .buttonStyle(.plain)
+
+                    // 2. Dedikerad Plattform (Kompakt ikon + badge)
+                    platformFilterMenu
+
+                    // 3. Årsvy vs Rutnät
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            groupByYear.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: groupByYear ? "calendar" : "square.grid.3x3.fill")
+                                .font(.system(size: 9.5, weight: .bold))
+                            Text(groupByYear ? "Årsvy" : "Rutnät")
+                                .font(.caption.weight(.bold))
+                                .lineLimit(1)
+                                .fixedSize()
+                        }
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 5.5)
+                        .background(groupByYear ? Color.red.opacity(0.12) : Color(.secondarySystemGroupedBackground), in: Capsule())
+                        .foregroundStyle(groupByYear ? Color.red : Color.primary)
+                        .overlay(Capsule().stroke(groupByYear ? Color.red.opacity(0.25) : Color.white.opacity(0.12), lineWidth: 0.8))
+                    }
+                    .buttonStyle(.plain)
+
+                    // 4. Fäll ihop/ut alla år i Årsvy
+                    collapseAllYearsButton
+
+                    // 5. Sortering
+                    sortMenu
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 2)
+
+            // Aktiva filter
+            activeFilterChips
+        }
     }
 
     // MARK: - Sektion: I ägo (Spelar nu + Poster Grid)
@@ -1197,8 +1241,8 @@ struct LibraryView: View {
 
     private func shortSortTitle(_ sort: SortOption) -> String {
         switch sort {
-        case .dateAdded: return "Tillagda"
-        case .releaseYear: return "Lansering"
+        case .dateAdded: return "Datum"
+        case .releaseYear: return "År"
         case .title: return "A–Ö"
         case .rating: return "Betyg"
         }

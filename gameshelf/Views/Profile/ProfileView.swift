@@ -225,7 +225,7 @@ struct ProfileView: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 10)
-            .padding(.bottom, 40)
+            .padding(.bottom, 75)
         }
         .refreshable {
             await profile.syncWithRemote()

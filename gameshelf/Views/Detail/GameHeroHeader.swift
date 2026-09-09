@@ -33,7 +33,7 @@ struct GameHeroHeader: View {
                     .shadow(radius: 2)
 
                 HStack(spacing: Spacing.s) {
-                    StatusBadge(status: game.status)
+                    StatusBadge(game: game)
                     Text(game.platforms.joined(separator: ", "))
                     if !releaseDateText(for: game).isEmpty {
                         Text("·")
@@ -87,7 +87,7 @@ struct CompactGameHeroHeader: View {
                     .foregroundColor(.ds.textPrimary)
 
                 HStack(spacing: Spacing.s) {
-                    StatusBadge(status: game.status)
+                    StatusBadge(game: game)
                     Text(game.platforms.first ?? "")
                     if !releaseDateText(for: game).isEmpty {
                         Text("·")

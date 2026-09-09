@@ -140,7 +140,7 @@ export function Header({
               <span>Samlingar</span>
               {collections.length > 0 && (
                 <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
                     viewMode === 'collections'
                       ? 'bg-white/20 text-white'
                       : 'bg-zinc-800 text-zinc-400'

@@ -277,7 +277,7 @@ export function CompanyModal({
                           )}
 
                           <div className="absolute top-2 left-2">
-                            <StatusBadge status={game.status} />
+                            <StatusBadge game={game} size="sm" />
                           </div>
 
                           {game.rating && game.rating > 0 && (

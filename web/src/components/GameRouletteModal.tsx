@@ -343,7 +343,7 @@ export function GameRouletteModal({
                 {/* Status / Discovery badge */}
                 {rouletteMode === 'my_games' && displayedGame && (
                   <div className="absolute top-2.5 left-2.5">
-                    <StatusBadge status={displayedGame.status} size="sm" />
+                    <StatusBadge game={displayedGame} size="sm" />
                   </div>
                 )}
 

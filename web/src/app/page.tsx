@@ -1319,7 +1319,7 @@ export default function HomePage() {
               >
                 <span>Alla</span>
                 <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                  className={`px-1.5 py-0.5 rounded-full text-[10px] ${
                     selectedStatus === 'Alla' ? 'bg-zinc-300 text-zinc-900' : 'bg-zinc-800 text-zinc-400'
                   }`}
                 >
@@ -1339,7 +1339,7 @@ export default function HomePage() {
                 >
                   <span>Backlog</span>
                   <span
-                    className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                    className={`px-1.5 py-0.5 rounded-full text-[10px] ${
                       selectedStatus === 'Backlog'
                         ? 'bg-blue-800 text-white'
                         : 'bg-blue-950 text-blue-300'
@@ -1366,7 +1366,7 @@ export default function HomePage() {
                   >
                     <span>{label}</span>
                     <span
-                      className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] ${
                         isSelected ? 'bg-zinc-300 text-zinc-900' : 'bg-zinc-800 text-zinc-400'
                       }`}
                     >

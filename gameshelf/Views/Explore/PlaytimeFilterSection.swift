@@ -128,7 +128,7 @@ struct PlaytimeFilterSection: View {
                                             .foregroundStyle(.primary)
                                             .lineLimit(1)
 
-                                        StatusBadge(status: game.status)
+                                        StatusBadge(game: game)
                                     }
                                     .frame(width: 95, alignment: .leading)
                                 }

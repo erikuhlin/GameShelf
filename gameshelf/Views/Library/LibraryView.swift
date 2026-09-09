@@ -1533,7 +1533,7 @@ struct LibraryGameCardRow: View {
                     .foregroundStyle(.primary)
 
                 HStack(spacing: 8) {
-                    StatusBadge(status: game.status)
+                    StatusBadge(game: game)
 
                     if game.releaseYear > 0 {
                         Text(String(game.releaseYear))
@@ -1577,7 +1577,7 @@ struct LibraryGameGridCard: View {
                     .foregroundStyle(.primary)
 
                 HStack {
-                    StatusBadge(status: game.status)
+                    StatusBadge(game: game)
 
                     Spacer()
 

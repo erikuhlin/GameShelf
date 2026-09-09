@@ -374,7 +374,8 @@ export function DiscoverView({
       const diffDays = Math.round((groupStart - todayStart) / (1000 * 60 * 60 * 24));
 
       let countdown = '';
-      if (diffDays === 0) countdown = 'Idag';
+      if (diffDays < 0) countdown = 'Släppt';
+      else if (diffDays === 0) countdown = 'Idag';
       else if (diffDays === 1) countdown = 'Imorgon';
       else if (diffDays > 1 && diffDays <= 30) countdown = `Om ${diffDays} dagar`;
       else if (diffDays > 30) {
@@ -1150,7 +1151,7 @@ export function DiscoverView({
                               Klarat! 🏆
                             </span>
                           ) : (
-                            <StatusBadge status={game.status} />
+                            <StatusBadge game={game} />
                           )}
                         </div>
 
@@ -2408,7 +2409,7 @@ export function DiscoverView({
                             title={inLibrary ? (inWishlist ? 'På önskelistan' : 'I biblioteket') : 'Lägg till i önskelista'}
                             className={`p-2.5 rounded-xl border transition cursor-pointer flex-shrink-0 ${
                               inLibrary
-                                ? 'bg-zinc-800/40 border-zinc-750 cursor-default'
+                                ? 'bg-zinc-800/40 border-zinc-700/50 cursor-default'
                                 : 'bg-zinc-800 hover:bg-brand-red text-zinc-300 hover:text-white border-zinc-700'
                             }`}
                           >
@@ -2762,7 +2763,7 @@ export function DiscoverView({
                               </span>
                               {item.category && (
                                 <span
-                                  className={`px-1.5 py-0.2 rounded text-[10px] font-semibold ${
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
                                     item.category === 'Recension'
                                       ? 'bg-amber-500/20 text-amber-300'
                                       : 'bg-zinc-800 text-zinc-400'

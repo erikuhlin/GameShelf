@@ -160,7 +160,9 @@ struct UpcomingReleasesView: View {
                 countdown = ""
             } else {
                 let daysUntil = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: date)).day ?? 0
-                if daysUntil == 0 {
+                if daysUntil < 0 {
+                    countdown = "Släppt"
+                } else if daysUntil == 0 {
                     countdown = "Idag"
                 } else if daysUntil == 1 {
                     countdown = "Imorgon"
@@ -525,7 +527,8 @@ struct UpcomingReleasesView: View {
             let cal = Calendar.current
             let daysUntil = cal.dateComponents([.day], from: cal.startOfDay(for: Date()), to: cal.startOfDay(for: date)).day ?? 0
             let countdown: String
-            if daysUntil == 0 { countdown = "Idag" }
+            if daysUntil < 0 { countdown = "Släppt" }
+            else if daysUntil == 0 { countdown = "Idag" }
             else if daysUntil == 1 { countdown = "Imorgon" }
             else if daysUntil > 1 && daysUntil <= 60 { countdown = "Om \(daysUntil)d" }
             else {

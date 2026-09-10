@@ -62,6 +62,7 @@ struct GameDetailView: View {
     @State private var showingCollectionsSheet = false
     @State private var showingMoveToLibraryDialog = false
     @State private var showingRemoveWishlistAlert = false
+    @State private var showingCompletionCelebration = false
     @State private var selectedVideo: IGDBVideo? = nil
 
     // Spelframsteg state
@@ -303,6 +304,13 @@ struct GameDetailView: View {
         .sheet(isPresented: $showingPlatformSheet) {
             if let g = currentGame {
                 platformFormatSheet(g)
+            }
+        }
+        .sheet(isPresented: $showingCompletionCelebration) {
+            if let g = currentGame {
+                GameCompletionCelebrationSheet(game: g) { updatedGame in
+                    updateLocal(updatedGame)
+                }
             }
         }
         .confirmationDialog(
@@ -557,17 +565,21 @@ struct GameDetailView: View {
                 Section("Status") {
                     ForEach(PlayStatus.allCases) { st in
                         Button {
-                            var copy = g
-                            copy.status = st
-                            if st == .playing {
-                                copy.isBacklog = false
-                                if copy.lastPlayedDate == nil {
-                                    copy.lastPlayedDate = Date()
+                            if st == .completed && g.status != .completed {
+                                showingCompletionCelebration = true
+                            } else {
+                                var copy = g
+                                copy.status = st
+                                if st == .playing {
+                                    copy.isBacklog = false
+                                    if copy.lastPlayedDate == nil {
+                                        copy.lastPlayedDate = Date()
+                                    }
+                                } else if st == .completed {
+                                    copy.storyProgress = .completed
                                 }
-                            } else if st == .completed {
-                                copy.storyProgress = .completed
+                                updateLocal(copy)
                             }
-                            updateLocal(copy)
                         } label: {
                             HStack {
                                 if g.status == st {
@@ -583,6 +595,14 @@ struct GameDetailView: View {
                 }
 
                 if g.status == .completed {
+                    Section("Speldagbok") {
+                        Button {
+                            showingCompletionCelebration = true
+                        } label: {
+                            Label("Redigera genomspelning...", systemImage: "pencil.and.list.clipboard")
+                        }
+                    }
+
                     Section("Klarat år (Spelmål)") {
                         Button {
                             var copy = g
@@ -1135,6 +1155,9 @@ struct GameDetailView: View {
     @ViewBuilder
     private func myPlayTabContent(_ g: Game) -> some View {
         VStack(spacing: 16) {
+            if g.status == .completed {
+                completedCelebrationCard(g)
+            }
             if !g.isMultiplayerOrOngoing {
                 playtimeProgressCard(g)
             } else {
@@ -1145,6 +1168,149 @@ struct GameDetailView: View {
             moveToWishlistButton(g)
             deleteGameButton(g)
         }
+    }
+
+    // MARK: - Genomspelningskort & Mini-recension
+    private func completedCelebrationCard(_ g: Game) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.yellow, Color.orange],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 36, height: 36)
+                        .shadow(color: Color.orange.opacity(0.4), radius: 4, y: 2)
+
+                    Image(systemName: "trophy.fill")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Genomspelat")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.primary)
+
+                    if let date = g.completedDate {
+                        Text("Avklarat \(formatCompletionDate(date))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Spelminne / Nostalgi")
+                            .font(.caption)
+                            .foregroundStyle(.purple)
+                    }
+                }
+
+                Spacer()
+
+                Button {
+                    showingCompletionCelebration = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "pencil")
+                            .font(.caption2)
+                        Text("Redigera")
+                            .font(.caption.bold())
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color(.tertiarySystemFill), in: Capsule())
+                    .foregroundStyle(.primary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Betyg och metadata
+            HStack(spacing: 10) {
+                if let r = g.rating, r > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "star.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.yellow)
+                        Text("\(r)")
+                            .font(.headline.bold())
+                            .foregroundStyle(.yellow)
+                        Text("/ 10")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.yellow.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
+                }
+
+                if let hours = g.hoursPlayed, hours > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                        Text(String(format: hours.truncatingRemainder(dividingBy: 1) == 0 ? "%.0f h" : "%.1f h", hours))
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.primary)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 8))
+                }
+
+                if let plat = g.platforms.first {
+                    HStack(spacing: 4) {
+                        Image(systemName: "gamecontroller.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.purple)
+                        Text(plat)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 8))
+                }
+            }
+
+            // Mini-recension
+            if !g.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "quote.opening")
+                            .font(.caption2)
+                            .foregroundStyle(.purple)
+                        Text("Slutord & Recension")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Text(g.notes.trimmingCharacters(in: .whitespacesAndNewlines))
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(.tertiarySystemFill))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+            }
+        }
+        .padding(16)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.yellow.opacity(0.2), lineWidth: 0.8)
+        )
+    }
+
+    private func formatCompletionDate(_ date: Date) -> String {
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "sv_SE")
+        df.dateFormat = "d MMMM yyyy"
+        return df.string(from: date)
     }
 
     @ViewBuilder

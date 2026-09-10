@@ -923,7 +923,8 @@ struct AddGameView: View {
             isOwned: isOwned,
             playTypes: inferredTypes,
             isBacklog: isBacklog,
-            lastPlayedDate: status == .playing ? Date() : nil
+            lastPlayedDate: status == .playing ? Date() : nil,
+            storyProgress: status == .completed ? .completed : nil
         )
 
         store.add(newGame)

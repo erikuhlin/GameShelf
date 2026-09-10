@@ -1150,6 +1150,70 @@ export function GameDetailModal({
           {/* ===== FLIK 1: MITT SPELANDE ===== */}
           {isOwned && activeTab === 'myPlay' && (
             <div className="space-y-6">
+              {/* Sektion: Genomspelning & Speldagbok */}
+              {status === 'completed' && (
+                <div className="bg-gradient-to-br from-amber-500/10 via-zinc-900 to-zinc-900 border border-amber-500/30 rounded-2xl p-4 sm:p-5 space-y-4 shadow-lg">
+                  <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-400 flex items-center justify-center text-black font-bold shadow-md">
+                        <Trophy className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-white uppercase tracking-wider block">
+                          Genomspelat
+                        </span>
+                        <span className="text-[11px] text-zinc-400">
+                          {game.completed_date
+                            ? `Avklarat ${new Date(game.completed_date).toLocaleDateString('sv-SE', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                            : 'Spelminne / Nostalgi'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Betyg */}
+                    <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-xl p-3 flex items-center gap-3">
+                      <Star className="w-5 h-5 text-amber-400 fill-current shrink-0" />
+                      <div>
+                        <div className="text-[10px] text-zinc-400 uppercase font-semibold">Ditt betyg</div>
+                        <div className="text-sm font-bold text-white">
+                          {rating ? `${rating} / 10` : 'Ej betygsatt'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Plattform */}
+                    <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-xl p-3 flex items-center gap-3">
+                      <Gamepad className="w-5 h-5 text-purple-400 shrink-0" />
+                      <div>
+                        <div className="text-[10px] text-zinc-400 uppercase font-semibold">Plattform</div>
+                        <div className="text-sm font-bold text-white truncate">
+                          {game.platforms?.[0] || 'Okänd'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Speltid */}
+                    <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-xl p-3 flex items-center gap-3">
+                      <Clock className="w-5 h-5 text-orange-400 shrink-0" />
+                      <div>
+                        <div className="text-[10px] text-zinc-400 uppercase font-semibold">Loggad speltid</div>
+                        <div className="text-sm font-bold text-white">
+                          {hoursPlayed > 0 ? `${hoursPlayed} tim` : 'Ej loggat'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {notes && (
+                    <div className="bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-3 text-xs text-zinc-300 italic">
+                      “{notes}”
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Sektion: Spelframsteg */}
               <div className="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-4 sm:p-5 space-y-5">
                 <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3">

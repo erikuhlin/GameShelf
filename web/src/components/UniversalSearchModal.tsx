@@ -501,7 +501,7 @@ export function UniversalSearchModal({
       gameObj.is_owned = true;
       gameObj.is_backlog = false;
       gameObj.completed_year = completedYear;
-      gameObj.completed_date = completedYear ? new Date().toISOString() : null;
+      gameObj.completed_date = completedYear === new Date().getFullYear() ? new Date().toISOString() : null;
       gameObj.story_progress = 'completed';
     } else if (choice === 'wishlist') {
       gameObj.status = 'notStarted';

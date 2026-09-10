@@ -8,8 +8,9 @@
 import SwiftUI
 
 enum ProfileTab: String, CaseIterable, Identifiable {
-    case profile = "Profil & DNA"
-    case activity = "Aktivitet & Statistik"
+    case profile = "Profil"
+    case diary = "Speldagbok"
+    case activity = "Statistik"
 
     var id: String { rawValue }
 }
@@ -131,6 +132,8 @@ struct ProfileView: View {
                     switch selectedTab {
                     case .profile:
                         profileScrollView
+                    case .diary:
+                        GameDiaryView()
                     case .activity:
                         ActivityView(isEmbedded: true)
                     }

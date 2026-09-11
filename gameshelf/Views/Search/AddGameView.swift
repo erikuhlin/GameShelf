@@ -924,6 +924,8 @@ struct AddGameView: View {
             playTypes: inferredTypes,
             isBacklog: isBacklog,
             lastPlayedDate: status == .playing ? Date() : nil,
+            completedYear: status == .completed ? (game.releaseYear.map { $0 > 0 ? $0 : nil } ?? nil) : nil,
+            completedDate: nil,
             storyProgress: status == .completed ? .completed : nil
         )
 
@@ -1242,7 +1244,22 @@ private struct IGDBSearchRow: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Lägg till i önskelista")
 
-                    // 2. Snabbknapp: Lägg till i bibliotek
+                    // 2. Snabbknapp: Klarat / Spelminne
+                    Button {
+                        onQuickAdd(.completed)
+                    } label: {
+                        Image(systemName: "trophy.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.yellow)
+                            .frame(width: 32, height: 32)
+                            .background(Color.yellow.opacity(0.15))
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Color.yellow.opacity(0.35), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Lägg till som Genomspelat / Spelminne")
+
+                    // 3. Snabbknapp: Lägg till i bibliotek
                     Menu {
                         Button {
                             onQuickAdd(.backlog)
@@ -1259,7 +1276,7 @@ private struct IGDBSearchRow: View {
                         Button {
                             onQuickAdd(.completed)
                         } label: {
-                            Label("Lägg till som Genomspelat", systemImage: "checkmark.seal.fill")
+                            Label("Lägg till som Genomspelat (Spelminne)", systemImage: "trophy.fill")
                         }
 
                         Divider()

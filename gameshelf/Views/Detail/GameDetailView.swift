@@ -285,8 +285,10 @@ struct GameDetailView: View {
                 title: currentGame?.title ?? remote?.name ?? "Spel",
                 coverURL: currentGame?.coverURL ?? remote?.coverURL,
                 isInLibrary: currentGame != nil,
-                onAdd: {
-                    if let r = remote { addRemoteToLibrary(r) }
+                onSelectStatus: { status, isBacklog in
+                    if let r = remote {
+                        addRemoteWithStatus(r, status: status, isBacklog: isBacklog)
+                    }
                 },
                 onRemove: {
                     if let g = currentGame {
@@ -294,7 +296,7 @@ struct GameDetailView: View {
                     }
                 }
             )
-            .presentationDetents([.height(320)])
+            .presentationDetents([.height(350)])
         }
         .sheet(isPresented: $showingCollectionsSheet) {
             if let g = currentGame {
@@ -919,15 +921,15 @@ struct GameDetailView: View {
     }
 
     private func unaddedActionsBar(_ r: IGDBGame) -> some View {
-        HStack(spacing: 10) {
-            // 1. Lägg till i biblioteket
+        HStack(spacing: 8) {
+            // 1. Lägg till i biblioteket (öppnar väljare)
             Button {
                 showingLibraryStatusSheet = true
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     Image(systemName: "plus")
                         .font(.subheadline.bold())
-                    Text("Lägg till i biblioteket")
+                    Text("Lägg till")
                         .font(.subheadline.bold())
                 }
                 .frame(maxWidth: .infinity)
@@ -938,28 +940,46 @@ struct GameDetailView: View {
             }
             .buttonStyle(.plain)
 
-            // 2. Snabbknapp: Önskelista
+            // 2. Snabbknapp: Har redan klarat (Spelminne)
             Button {
-                addRemoteToWishlist(r)
+                addRemoteWithStatus(r, status: .completed, isBacklog: false)
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "heart")
+                HStack(spacing: 5) {
+                    Image(systemName: "trophy.fill")
                         .font(.subheadline)
-                        .foregroundStyle(.primary)
-                    Text("Önskelista")
+                        .foregroundStyle(.yellow)
+                    Text("Klarat")
                         .font(.subheadline.bold())
                         .foregroundStyle(.primary)
                 }
-                .padding(.horizontal, 18)
+                .padding(.horizontal, 16)
                 .padding(.vertical, 14)
                 .background(Color(.secondarySystemGroupedBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color(.separator), lineWidth: 1)
+                        .stroke(Color.yellow.opacity(0.35), lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
+
+            // 3. Snabbknapp: Önskelista
+            Button {
+                addRemoteToWishlist(r)
+            } label: {
+                Image(systemName: "heart")
+                    .font(.subheadline)
+                    .foregroundStyle(.red)
+                    .frame(width: 48, height: 48)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(Color(.separator), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Önskelista")
         }
     }
 
@@ -3280,7 +3300,11 @@ struct GameDetailView: View {
         store.update(copy)
     }
 
-    private func addRemoteToLibrary(_ d: IGDBGame) {
+    private func addRemoteWithStatus(
+        _ d: IGDBGame,
+        status: PlayStatus,
+        isBacklog: Bool = false
+    ) {
         let genres = d.genres?.map { $0.name } ?? []
         let available = d.platforms?.map { $0.name } ?? []
         let platforms = PlatformMatcher.resolvePlatforms(availableIGDBPlatforms: available, userProfilePlatforms: profile.platforms)
@@ -3298,17 +3322,28 @@ struct GameDetailView: View {
             releaseYear: d.releaseYear ?? 0,
             genres: genres,
             developers: d.developerName.map { [$0] } ?? [],
-            status: .notStarted,
+            status: status,
             rating: 0,
             igdbRating: normalizedRating,
             coverURL: d.coverURL,
             igdbID: d.id,
             firstReleaseDate: d.firstReleaseDate,
             estimatedHours: est,
-            isOwned: false,
-            playTypes: inferredTypes
+            isOwned: true,
+            playTypes: inferredTypes,
+            isBacklog: isBacklog,
+            lastPlayedDate: status == .playing ? Date() : nil,
+            completedYear: status == .completed ? (d.releaseYear.map { $0 > 0 ? $0 : nil } ?? nil) : nil,
+            completedDate: nil,
+            storyProgress: status == .completed ? .completed : nil
         )
         store.add(new)
+        mode = .local(new)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+    }
+
+    private func addRemoteToLibrary(_ d: IGDBGame) {
+        addRemoteWithStatus(d, status: .notStarted, isBacklog: true)
     }
 }
 
@@ -3640,7 +3675,7 @@ private struct LibraryStatusSheetView: View {
     let title: String
     let coverURL: URL?
     let isInLibrary: Bool
-    let onAdd: () -> Void
+    let onSelectStatus: (PlayStatus, Bool) -> Void
     let onRemove: () -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -3651,22 +3686,30 @@ private struct LibraryStatusSheetView: View {
                 CoverView(title: title, url: coverURL, corner: 6, height: 48)
                     .frame(width: 36)
 
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+
+                    if !isInLibrary {
+                        Text("Välj hur du vill lägga till spelet")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
 
                 Spacer()
             }
 
             VStack(spacing: 10) {
                 if isInLibrary {
-                    Button {
+                    Button(role: .destructive) {
                         onRemove()
                         dismiss()
                     } label: {
-                        Label("Ta bort från biblioteket", systemImage: "checkmark.circle.fill")
+                        Label("Ta bort från biblioteket", systemImage: "trash.fill")
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
@@ -3675,43 +3718,104 @@ private struct LibraryStatusSheetView: View {
                     .tint(.red)
                 } else {
                     Button {
-                        onAdd()
+                        onSelectStatus(.playing, false)
                         dismiss()
                     } label: {
-                        Label("Lägg till i biblioteket", systemImage: "plus.circle.fill")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
+                        HStack(spacing: 12) {
+                            Image(systemName: "play.fill")
+                                .font(.headline)
+                                .foregroundStyle(.green)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Börja spela nu")
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.primary)
+                                Text("Sätter status till Spelar nu")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 11)
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
+                    .buttonStyle(.plain)
+
+                    Button {
+                        onSelectStatus(.notStarted, true)
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "archivebox.fill")
+                                .font(.headline)
+                                .foregroundStyle(.blue)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Lägg i Backlog")
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.primary)
+                                Text("Sätter status till Inte påbörjat")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 11)
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        onSelectStatus(.completed, false)
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "trophy.fill")
+                                .font(.headline)
+                                .foregroundStyle(.yellow)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Har redan klarat (Spelminne)")
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.primary)
+                                Text("Sparas som genomspelat i samlingen")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 11)
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.yellow.opacity(0.35), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 Button {
                     dismiss()
                 } label: {
                     Text("Avbryt")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color(.secondarySystemGroupedBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .padding(.vertical, 10)
                 }
             }
-
-            // Caption bottom text
-            VStack(spacing: 4) {
-                Text("Biblioteksstatus")
-                    .font(.caption.bold())
-                    .foregroundStyle(.primary)
-
-                Text("Lägg till eller ta bort spel från ditt bibliotek med ett tydligt och snabbt flöde.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.top, 4)
         }
         .padding(20)
         .background(Color(.systemGroupedBackground).ignoresSafeArea())

@@ -436,8 +436,8 @@ export function GameDetailModal({
       newIsBacklog = true;
     } else if (choice === 'completed') {
       newStatus = 'completed';
-      newCompletedYear = null;
-      newCompletedDate = nowIso;
+      newCompletedYear = game.release_year ?? null;
+      newCompletedDate = null;
       newStoryProg = 'completed';
     }
 
@@ -977,20 +977,30 @@ export function GameDetailModal({
                 <button
                   type="button"
                   onClick={() => setShowMovePicker(true)}
-                  className="flex-1 py-3 px-4 bg-brand-red hover:bg-red-700 text-white font-bold text-sm rounded-xl transition shadow-lg shadow-brand-red/20 flex items-center justify-center gap-2 cursor-pointer"
+                  className="flex-1 py-3 px-3 sm:px-4 bg-brand-red hover:bg-red-700 text-white font-bold text-sm rounded-xl transition shadow-lg shadow-brand-red/20 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Lägg till i biblioteket</span>
+                  <span>Lägg till</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleMoveToLibraryChoice('completed')}
+                  className="py-3 px-3 sm:px-4 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-xl transition cursor-pointer flex items-center gap-2 font-bold text-sm"
+                  title="Lägg till som redan genomspelat (Spelminne)"
+                >
+                  <Trophy className="w-4 h-4" />
+                  <span>Klarat</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={handleAddToWishlist}
-                  className="py-3 px-4 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-red-400 border border-zinc-800 rounded-xl transition cursor-pointer flex items-center gap-2 font-semibold text-sm"
+                  className="py-3 px-3 sm:px-4 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-red-400 border border-zinc-800 rounded-xl transition cursor-pointer flex items-center gap-2 font-semibold text-sm"
                   title="Lägg till i önskelistan"
                 >
                   <Heart className="w-4 h-4 fill-current text-brand-red" />
-                  <span>Önskelista</span>
+                  <span className="hidden sm:inline">Önskelista</span>
                 </button>
               </div>
             </div>

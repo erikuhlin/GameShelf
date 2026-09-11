@@ -814,6 +814,7 @@ export function UniversalSearchModal({
                 onToggleDrop={() => setShowAddDropdown(showAddDropdown === result.id ? null : result.id)}
                 onSetChoice={setAddChoice} onSetYear={setAddCompletedYear}
                 onConfirmAdd={() => handleAddGame(result, addChoice, addCompletedYear)}
+                onQuickAddCompleted={() => handleAddGame(result, 'completed', null)}
               />
             );
           })}
@@ -941,6 +942,7 @@ export function UniversalSearchModal({
                         onToggleDrop={() => setShowAddDropdown(showAddDropdown === result.id ? null : result.id)}
                         onSetChoice={setAddChoice} onSetYear={setAddCompletedYear}
                         onConfirmAdd={() => handleAddGame(asResult, addChoice, addCompletedYear)}
+                        onQuickAddCompleted={() => handleAddGame(asResult, 'completed', null)}
                       />
                     );
                   })}
@@ -1166,6 +1168,7 @@ interface GameResultCardProps {
   onSetChoice: (c: AddChoice) => void;
   onSetYear: (y: number | null) => void;
   onConfirmAdd: () => void;
+  onQuickAddCompleted?: () => void;
 }
 
 const ADD_CHOICES: { id: AddChoice; label: string; icon: string }[] = [
@@ -1180,7 +1183,7 @@ const CY = new Date().getFullYear();
 function GameResultCard({
   result, inLibrary, isInWishlist, isAdding, showDrop,
   addChoice, addCompletedYear,
-  onSelectGame, onToggleDrop, onSetChoice, onSetYear, onConfirmAdd,
+  onSelectGame, onToggleDrop, onSetChoice, onSetYear, onConfirmAdd, onQuickAddCompleted,
 }: GameResultCardProps) {
   return (
     <div className={`rounded-2xl border transition-all overflow-hidden ${
@@ -1223,19 +1226,33 @@ function GameResultCard({
             </span>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={onToggleDrop}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold shrink-0 whitespace-nowrap transition cursor-pointer ${
-              showDrop
-                ? 'bg-brand-red text-white shadow-sm shadow-brand-red/30'
-                : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
-            }`}
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Lägg till</span>
-            <ChevronDown className={`w-3 h-3 transition-transform ${showDrop ? 'rotate-180' : ''}`} />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {onQuickAddCompleted && (
+              <button
+                type="button"
+                onClick={onQuickAddCompleted}
+                title="Lägg till som redan genomspelat (Spelminne)"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition cursor-pointer"
+              >
+                <span>🏆</span>
+                <span className="hidden sm:inline">Klarat</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onToggleDrop}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold shrink-0 whitespace-nowrap transition cursor-pointer ${
+                showDrop
+                  ? 'bg-brand-red text-white shadow-sm shadow-brand-red/30'
+                  : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+              }`}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Lägg till</span>
+              <ChevronDown className={`w-3 h-3 transition-transform ${showDrop ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
         )}
       </div>
 

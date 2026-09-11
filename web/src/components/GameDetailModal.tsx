@@ -45,8 +45,10 @@ import {
   ArrowRight,
   CheckCircle2,
   ChevronDown,
+  Flame,
 } from 'lucide-react';
 import { GameShareModal } from './GameShareModal';
+import { fetchGameDeal, getStoreLinks, GameDeal, StoreQuickLink } from '@/services/priceWatcherService';
 
 interface GameDetailModalProps {
   game: Game | null;
@@ -168,6 +170,8 @@ export function GameDetailModal({
   const [isExpandedSummary, setIsExpandedSummary] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [activeLightboxImg, setActiveLightboxImg] = useState<string | null>(null);
+  const [deal, setDeal] = useState<GameDeal | null>(null);
+  const [storeLinks, setStoreLinks] = useState<StoreQuickLink[]>([]);
 
   // Remote data state
   const [remoteDetails, setRemoteDetails] = useState<RemoteDetails | null>(null);
@@ -200,11 +204,18 @@ export function GameDetailModal({
       setLiveReleaseDate(game.first_release_date || null);
       setRemoteDetails(null);
       setIsEditingHours(false);
-      setIsEditingProgressNote(false);
       setShowMovePicker(false);
       setShowCollectionPicker(false);
+
+      // Hämta deal & butikslänkar
+      setDeal(null);
+      setStoreLinks(getStoreLinks(game));
+      fetchGameDeal(game.title).then((d) => {
+        setDeal(d);
+        setStoreLinks(getStoreLinks(game, d));
+      });
     }
-  }, [game?.id]);
+  }, [game?.id, game?.title]);
 
   // Hämta utökad IGDB-information
   useEffect(() => {
@@ -1040,6 +1051,70 @@ export function GameDetailModal({
                   <Heart className="w-5 h-5 fill-current text-brand-red" />
                 </button>
               </div>
+
+              {/* Aktiv rea kort */}
+              {deal && deal.isOnSale && (
+                <div className="p-3.5 bg-gradient-to-br from-zinc-900 via-zinc-900 to-amber-950/20 border border-orange-500/30 rounded-xl space-y-2.5 shadow-lg shadow-orange-950/20">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-orange-400">
+                      <Flame className="w-4 h-4 fill-current text-orange-500" />
+                      <span>Aktiv rea hos {deal.storeName}</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-extrabold bg-gradient-to-r from-red-600 to-orange-500 text-white shadow-sm">
+                      -{Math.round(deal.savingsPercent)}%
+                    </span>
+                  </div>
+
+                  <div className="flex items-baseline gap-2.5">
+                    <span className="text-xl font-black text-white">
+                      ${deal.salePrice.toFixed(2)}
+                    </span>
+                    <span className="text-xs text-zinc-500 line-through">
+                      ${deal.normalPrice.toFixed(2)}
+                    </span>
+                    {deal.isHistoricalLow && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        🏆 Lägsta någonsin!
+                      </span>
+                    )}
+                  </div>
+
+                  {deal.dealURL && (
+                    <a
+                      href={deal.dealURL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-1.5 w-full py-2 px-3 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 rounded-lg text-xs font-bold text-orange-300 transition"
+                    >
+                      <span>Gå till erbjudandet i {deal.storeName}</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {/* Smarta butikslänkar för konsoler & PC */}
+              {storeLinks.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                    Kolla pris & butiker
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {storeLinks.map((link) => (
+                      <a
+                        key={link.id}
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer ${link.badgeColor}`}
+                      >
+                        <span>{link.name}</span>
+                        <ExternalLink className="w-3 h-3 opacity-70" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

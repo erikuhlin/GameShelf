@@ -4,15 +4,22 @@ import React from 'react';
 import { Game } from '@/types/game';
 import { StatusBadge } from './StatusBadge';
 import { isMultiplayerOrOngoing } from '@/lib/statusHelper';
-import { Star, Gamepad, Clock, CheckSquare } from 'lucide-react';
+import { Star, Gamepad, Clock, CheckSquare, Flame } from 'lucide-react';
+import { GameDeal, normalizeTitle } from '@/services/priceWatcherService';
 
 interface GridViewProps {
   games: Game[];
   onSelectGame: (game: Game) => void;
   groupByYear?: boolean;
+  dealsMap?: Record<string, GameDeal>;
 }
 
-export function GridView({ games, onSelectGame, groupByYear = false }: GridViewProps) {
+export function GridView({
+  games,
+  onSelectGame,
+  groupByYear = false,
+  dealsMap,
+}: GridViewProps) {
   if (games.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center px-4">
@@ -74,9 +81,16 @@ export function GridView({ games, onSelectGame, groupByYear = false }: GridViewP
             </div>
           )}
 
-          {/* Status Badge in Corner */}
-          <div className="absolute top-2 left-2">
-            <StatusBadge game={game} size="sm" />
+          {/* Status / Sale Badge in Corner */}
+          <div className="absolute top-2 left-2 flex items-center gap-1">
+            {!game.is_owned && dealsMap?.[normalizeTitle(game.title)]?.isOnSale ? (
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold bg-gradient-to-r from-red-600 to-orange-500 text-white shadow-md shadow-red-900/40 border border-white/20">
+                <Flame className="w-3 h-3 fill-current" />
+                <span>-{Math.round(dealsMap[normalizeTitle(game.title)].savingsPercent)}%</span>
+              </span>
+            ) : (
+              <StatusBadge game={game} size="sm" />
+            )}
           </div>
 
           {/* Rating badge */}

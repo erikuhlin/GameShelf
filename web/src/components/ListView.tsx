@@ -3,14 +3,16 @@
 import React from 'react';
 import { Game } from '@/types/game';
 import { StatusBadge } from './StatusBadge';
-import { Star, Gamepad, Clock, CheckSquare } from 'lucide-react';
+import { Star, Gamepad, Clock, CheckSquare, Flame } from 'lucide-react';
+import { GameDeal, normalizeTitle } from '@/services/priceWatcherService';
 
 interface ListViewProps {
   games: Game[];
   onSelectGame: (game: Game) => void;
+  dealsMap?: Record<string, GameDeal>;
 }
 
-export function ListView({ games, onSelectGame }: ListViewProps) {
+export function ListView({ games, onSelectGame, dealsMap }: ListViewProps) {
   if (games.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center px-4">
@@ -102,7 +104,14 @@ export function ListView({ games, onSelectGame }: ListViewProps) {
 
               {/* Status */}
               <td className="py-2.5 px-4">
-                <StatusBadge game={game} size="sm" />
+                {!game.is_owned && dealsMap?.[normalizeTitle(game.title)]?.isOnSale ? (
+                  <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold bg-gradient-to-r from-red-600 to-orange-500 text-white shadow-sm">
+                    <Flame className="w-3 h-3 fill-current" />
+                    <span>-{Math.round(dealsMap[normalizeTitle(game.title)].savingsPercent)}%</span>
+                  </span>
+                ) : (
+                  <StatusBadge game={game} size="sm" />
+                )}
               </td>
 
               {/* Rating */}

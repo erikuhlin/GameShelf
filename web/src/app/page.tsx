@@ -38,7 +38,9 @@ import {
   LayoutGrid,
   List,
   ArrowUpDown,
+  Flame,
 } from 'lucide-react';
+import { fetchDealsForGames, normalizeTitle, GameDeal } from '@/services/priceWatcherService';
 
 export type LibrarySortOption =
   | 'dateAdded'
@@ -64,6 +66,8 @@ export default function HomePage() {
   const [librarySort, setLibrarySort] = useState<LibrarySortOption>('dateAdded');
   const [libraryPlatformFilter, setLibraryPlatformFilter] = useState<string>('Alla');
   const [libraryOwnershipFilter, setLibraryOwnershipFilter] = useState<'all' | 'owned' | 'wishlist'>('all');
+  const [filterOnlyOnSale, setFilterOnlyOnSale] = useState(false);
+  const [dealsMap, setDealsMap] = useState<Record<string, GameDeal>>({});
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -156,6 +160,16 @@ export default function HomePage() {
       return () => window.removeEventListener('gameshelf_profile_updated', handleProfileUpdate);
     }
   }, []);
+
+  // Hämta aktiva deals för spel på önskelistan via CheapShark
+  useEffect(() => {
+    const unowned = games.filter((g) => !g.is_owned);
+    if (unowned.length > 0) {
+      fetchDealsForGames(unowned).then((deals) => {
+        setDealsMap((prev) => ({ ...prev, ...deals }));
+      });
+    }
+  }, [games]);
 
   const fetchRemoteProfile = async (userId: string) => {
     try {
@@ -726,8 +740,12 @@ export default function HomePage() {
       if (libraryOwnershipFilter === 'owned' && !game.is_owned) {
         return false;
       }
-      if (libraryOwnershipFilter === 'wishlist' && game.is_owned) {
-        return false;
+      if (libraryOwnershipFilter === 'wishlist') {
+        if (game.is_owned) return false;
+        if (filterOnlyOnSale) {
+          const deal = dealsMap[normalizeTitle(game.title)];
+          if (!deal || !deal.isOnSale) return false;
+        }
       }
 
       // 3. Plattformsfilter
@@ -870,6 +888,10 @@ export default function HomePage() {
     counts['Backlog'] = relevant.filter((g) => g.is_backlog).length;
     return counts;
   }, [games, libraryOwnershipFilter]);
+
+  const wishlistOnSaleCount = useMemo(() => {
+    return games.filter((g) => !g.is_owned && dealsMap[normalizeTitle(g.title)]?.isOnSale).length;
+  }, [games, dealsMap]);
 
   // Handlers for game changes
   const handleGameAdded = (newGame: Game) => {
@@ -1494,6 +1516,30 @@ export default function HomePage() {
                 Önskelista 🎁 ({games.filter((g) => !g.is_owned).length})
               </button>
             </div>
+
+            {libraryOwnershipFilter === 'wishlist' && (
+              <button
+                type="button"
+                onClick={() => setFilterOnlyOnSale((prev) => !prev)}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                  filterOnlyOnSale
+                    ? 'bg-gradient-to-r from-red-600/20 to-orange-500/20 text-orange-400 border border-orange-500/50 shadow-sm'
+                    : 'bg-zinc-900/60 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                }`}
+                title="Filtrera för att endast visa spel med aktiv rabatt"
+              >
+                <Flame
+                  className={`w-3.5 h-3.5 ${
+                    filterOnlyOnSale ? 'text-orange-400 fill-current' : 'text-zinc-500'
+                  }`}
+                />
+                <span>
+                  {wishlistOnSaleCount > 0
+                    ? `Endast på rea (${wishlistOnSaleCount})`
+                    : 'Endast på rea'}
+                </span>
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1625,17 +1671,18 @@ export default function HomePage() {
               )}
 
             {viewMode === 'shelf' && (
-              <ShelfView games={filteredGames} onSelectGame={setSelectedGame} />
+              <ShelfView games={filteredGames} onSelectGame={setSelectedGame} dealsMap={dealsMap} />
             )}
             {viewMode === 'grid' && (
               <GridView
                 games={filteredGames}
                 onSelectGame={setSelectedGame}
                 groupByYear={librarySort === 'releaseYearDesc' || librarySort === 'releaseYearAsc'}
+                dealsMap={dealsMap}
               />
             )}
             {viewMode === 'list' && (
-              <ListView games={filteredGames} onSelectGame={setSelectedGame} />
+              <ListView games={filteredGames} onSelectGame={setSelectedGame} dealsMap={dealsMap} />
             )}
           </>
         )}

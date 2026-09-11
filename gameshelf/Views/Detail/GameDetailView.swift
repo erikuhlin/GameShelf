@@ -73,6 +73,7 @@ struct GameDetailView: View {
 
     @FocusState private var isNotesFocused: Bool
     @State private var newTodoText: String = ""
+    @ObservedObject private var priceWatcher = PriceWatcherService.shared
 
     enum LibraryDetailTab: String, CaseIterable, Identifiable {
         case myPlay = "Mitt Spelande"
@@ -209,6 +210,8 @@ struct GameDetailView: View {
                     // TILLSTÅND 2: ÖNSKELISTA
                     wishlistHeaderStrip(g)
                     wishlistActionsBar(g)
+                    wishlistDealCard(g)
+                    storeQuickLinksSection(g)
 
                     if isLoadingRemote {
                         remoteLoadingIndicator
@@ -1040,6 +1043,127 @@ struct GameDetailView: View {
                     .overlay(Circle().stroke(Color.red.opacity(0.4), lineWidth: 1))
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Rea & Priskort för Önskelista
+    @ViewBuilder
+    private func wishlistDealCard(_ g: Game) -> some View {
+        if let deal = priceWatcher.deal(for: g), deal.isOnSale {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .center) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "flame.fill")
+                            .font(.subheadline)
+                            .foregroundStyle(.orange)
+                        Text("Aktiv rea hos \(deal.storeName)")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(.primary)
+                    }
+
+                    Spacer()
+
+                    Text(deal.savingsFormatted)
+                        .font(.caption.weight(.heavy))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3.5)
+                        .background(
+                            LinearGradient(colors: [Color.red, Color.orange], startPoint: .topLeading, endPoint: .bottomTrailing),
+                            in: Capsule()
+                        )
+                }
+
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(deal.formattedSalePrice)
+                        .font(.title2.weight(.heavy))
+                        .foregroundStyle(.primary)
+
+                    Text(deal.formattedNormalPrice)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .strikethrough()
+
+                    if deal.isHistoricalLow {
+                        HStack(spacing: 3) {
+                            Image(systemName: "trophy.fill")
+                                .font(.system(size: 10))
+                            Text("All-time low!")
+                                .font(.caption2.weight(.bold))
+                        }
+                        .foregroundStyle(.yellow)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Color.yellow.opacity(0.15), in: Capsule())
+                    }
+                }
+
+                if let url = deal.dealURL {
+                    Link(destination: url) {
+                        HStack(spacing: 6) {
+                            Text("Gå till erbjudandet i \(deal.storeName)")
+                                .font(.subheadline.weight(.semibold))
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption.weight(.bold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.orange.opacity(0.15))
+                        .foregroundStyle(Color.orange)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(14)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.orange.opacity(0.35), lineWidth: 1)
+            )
+        }
+    }
+
+    // MARK: - Smarta Konsol- & Butikslänkar
+    @ViewBuilder
+    private func storeQuickLinksSection(_ g: Game) -> some View {
+        let links = priceWatcher.storeLinks(for: g)
+        if !links.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Kolla pris & butiker")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(links) { link in
+                            Link(destination: link.url) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: link.iconSystemName)
+                                        .font(.caption.weight(.bold))
+                                    Text(link.name)
+                                        .font(.caption.weight(.semibold))
+                                    Image(systemName: "arrow.up.right")
+                                        .font(.system(size: 8.5, weight: .bold))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color(.secondarySystemGroupedBackground))
+                                .foregroundStyle(.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(Color(.separator).opacity(0.5), lineWidth: 0.8)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -3132,6 +3256,12 @@ struct GameDetailView: View {
             Task { await ensureRemoteForLocal(g) }
         } else if case .local(let g) = mode {
             Task { await ensureRemoteForLocal(g) }
+        }
+
+        if let g = currentGame {
+            Task { await priceWatcher.fetchDeals(for: [g]) }
+        } else if case .local(let g) = mode {
+            Task { await priceWatcher.fetchDeals(for: [g]) }
         }
     }
 

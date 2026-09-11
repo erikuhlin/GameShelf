@@ -3,14 +3,16 @@
 import React from 'react';
 import { Game } from '@/types/game';
 import { StatusBadge } from './StatusBadge';
-import { Star, Gamepad } from 'lucide-react';
+import { Star, Gamepad, Flame } from 'lucide-react';
+import { GameDeal, normalizeTitle } from '@/services/priceWatcherService';
 
 interface ShelfViewProps {
   games: Game[];
   onSelectGame: (game: Game) => void;
+  dealsMap?: Record<string, GameDeal>;
 }
 
-export function ShelfView({ games, onSelectGame }: ShelfViewProps) {
+export function ShelfView({ games, onSelectGame, dealsMap }: ShelfViewProps) {
   // Dela in samlingen i hyllrader (t.ex. 6 spel per hyllplan) så inget spel dupliceras
   const shelfRows = React.useMemo(() => {
     const rows: Game[][] = [];
@@ -74,11 +76,18 @@ export function ShelfView({ games, onSelectGame }: ShelfViewProps) {
                       </div>
                     )}
 
-                    {/* Önskelista / Backlog märkning */}
+                    {/* Önskelista / Backlog / Rea märkning */}
                     {!game.is_owned ? (
-                      <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-purple-950/90 backdrop-blur-md text-purple-300 text-[9px] sm:text-[10px] font-bold border border-purple-500/50 shadow-sm flex items-center gap-1">
-                        <span>Önskelista</span>
-                      </div>
+                      dealsMap?.[normalizeTitle(game.title)]?.isOnSale ? (
+                        <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-gradient-to-r from-red-600 to-orange-500 text-white text-[9px] sm:text-[10px] font-bold shadow-md flex items-center gap-1">
+                          <Flame className="w-2.5 h-2.5 fill-current" />
+                          <span>-{Math.round(dealsMap[normalizeTitle(game.title)].savingsPercent)}%</span>
+                        </div>
+                      ) : (
+                        <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-purple-950/90 backdrop-blur-md text-purple-300 text-[9px] sm:text-[10px] font-bold border border-purple-500/50 shadow-sm flex items-center gap-1">
+                          <span>Önskelista</span>
+                        </div>
+                      )
                     ) : game.is_backlog ? (
                       <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-blue-950/90 backdrop-blur-md text-blue-300 text-[9px] sm:text-[10px] font-bold border border-blue-500/50 shadow-sm flex items-center gap-1">
                         <span>Backlog</span>

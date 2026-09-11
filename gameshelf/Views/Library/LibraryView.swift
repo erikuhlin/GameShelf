@@ -91,6 +91,8 @@ struct LibraryView: View {
     @State private var collapsedYears: Set<Int> = []
     @State private var isSearching = false
     @State private var isPlayingNowCollapsed = false
+    @State private var filterOnlyOnSale = false
+    @ObservedObject private var priceWatcher = PriceWatcherService.shared
 
     // Adaptiva kolumner för Poster Grid (3 på iPhone, 5–8 på iPad)
     private var posterGridColumns: [GridItem] {
@@ -262,6 +264,12 @@ struct LibraryView: View {
         return store.games.filter { game in
             guard !game.isOwned else { return false }
 
+            if filterOnlyOnSale {
+                guard let deal = priceWatcher.deal(for: game), deal.isOnSale else {
+                    return false
+                }
+            }
+
             let matchesPlatform = gameMatchesSelectedPlatform(game)
             let matchesSearch = query.isEmpty ||
                 game.title.lowercased().contains(query) ||
@@ -272,6 +280,10 @@ struct LibraryView: View {
             return matchesPlatform && matchesSearch
         }
         .sorted(by: sortComparator)
+    }
+
+    private var wishlistOnSaleCount: Int {
+        store.games.filter { !$0.isOwned && (priceWatcher.deal(for: $0)?.isOnSale == true) }.count
     }
 
     // Grupperade spel per år för tidslinjevy
@@ -531,6 +543,10 @@ struct LibraryView: View {
                         await store.syncWithRemote()
                     }
                 }
+            }
+            .task(id: store.games.filter { !$0.isOwned }.count) {
+                let unowned = store.games.filter { !$0.isOwned }
+                await priceWatcher.fetchDeals(for: unowned)
             }
         }
     }
@@ -933,8 +949,54 @@ struct LibraryView: View {
     @ViewBuilder
     private var wishlistSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if !wishlistGames.isEmpty || isSearching || !searchText.isEmpty {
+            let totalUnownedCount = store.games.filter { !$0.isOwned }.count
+
+            if !wishlistGames.isEmpty || isSearching || !searchText.isEmpty || filterOnlyOnSale {
                 subToolbar(gameCount: wishlistGames.count)
+            }
+
+            if totalUnownedCount > 0 {
+                HStack(spacing: 8) {
+                    Button {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            filterOnlyOnSale.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: filterOnlyOnSale ? "flame.fill" : "flame")
+                                .font(.system(size: 11, weight: .bold))
+                            if wishlistOnSaleCount > 0 {
+                                Text("Endast på rea (\(wishlistOnSaleCount))")
+                                    .font(.caption.weight(.semibold))
+                            } else {
+                                Text("Endast på rea")
+                                    .font(.caption.weight(.semibold))
+                            }
+                        }
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 6.5)
+                        .background(
+                            filterOnlyOnSale
+                                ? Color.orange.opacity(0.18)
+                                : Color(.secondarySystemGroupedBackground),
+                            in: Capsule()
+                        )
+                        .foregroundStyle(filterOnlyOnSale ? Color.orange : Color.secondary)
+                        .overlay(
+                            Capsule()
+                                .stroke(filterOnlyOnSale ? Color.orange.opacity(0.5) : Color.clear, lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    if priceWatcher.isLoading {
+                        ProgressView()
+                            .scaleEffect(0.65)
+                    }
+
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
             }
 
             if !wishlistGames.isEmpty {
@@ -1005,6 +1067,11 @@ struct LibraryView: View {
                     }
                     .padding(.horizontal, 16)
                 }
+            } else if filterOnlyOnSale {
+                emptyState(
+                    title: "Inga spel på rea just nu",
+                    subtitle: "Inga av spelen på din önskelista har en aktiv rea för tillfället."
+                )
             } else {
                 emptyState(
                     title: "Önskelistan är tom",
@@ -1330,8 +1397,28 @@ struct LibraryPosterCard: View {
 
                     Spacer(minLength: 4)
 
-                    // Höger badge: Betyg (framhävt med guld-accent) eller Kommande
-                    if let rating = game.rating, rating > 0 {
+                    // Höger badge: Rea (om på rea och i önskelista), Betyg eller Kommande
+                    if showWishlistInfo, let deal = PriceWatcherService.shared.deal(for: game), deal.isOnSale {
+                        HStack(spacing: 2) {
+                            Text("🔥")
+                                .font(.system(size: 7.5))
+                            Text(deal.savingsFormatted)
+                                .font(.system(size: 8.5, weight: .heavy))
+                                .foregroundStyle(.white)
+                        }
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2.5)
+                        .background(
+                            LinearGradient(
+                                colors: [Color.red, Color.orange],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            in: Capsule()
+                        )
+                        .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
+                        .shadow(color: .red.opacity(0.4), radius: 3, x: 0, y: 1)
+                    } else if let rating = game.rating, rating > 0 {
                         HStack(spacing: 2) {
                             Image(systemName: "star.fill")
                                 .font(.system(size: 7))

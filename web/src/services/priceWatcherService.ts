@@ -24,7 +24,7 @@ export interface StoreQuickLink {
   badgeColor: string;
 }
 
-const CACHE_KEY = 'gameshelf_deals_cache_v2';
+const CACHE_KEY = 'gameshelf_deals_cache_v3';
 const CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 timmar
 
 let inMemoryCache: Record<string, GameDeal> | null = null;

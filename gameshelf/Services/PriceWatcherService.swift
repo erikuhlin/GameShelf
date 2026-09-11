@@ -78,7 +78,7 @@ final class PriceWatcherService: ObservableObject {
     @Published private(set) var deals: [String: GameDealInfo] = [:]
     @Published private(set) var isLoading: Bool = false
 
-    private let cacheKey = "gameshelf_cached_deals_v2"
+    private let cacheKey = "gameshelf_cached_deals_v3"
     private let cacheTTL: TimeInterval = 4 * 3600 // 4 timmar
     private var inFlightQueries = Set<String>()
 
@@ -215,11 +215,11 @@ final class PriceWatcherService: ObservableObject {
         return links
     }
 
-    // MARK: - Intern CheapShark Query
+    // MARK: - Intern CheapShark Query (Begränsad till Steam, GOG, Epic)
 
     private nonisolated func queryDeal(for title: String) async -> GameDealInfo? {
         guard let encoded = title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://www.cheapshark.com/api/1.0/deals?title=\(encoded)&exact=1") else {
+              let url = URL(string: "https://www.cheapshark.com/api/1.0/deals?title=\(encoded)&storeID=1,7,25&exact=1") else {
             return nil
         }
 
@@ -235,9 +235,9 @@ final class PriceWatcherService: ObservableObject {
 
             var dealsList = try JSONDecoder().decode([CheapSharkDealDTO].self, from: data)
 
-            // Om exact=1 inte gav något, prova utan exact
+            // Om exact=1 inte gav något, prova med bredare sökning men verifiera titeln noga
             if dealsList.isEmpty {
-                if let fallbackURL = URL(string: "https://www.cheapshark.com/api/1.0/deals?title=\(encoded)&pageSize=3") {
+                if let fallbackURL = URL(string: "https://www.cheapshark.com/api/1.0/deals?title=\(encoded)&storeID=1,7,25&pageSize=5") {
                     var fallbackReq = URLRequest(url: fallbackURL)
                     fallbackReq.setValue("GameshelfApp/1.0", forHTTPHeaderField: "User-Agent")
                     fallbackReq.timeoutInterval = 8.0
@@ -248,8 +248,29 @@ final class PriceWatcherService: ObservableObject {
                 }
             }
 
-            guard let best = dealsList.first(where: { ($0.isOnSale ?? "0") == "1" }) ?? dealsList.first else {
+            // Filtrera strikt till endast Steam (1), GOG (7) och Epic Games (25)
+            let validStoresDeals = dealsList.filter { deal in
+                guard let stID = deal.storeID else { return false }
+                return stID == "1" || stID == "7" || stID == "25"
+            }
+
+            // Strikt titelverifiering: förhindra att DLC, expansioner eller fel spel matchar
+            let matchingDeals = validStoresDeals.filter { deal in
+                guard let dTitle = deal.title else { return false }
+                return isTitleMatch(gameTitle: title, dealTitle: dTitle)
+            }
+
+            guard !matchingDeals.isEmpty else {
                 return nil
+            }
+
+            // Välj i första hand det bästa aktiva rea-erbjudandet (högst rabatt)
+            let onSaleDeals = matchingDeals.filter { ($0.isOnSale ?? "0") == "1" && (Double($0.savings ?? "0") ?? 0.0) > 0.0 }
+            let best: CheapSharkDealDTO
+            if let bestSale = onSaleDeals.max(by: { (Double($0.savings ?? "0") ?? 0) < (Double($1.savings ?? "0") ?? 0) }) {
+                best = bestSale
+            } else {
+                best = matchingDeals[0]
             }
 
             let sPrice = Double(best.salePrice ?? "0") ?? 0.0
@@ -260,13 +281,10 @@ final class PriceWatcherService: ObservableObject {
             let stName = storeName(for: stID)
 
             var dealRedirectURL: URL? = nil
-            // Om det är Steam och vi har steamAppID, länka direkt till Steam!
+            // Om det är Steam och vi har steamAppID, länka direkt till Steam
             if stID == "1", let appID = best.steamAppID, !appID.isEmpty {
                 dealRedirectURL = URL(string: "https://store.steampowered.com/app/\(appID)")
             } else if let dID = best.dealID, !dID.isEmpty {
-                // VIKTIGT: dID från CheapShark API är redan URL-kodad (t.ex. %2F, %2B, %3D).
-                // Genom att inte köra addingPercentEncoding undviks dubbelkodning (%25)
-                // som fick CheapShark att misslyckas och omdirigera till sin startsida.
                 dealRedirectURL = URL(string: "https://www.cheapshark.com/redirect?dealID=\(dID)")
             }
 
@@ -313,42 +331,39 @@ final class PriceWatcherService: ObservableObject {
     private nonisolated func storeName(for storeID: String) -> String {
         switch storeID {
         case "1": return "Steam"
-        case "2": return "GamersGate"
-        case "3": return "GreenManGaming"
-        case "4": return "Amazon"
-        case "5": return "GameStop"
-        case "6": return "Direct2Drive"
         case "7": return "GOG"
-        case "8": return "EA / Origin"
-        case "9": return "Get Games"
-        case "10": return "Shiny Loot"
-        case "11": return "Humble Store"
-        case "12": return "Desura"
-        case "13": return "Ubisoft Store"
-        case "14": return "IndieGameStand"
-        case "15": return "Fanatical"
-        case "16": return "Gamesrocket"
-        case "17": return "Games Republic"
-        case "18": return "SilaGames"
-        case "19": return "Playfield"
-        case "20": return "ImperialGames"
-        case "21": return "WinGameStore"
-        case "22": return "FunStock"
-        case "23": return "GameBillet"
-        case "24": return "Voidu"
         case "25": return "Epic Games Store"
-        case "26": return "Razer Game Store"
-        case "27": return "Gamesplanet"
-        case "28": return "Gamesload"
-        case "29": return "2Game"
-        case "30": return "IndieGala"
-        case "31": return "Blizzard Shop"
-        case "32": return "AllYouPlay"
-        case "33": return "DLGamer"
-        case "34": return "Noctre"
-        case "35": return "DreamGame"
         default: return "PC Store"
         }
+    }
+
+    private nonisolated func isTitleMatch(gameTitle: String, dealTitle: String) -> Bool {
+        let clean1 = normalizeForComparison(gameTitle)
+        let clean2 = normalizeForComparison(dealTitle)
+        if clean1 == clean2 { return true }
+        // Tillåt endast om det är grundspelet eller dess officiella utgåva, ej soundtrack eller dlc
+        if clean2.hasPrefix(clean1) {
+            let lower = dealTitle.lowercased()
+            if lower.contains("soundtrack") || lower.contains("season pass") || lower.contains("dlc") || lower.contains("content") || lower.contains("artbook") {
+                return false
+            }
+            return true
+        }
+        return false
+    }
+
+    private nonisolated func normalizeForComparison(_ title: String) -> String {
+        title.lowercased()
+            .replacingOccurrences(of: ":", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .replacingOccurrences(of: "–", with: "")
+            .replacingOccurrences(of: "'", with: "")
+            .replacingOccurrences(of: "\"", with: "")
+            .replacingOccurrences(of: "™", with: "")
+            .replacingOccurrences(of: "®", with: "")
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
     }
 
     private nonisolated func normalizeTitle(_ title: String) -> String {

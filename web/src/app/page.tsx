@@ -1694,6 +1694,7 @@ export default function HomePage() {
         onClose={() => setIsAddModalOpen(false)}
         onGameAdded={handleGameAdded}
         existingGames={games}
+        onSelectGame={(g) => setSelectedGame(g)}
       />
 
       <GameDetailModal

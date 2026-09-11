@@ -54,10 +54,10 @@ interface GameDetailModalProps {
   game: Game | null;
   isOpen: boolean;
   onClose: () => void;
-  onUpdateGame: (updated: Game) => void;
-  onDeleteGame: (id: string) => void;
-  collections: GameCollection[];
-  onToggleCollection: (gameId: string, collectionId: string) => void;
+  onUpdateGame?: (updated: Game) => void;
+  onDeleteGame?: (id: string) => void;
+  collections?: GameCollection[];
+  onToggleCollection?: (gameId: string, collectionId: string) => void;
   onCreateCollection?: (name: string, gameId: string) => Promise<void> | void;
   onOpenCompany?: (companyId: number, companyName: string, role: 'developer' | 'publisher') => void;
   isTargetGoal?: boolean;
@@ -111,7 +111,7 @@ export function GameDetailModal({
   onClose,
   onUpdateGame,
   onDeleteGame,
-  collections,
+  collections = [],
   onToggleCollection,
   onCreateCollection,
   onOpenCompany,
@@ -300,7 +300,7 @@ export function GameDetailModal({
                 ...(igdbId && !game.igdb_id ? { igdb_id: igdbId } : {}),
                 updated_at: new Date().toISOString(),
               };
-              onUpdateGame({ ...game, ...updates });
+              if (onUpdateGame) onUpdateGame({ ...game, ...updates });
               try {
                 const sanitized = sanitizeUserGamePayload(updates, game);
                 supabase.from('user_games').update(sanitized).eq('id', game.id).then();
@@ -332,13 +332,13 @@ export function GameDetailModal({
     if (isPreview) {
       if (onAddGame) {
         onAddGame(updatedGame);
-      } else {
+      } else if (onUpdateGame) {
         onUpdateGame(updatedGame);
       }
       return;
     }
 
-    onUpdateGame(updatedGame);
+    if (onUpdateGame) onUpdateGame(updatedGame);
 
     try {
       const sanitized = sanitizeUserGamePayload(updates, game);
@@ -473,7 +473,7 @@ export function GameDetailModal({
       };
       if (onAddGame) {
         onAddGame(fullGame);
-      } else {
+      } else if (onUpdateGame) {
         onUpdateGame(fullGame);
       }
     } else {
@@ -506,7 +506,7 @@ export function GameDetailModal({
     setIsBacklog(false);
     if (onAddGame) {
       onAddGame(wishlistGame);
-    } else {
+    } else if (onUpdateGame) {
       onUpdateGame(wishlistGame);
     }
     setActiveTab('facts');
@@ -520,7 +520,7 @@ export function GameDetailModal({
     }
     try {
       await supabase.from('user_games').delete().eq('id', game.id);
-      onDeleteGame(game.id);
+      if (onDeleteGame) onDeleteGame(game.id);
       onClose();
     } catch (err) {
       console.error('Failed to delete game:', err);
@@ -729,7 +729,9 @@ export function GameDetailModal({
                     <button
                       key={col.id}
                       type="button"
-                      onClick={() => onToggleCollection(game.id, col.id)}
+                      onClick={() => {
+                        if (onToggleCollection) onToggleCollection(game.id, col.id);
+                      }}
                       className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer ${
                         isChecked
                           ? 'bg-brand-red/15 text-white border border-brand-red/40'
@@ -1051,7 +1053,12 @@ export function GameDetailModal({
                   <Heart className="w-5 h-5 fill-current text-brand-red" />
                 </button>
               </div>
+            </div>
+          )}
 
+          {/* Pris, Aktiv rea & Smarta Butikslänkar (för förhandsgranskning & önskelista) */}
+          {(isPreview || isWishlist) && (
+            <div className="space-y-3">
               {/* Aktiv rea kort */}
               {deal && deal.isOnSale && (
                 <div className="p-3.5 bg-gradient-to-br from-zinc-900 via-zinc-900 to-amber-950/20 border border-orange-500/30 rounded-xl space-y-2.5 shadow-lg shadow-orange-950/20">
@@ -1758,6 +1765,73 @@ export function GameDetailModal({
           {/* ===== FLIK 2: SPELFAKTA & INFO ===== */}
           {(!isOwned || activeTab === 'facts') && (
             <div className="space-y-6">
+              {/* Om spelet ägs, visa ändå eventuell rea och butikslänkar i faktafliken */}
+              {isOwned && (
+                <div className="space-y-3">
+                  {deal && deal.isOnSale && (
+                    <div className="p-3.5 bg-gradient-to-br from-zinc-900 via-zinc-900 to-amber-950/20 border border-orange-500/30 rounded-xl space-y-2.5 shadow-lg shadow-orange-950/20">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-orange-400">
+                          <Flame className="w-4 h-4 fill-current text-orange-500" />
+                          <span>Aktiv rea hos {deal.storeName}</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full text-xs font-extrabold bg-gradient-to-r from-red-600 to-orange-500 text-white shadow-sm">
+                          -{Math.round(deal.savingsPercent)}%
+                        </span>
+                      </div>
+
+                      <div className="flex items-baseline gap-2.5">
+                        <span className="text-xl font-black text-white">
+                          ${deal.salePrice.toFixed(2)}
+                        </span>
+                        <span className="text-xs text-zinc-500 line-through">
+                          ${deal.normalPrice.toFixed(2)}
+                        </span>
+                        {deal.isHistoricalLow && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            🏆 Lägsta någonsin!
+                          </span>
+                        )}
+                      </div>
+
+                      {deal.dealURL && (
+                        <a
+                          href={deal.dealURL}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-1.5 w-full py-2 px-3 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 rounded-lg text-xs font-bold text-orange-300 transition"
+                        >
+                          <span>Gå till erbjudandet hos {deal.storeName}</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  {storeLinks.length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                        Kolla pris & butiker
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {storeLinks.map((link) => (
+                          <a
+                            key={link.id}
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer ${link.badgeColor}`}
+                          >
+                            <span>{link.name}</span>
+                            <ExternalLink className="w-3 h-3 opacity-60" />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Om spelet */}
               {(remoteDetails?.summary || game.summary) && (
                 <div className="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-4 sm:p-5 space-y-2.5">

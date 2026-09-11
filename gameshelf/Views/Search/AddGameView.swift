@@ -996,6 +996,11 @@ struct AddGameView: View {
                     self.currentOffset = offset
                 } else {
                     self.searchResults = filtered
+                    Task {
+                        for game in filtered.prefix(4) {
+                            await PriceWatcherService.shared.fetchDeal(title: game.name)
+                        }
+                    }
                 }
                 self.hasMoreResults = results.count == pageSize
                 self.isLoading = false
@@ -1087,6 +1092,7 @@ struct AddGameView: View {
 // MARK: - Radvy för Sök och Förslag med 1-Klicks Tillägg
 private struct IGDBSearchRow: View {
     @EnvironmentObject var store: LibraryStore
+    @ObservedObject private var priceWatcher = PriceWatcherService.shared
     let igdbGame: IGDBGame
     let localGame: Game?
     var onQuickAdd: (AddGameView.QuickAddOption) -> Void
@@ -1128,6 +1134,21 @@ private struct IGDBSearchRow: View {
                         Text(cleanGenre)
                             .lineLimit(1)
                             .layoutPriority(1)
+                    }
+                    if let deal = priceWatcher.deal(forTitle: igdbGame.name), deal.isOnSale {
+                        Text("•")
+                            .foregroundStyle(.tertiary)
+                        HStack(spacing: 2) {
+                            Image(systemName: "flame.fill")
+                                .font(.system(size: 8))
+                            Text(deal.savingsFormatted)
+                                .font(.system(size: 9, weight: .heavy))
+                        }
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1.5)
+                        .background(Color.orange.opacity(0.15), in: Capsule())
+                        .layoutPriority(3)
                     }
                 }
                 .font(.caption2)

@@ -11,6 +11,7 @@ interface AddGameModalProps {
   onClose: () => void;
   onGameAdded: (newGame: Game) => void;
   existingGames: Game[];
+  onSelectGame?: (game: Game) => void;
 }
 
 const INITIAL_OPTIONS = [
@@ -26,6 +27,7 @@ export function AddGameModal({
   onClose,
   onGameAdded,
   existingGames,
+  onSelectGame,
 }: AddGameModalProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<IGDBSearchResult[]>([]);
@@ -253,59 +255,106 @@ export function AddGameModal({
               : null;
             const developer = game.involved_companies?.find((c) => c.developer)?.company?.name;
 
+            const toGame = (igdbGame: IGDBSearchResult): Game => {
+              const existing = existingGames.find(
+                (g) => g.igdb_id === igdbGame.id || g.title.toLowerCase() === igdbGame.name.toLowerCase()
+              );
+              if (existing) return existing;
+
+              const platforms = (igdbGame.platforms || []).map((p) => p.name);
+              const genres = (igdbGame.genres || []).map((g) => g.name);
+              const developers = (igdbGame.involved_companies || [])
+                .filter((c) => c.developer)
+                .map((c) => c.company.name);
+
+              return {
+                id: `preview-${igdbGame.id}`,
+                title: igdbGame.name,
+                platforms,
+                release_year: releaseYear,
+                genres,
+                developers: developers.length > 0 ? developers : [],
+                status: 'notStarted',
+                rating: null,
+                igdb_rating: normalizeIgdbRating(igdbGame.igdb_rating ?? igdbGame.total_rating ?? igdbGame.rating) ?? null,
+                cover_url: igdbGame.cover?.url || null,
+                igdb_id: igdbGame.id,
+                first_release_date: igdbGame.first_release_date || null,
+                estimated_hours: null,
+                is_owned: false,
+                is_backlog: false,
+                play_types: inferPlayTypes({ title: igdbGame.name, genres }),
+                notes: '',
+                todos: [],
+              };
+            };
+
             return (
               <div
                 key={game.id}
                 className="flex items-center gap-4 p-3.5 rounded-xl bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800/80 transition"
               >
-                {/* Cover Thumbnail */}
-                <div className="w-14 h-18 rounded-lg overflow-hidden bg-zinc-800 border border-zinc-700/60 flex-shrink-0 aspect-[3/4]">
-                  {game.cover?.url ? (
-                    <img
-                      src={game.cover.url}
-                      alt={game.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Gamepad className="w-5 h-5 text-zinc-600" />
-                    </div>
-                  )}
-                </div>
-
-                {/* Details */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-semibold text-zinc-100 text-sm truncate">{game.name}</h4>
-                    {releaseYear && (
-                      <span className="text-xs text-zinc-400 flex items-center gap-1">
-                        <Calendar className="w-3 h-3 text-zinc-500" />
-                        {releaseYear}
-                      </span>
+                {/* Clickable info area */}
+                <div
+                  onClick={() => {
+                    if (onSelectGame) {
+                      onSelectGame(toGame(game));
+                      onClose();
+                    }
+                  }}
+                  className={`flex items-center gap-4 flex-1 min-w-0 ${onSelectGame ? 'cursor-pointer' : ''}`}
+                >
+                  {/* Cover Thumbnail */}
+                  <div className="w-14 h-18 rounded-lg overflow-hidden bg-zinc-800 border border-zinc-700/60 flex-shrink-0 aspect-[3/4]">
+                    {game.cover?.url ? (
+                      <img
+                        src={game.cover.url}
+                        alt={game.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Gamepad className="w-5 h-5 text-zinc-600" />
+                      </div>
                     )}
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-zinc-400">
-                    {developer && <span className="text-zinc-400">{developer}</span>}
-                    {game.platforms && game.platforms.length > 0 && (
-                      <span className="text-zinc-500 truncate max-w-[200px]">
-                        • {game.platforms.map((p) => p.name).join(', ')}
-                      </span>
-                    )}
-                  </div>
-
-                  {game.genres && game.genres.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                      {game.genres.slice(0, 3).map((genre) => (
-                        <span
-                          key={genre.id}
-                          className="px-1.5 py-0.5 rounded text-[10px] bg-zinc-800 text-zinc-400 border border-zinc-700/50"
-                        >
-                          {genre.name}
+                  {/* Details */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-semibold text-zinc-100 text-sm truncate hover:text-brand-red transition">
+                        {game.name}
+                      </h4>
+                      {releaseYear && (
+                        <span className="text-xs text-zinc-400 flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-zinc-500" />
+                          {releaseYear}
                         </span>
-                      ))}
+                      )}
                     </div>
-                  )}
+
+                    <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-zinc-400">
+                      {developer && <span className="text-zinc-400">{developer}</span>}
+                      {game.platforms && game.platforms.length > 0 && (
+                        <span className="text-zinc-500 truncate max-w-[200px]">
+                          • {game.platforms.map((p) => p.name).join(', ')}
+                        </span>
+                      )}
+                    </div>
+
+                    {game.genres && game.genres.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {game.genres.slice(0, 3).map((genre) => (
+                          <span
+                            key={genre.id}
+                            className="px-1.5 py-0.5 rounded text-[10px] bg-zinc-800 text-zinc-400 border border-zinc-700/50"
+                          >
+                            {genre.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Add Button / Added Indicator */}

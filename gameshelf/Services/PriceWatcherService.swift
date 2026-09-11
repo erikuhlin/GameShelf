@@ -90,8 +90,30 @@ final class PriceWatcherService: ObservableObject {
 
     /// Hämta aktiv deal för ett visst spel
     func deal(for game: Game) -> GameDealInfo? {
-        let key = normalizeTitle(game.title)
+        deal(forTitle: game.title)
+    }
+
+    /// Hämta aktiv deal för en speltitel
+    func deal(forTitle title: String) -> GameDealInfo? {
+        let key = normalizeTitle(title)
         return deals[key]
+    }
+
+    /// Hämta deal för en enskild titel
+    func fetchDeal(title: String) async {
+        let key = normalizeTitle(title)
+        if inFlightQueries.contains(key) { return }
+        if let existing = deals[key], Date().timeIntervalSince(existing.fetchedAt) < cacheTTL {
+            return
+        }
+
+        inFlightQueries.insert(key)
+        defer { inFlightQueries.remove(key) }
+
+        if let deal = await queryDeal(for: title) {
+            deals[key] = deal
+            saveCachedDeals()
+        }
     }
 
     /// Hämta aktiva deals för en lista av spel (körs asynkront och sparsamt)
@@ -138,9 +160,14 @@ final class PriceWatcherService: ObservableObject {
 
     /// Generera smarta direktlänkar till respektive butik baserat på spelets plattformar
     func storeLinks(for game: Game) -> [StoreQuickLink] {
+        storeLinks(title: game.title, platforms: game.platforms)
+    }
+
+    /// Generera smarta direktlänkar baserat på titel och plattformsnamn
+    func storeLinks(title: String, platforms: [String]) -> [StoreQuickLink] {
         var links: [StoreQuickLink] = []
-        let titleEncoded = game.title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        let platformsLower = game.platforms.map { $0.lowercased() }
+        let titleEncoded = title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let platformsLower = platforms.map { $0.lowercased() }
 
         // Kolla PlayStation
         let hasPlayStation = platformsLower.contains(where: {
@@ -196,7 +223,7 @@ final class PriceWatcherService: ObservableObject {
         }) || platformsLower.isEmpty // Fallback till Steam om plattform ej specad
         if hasPC {
             let steamURLString: String
-            if let deal = self.deal(for: game), let steamAppID = deal.steamAppID, !steamAppID.isEmpty {
+            if let deal = self.deal(forTitle: title), let steamAppID = deal.steamAppID, !steamAppID.isEmpty {
                 steamURLString = "https://store.steampowered.com/app/\(steamAppID)"
             } else {
                 steamURLString = "https://store.steampowered.com/search/?term=\(titleEncoded)"

@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase, sanitizeUserGamePayload, mapSupabaseGame } from '@/lib/supabase';
-import { PlayStatus } from '@/types/game';
+import { PlayStatus, Game } from '@/types/game';
 import { inferPlayTypes } from '@/lib/statusHelper';
+import { GameDetailModal } from '@/components/GameDetailModal';
 import {
   Search as SearchIcon,
   ArrowLeft,
@@ -45,6 +46,7 @@ export default function SearchPage() {
   const [addingId, setAddingId] = useState<number | null>(null);
   const [initialChoice, setInitialChoice] = useState<string>('backlog');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [previewGame, setPreviewGame] = useState<Game | null>(null);
 
   // Fetch already added games to mark them
   useEffect(() => {
@@ -233,90 +235,132 @@ export default function SearchPage() {
             const isAdded = addedIds.includes(game.id);
             const isAdding = addingId === game.id;
 
+            const toGame = (sr: SearchResult): Game => {
+              return {
+                id: `preview-${sr.id}`,
+                title: sr.title,
+                platforms: sr.platforms || [],
+                release_year: sr.release_year,
+                genres: sr.genres || [],
+                developers: sr.developers || [],
+                status: 'notStarted',
+                rating: null,
+                igdb_rating: sr.igdb_rating,
+                cover_url: sr.cover_url,
+                igdb_id: sr.id,
+                is_owned: false,
+                is_backlog: false,
+                play_types: inferPlayTypes({ title: sr.title, genres: sr.genres }),
+                notes: '',
+                todos: [],
+              };
+            };
+
             return (
               <div
                 key={game.id}
                 className="flex items-start gap-4 p-4 rounded-xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 transition"
               >
-                {/* Cover art */}
-                <div className="w-20 aspect-[3/4] rounded-lg overflow-hidden bg-zinc-800 border border-zinc-700 flex-shrink-0">
-                  {game.cover_url ? (
-                    <img
-                      src={game.cover_url}
-                      alt={game.title}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Gamepad2 className="w-6 h-6 text-zinc-600" />
+                {/* Clickable info area */}
+                <div
+                  onClick={() => setPreviewGame(toGame(game))}
+                  className="flex items-start gap-4 flex-1 min-w-0 cursor-pointer"
+                >
+                  {/* Cover art */}
+                  <div className="w-20 aspect-[3/4] rounded-lg overflow-hidden bg-zinc-800 border border-zinc-700 flex-shrink-0">
+                    {game.cover_url ? (
+                      <img
+                        src={game.cover_url}
+                        alt={game.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Gamepad2 className="w-6 h-6 text-zinc-600" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-between h-full">
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="font-bold text-sm text-zinc-100 line-clamp-2 leading-snug hover:text-brand-red transition">
+                          {game.title}
+                        </h4>
+                        {game.igdb_rating && (
+                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-zinc-800 text-amber-300 border border-zinc-700 flex items-center gap-1 font-semibold flex-shrink-0">
+                            <Star className="w-2.5 h-2.5 fill-current" />
+                            {(Math.round(Number(game.igdb_rating) * 10) / 10).toFixed(1)}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 mt-1 text-xs text-zinc-400">
+                        {game.release_year && (
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3 text-zinc-500" />
+                            {game.release_year}
+                          </span>
+                        )}
+                        {game.developers && game.developers.length > 0 && (
+                          <span className="truncate">• {game.developers[0]}</span>
+                        )}
+                      </div>
+
+                      {game.platforms && game.platforms.length > 0 && (
+                        <p className="text-[11px] text-zinc-500 truncate mt-1">
+                          {game.platforms.join(', ')}
+                        </p>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
 
-                {/* Info */}
-                <div className="flex-1 min-w-0 flex flex-col justify-between h-full">
-                  <div>
-                    <div className="flex items-start justify-between gap-2">
-                      <h4 className="font-bold text-sm text-zinc-100 line-clamp-2 leading-snug">{game.title}</h4>
-                      {game.igdb_rating && (
-                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-zinc-800 text-amber-300 border border-zinc-700 flex items-center gap-1 font-semibold flex-shrink-0">
-                          <Star className="w-2.5 h-2.5 fill-current" />
-                          {(Math.round(Number(game.igdb_rating) * 10) / 10).toFixed(1)}
-                        </span>
+                {/* Add button */}
+                <div className="flex-shrink-0 self-end">
+                  {isAdded ? (
+                    <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-800 text-emerald-400 text-xs font-semibold border border-zinc-700 whitespace-nowrap">
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      I din samling
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => handleAddGame(game)}
+                      disabled={isAdding}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-brand-red hover:bg-brand-redPressed text-white text-xs font-semibold shadow-md transition transform active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
+                    >
+                      {isAdding ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Plus className="w-3.5 h-3.5" />
                       )}
-                    </div>
-
-                    <div className="flex items-center gap-2 mt-1 text-xs text-zinc-400">
-                      {game.release_year && (
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-zinc-500" />
-                          {game.release_year}
-                        </span>
-                      )}
-                      {game.developers && game.developers.length > 0 && (
-                        <span className="truncate">• {game.developers[0]}</span>
-                      )}
-                    </div>
-
-                    {game.platforms && game.platforms.length > 0 && (
-                      <p className="text-[11px] text-zinc-500 truncate mt-1">
-                        {game.platforms.join(', ')}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Add button */}
-                  <div className="mt-3">
-                    {isAdded ? (
-                      <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-800 text-emerald-400 text-xs font-semibold border border-zinc-700 whitespace-nowrap">
-                        <Check className="w-3.5 h-3.5 stroke-[3]" />
-                        I din samling
+                      <span>
+                        {initialChoice === 'wishlist'
+                          ? 'Önskelista'
+                          : `Lägg till (${INITIAL_OPTIONS.find((o) => o.id === initialChoice)?.label.replace('I min ', '')})`}
                       </span>
-                    ) : (
-                      <button
-                        onClick={() => handleAddGame(game)}
-                        disabled={isAdding}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-brand-red hover:bg-brand-redPressed text-white text-xs font-semibold shadow-md transition transform active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
-                      >
-                        {isAdding ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Plus className="w-3.5 h-3.5" />
-                        )}
-                        <span>
-                          {initialChoice === 'wishlist'
-                            ? 'Önskelista'
-                            : `Lägg till (${INITIAL_OPTIONS.find((o) => o.id === initialChoice)?.label.replace('I min ', '')})`}
-                        </span>
-                      </button>
-                    )}
-                  </div>
+                    </button>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
       </main>
+
+      {/* Game Detail Modal for search preview */}
+      <GameDetailModal
+        game={previewGame}
+        isOpen={!!previewGame}
+        onClose={() => setPreviewGame(null)}
+        onAddGame={(newGame) => {
+          if (newGame.igdb_id) {
+            setAddedIds((prev) => [...prev, Number(newGame.igdb_id)]);
+          }
+          setPreviewGame(null);
+        }}
+      />
     </div>
   );
 }

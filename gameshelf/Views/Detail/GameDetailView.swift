@@ -210,8 +210,8 @@ struct GameDetailView: View {
                     // TILLSTÅND 2: ÖNSKELISTA
                     wishlistHeaderStrip(g)
                     wishlistActionsBar(g)
-                    wishlistDealCard(g)
-                    storeQuickLinksSection(g)
+                    dealCard(title: g.title)
+                    storeQuickLinksSection(title: g.title, platforms: g.platforms)
 
                     if isLoadingRemote {
                         remoteLoadingIndicator
@@ -223,6 +223,8 @@ struct GameDetailView: View {
                 } else if let r = remote {
                     // TILLSTÅND 3: EJ TILLAGD (Data från IGDB)
                     unaddedActionsBar(r)
+                    dealCard(title: r.name)
+                    storeQuickLinksSection(title: r.name, platforms: r.platforms?.map(\.name) ?? [])
 
                     gameFactsContent
                 } else {
@@ -1046,10 +1048,10 @@ struct GameDetailView: View {
         }
     }
 
-    // MARK: - Rea & Priskort för Önskelista
+    // MARK: - Rea & Priskort (Önskelista & Sök)
     @ViewBuilder
-    private func wishlistDealCard(_ g: Game) -> some View {
-        if let deal = priceWatcher.deal(for: g), deal.isOnSale {
+    private func dealCard(title: String) -> some View {
+        if let deal = priceWatcher.deal(forTitle: title), deal.isOnSale {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .center) {
                     HStack(spacing: 6) {
@@ -1127,8 +1129,8 @@ struct GameDetailView: View {
 
     // MARK: - Smarta Konsol- & Butikslänkar
     @ViewBuilder
-    private func storeQuickLinksSection(_ g: Game) -> some View {
-        let links = priceWatcher.storeLinks(for: g)
+    private func storeQuickLinksSection(title: String, platforms: [String]) -> some View {
+        let links = priceWatcher.storeLinks(title: title, platforms: platforms)
         if !links.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Kolla pris & butiker")
@@ -3405,6 +3407,9 @@ struct GameDetailView: View {
 
             await MainActor.run {
                 remoteState = .loaded(game)
+            }
+            Task {
+                await priceWatcher.fetchDeal(title: game.name)
             }
         } catch {
             print("[GameDetailView] Failed loadRemote for IGDB ID \(id): \(error.localizedDescription)")

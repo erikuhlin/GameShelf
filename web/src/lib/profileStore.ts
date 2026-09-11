@@ -103,6 +103,7 @@ export const DEFAULT_PROFILE: UserProfile = {
   playingMood: 'Utforska nya världar',
   gamerBio: '',
   playstyle: ['Singleplayer'],
+  gotyByYear: {},
 };
 
 export function loadUserProfile(): UserProfile {

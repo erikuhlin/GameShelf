@@ -61,4 +61,5 @@ export interface UserProfile {
   playingMood?: string;
   gamerBio?: string;
   playstyle?: string[];
+  gotyByYear?: Record<string, string>;
 }

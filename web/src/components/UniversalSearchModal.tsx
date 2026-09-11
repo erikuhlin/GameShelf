@@ -64,6 +64,7 @@ interface AdvancedFilters {
   developer: string;
   sort: 'popularity' | 'rating' | 'newest' | 'oldest';
   hideOwned: boolean;
+  playtime: 'all' | 'short' | 'medium' | 'long' | 'epic';
 }
 
 interface SmartSuggestion {
@@ -83,6 +84,7 @@ const EMPTY_FILTERS: AdvancedFilters = {
   developer: '',
   sort: 'popularity',
   hideOwned: false,
+  playtime: 'all',
 };
 
 const GENRES = [
@@ -257,6 +259,7 @@ export function UniversalSearchModal({
     if (filters.minRating > 0) count++;
     if (filters.developer) count++;
     if (filters.hideOwned) count++;
+    if (filters.playtime && filters.playtime !== 'all') count++;
     return count;
   }, [filters]);
 
@@ -316,15 +319,32 @@ export function UniversalSearchModal({
     if (!query.trim()) return [];
     const q = query.toLowerCase();
     const resolvedQ = resolveGameAlias(query).toLowerCase();
-    return games.filter(
-      (g) =>
+    return games.filter((g) => {
+      const matchesText =
         g.title.toLowerCase().includes(q) ||
         g.title.toLowerCase().includes(resolvedQ) ||
         g.genres.some((genre) => genre.toLowerCase().includes(q)) ||
         g.developers.some((dev) => dev.toLowerCase().includes(q)) ||
-        g.platforms.some((p) => p.toLowerCase().includes(q))
-    );
-  }, [games, query]);
+        g.platforms.some((p) => p.toLowerCase().includes(q));
+
+      if (!matchesText) return false;
+
+      if (filters.playtime && filters.playtime !== 'all') {
+        const hours = g.estimated_hours || (g.hours_played ? Math.round(g.hours_played) : 0);
+        if (filters.playtime === 'short') {
+          if (!hours || hours >= 5) return false;
+        } else if (filters.playtime === 'medium') {
+          if (!hours || hours < 5 || hours >= 15) return false;
+        } else if (filters.playtime === 'long') {
+          if (!hours || hours < 15 || hours >= 40) return false;
+        } else if (filters.playtime === 'epic') {
+          if (!hours || hours < 40) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [games, query, filters.playtime]);
 
   // Bygg API-URL från filter
   const buildFilterUrl = useCallback((q: string, f: AdvancedFilters, preset?: string | null, pageOffset = 0) => {
@@ -671,6 +691,41 @@ export function UniversalSearchModal({
                   active ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/50'
                 }`}
               >{r.label}</button>
+            );
+          })}
+        </div>
+      </section>
+
+      <div className="h-px bg-zinc-800/50" />
+
+      {/* Speltid (Main Story / HLTB) */}
+      <section className="space-y-1.5">
+        <header className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+          <Clock className="w-3 h-3 text-cyan-400" />
+          <span>Speltid (Main Story)</span>
+        </header>
+        <div className="grid grid-cols-2 gap-1">
+          {[
+            { id: 'all', label: 'Alla' },
+            { id: 'short', label: '< 5h (Snabb)' },
+            { id: 'medium', label: '5–15h (Mellan)' },
+            { id: 'long', label: '15–40h (Lång)' },
+            { id: 'epic', label: '40h+ (Episk)' },
+          ].map((pt) => {
+            const active = (filters.playtime || 'all') === pt.id;
+            return (
+              <button
+                key={pt.id}
+                type="button"
+                onClick={() => setFilters((f) => ({ ...f, playtime: pt.id as any }))}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer text-left ${
+                  active
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60 border border-transparent'
+                }`}
+              >
+                {pt.label}
+              </button>
             );
           })}
         </div>

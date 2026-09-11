@@ -14,14 +14,16 @@ import {
   Calendar,
   Archive,
   ChevronDown,
+  Crown,
 } from 'lucide-react';
 
 interface StatsDashboardViewProps {
   games: Game[];
   onSelectGame: (game: Game) => void;
+  onOpenWrapped?: () => void;
 }
 
-export function StatsDashboardView({ games, onSelectGame }: StatsDashboardViewProps) {
+export function StatsDashboardView({ games, onSelectGame, onOpenWrapped }: StatsDashboardViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'diary'>('overview');
   const [diaryMode, setDiaryMode] = useState<'active' | 'memories'>('active');
   const [selectedYear, setSelectedYear] = useState<number | 'all'>(new Date().getFullYear());
@@ -223,9 +225,21 @@ export function StatsDashboardView({ games, onSelectGame }: StatsDashboardViewPr
           </button>
         </div>
 
-        <span className="hidden sm:inline-block text-xs px-2.5 py-1 rounded-full bg-zinc-900 text-zinc-400 border border-zinc-800">
-          {totalGames} spel totalt
-        </span>
+        <div className="flex items-center gap-2.5">
+          {onOpenWrapped && (
+            <button
+              type="button"
+              onClick={onOpenWrapped}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-bold transition shadow-sm cursor-pointer"
+            >
+              <Crown className="w-3.5 h-3.5 text-amber-400" />
+              <span>Spelåret Wrapped 👑</span>
+            </button>
+          )}
+          <span className="hidden sm:inline-block text-xs px-2.5 py-1 rounded-full bg-zinc-900 text-zinc-400 border border-zinc-800">
+            {totalGames} spel totalt
+          </span>
+        </div>
       </div>
 
       {/* ==================== SUB-TAB 1: ÖVERSIKT ==================== */}

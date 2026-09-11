@@ -16,6 +16,7 @@ struct SearchFilterConfig: Equatable {
     var minRating: Int = 0
     var hideOwned: Bool = false
     var sortOption: DiscoverSortOption = .popularity
+    var playtimeFilter: PlaytimeFilter = .all
 
     init(
         startYear: Int? = nil,
@@ -25,7 +26,8 @@ struct SearchFilterConfig: Equatable {
         developer: String = "",
         minRating: Int = 0,
         hideOwned: Bool = false,
-        sortOption: DiscoverSortOption = .popularity
+        sortOption: DiscoverSortOption = .popularity,
+        playtimeFilter: PlaytimeFilter = .all
     ) {
         self.startYear = startYear
         self.endYear = endYear
@@ -35,6 +37,7 @@ struct SearchFilterConfig: Equatable {
         self.minRating = minRating
         self.hideOwned = hideOwned
         self.sortOption = sortOption
+        self.playtimeFilter = playtimeFilter
     }
 
     // Bakåtkompatibilitet
@@ -54,7 +57,7 @@ struct SearchFilterConfig: Equatable {
     }
 
     var isActive: Bool {
-        startYear != nil || endYear != nil || !platformIDs.isEmpty || !genres.isEmpty || !developer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sortOption != .popularity || minRating > 0 || hideOwned
+        startYear != nil || endYear != nil || !platformIDs.isEmpty || !genres.isEmpty || !developer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sortOption != .popularity || minRating > 0 || hideOwned || playtimeFilter != .all
     }
 
     var activeFilterCount: Int {
@@ -66,6 +69,7 @@ struct SearchFilterConfig: Equatable {
         if sortOption != .popularity { count += 1 }
         if minRating > 0 { count += 1 }
         if hideOwned { count += 1 }
+        if playtimeFilter != .all { count += 1 }
         return count
     }
 
@@ -78,6 +82,7 @@ struct SearchFilterConfig: Equatable {
         minRating = 0
         hideOwned = false
         sortOption = .popularity
+        playtimeFilter = .all
     }
 }
 
@@ -512,6 +517,36 @@ struct AdvancedSearchFilterSheet: View {
                                 .font(.caption2.bold())
                                 .foregroundStyle(.red)
                         }
+                    }
+                }
+
+                // 5b. Speltid (Main Story)
+                Section("Speltid (Main Story)") {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(PlaytimeFilter.allCases) { pf in
+                                let isSelected = localConfig.playtimeFilter == pf
+                                Button {
+                                    withAnimation(.snappy(duration: 0.2)) {
+                                        localConfig.playtimeFilter = pf
+                                    }
+                                } label: {
+                                    HStack(spacing: 5) {
+                                        Image(systemName: isSelected ? "checkmark" : pf.icon)
+                                            .font(.system(size: 10, weight: .bold))
+                                        Text(pf.rawValue)
+                                            .font(.caption.weight(.semibold))
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 7)
+                                    .background(isSelected ? Color.red : Color(.tertiarySystemFill))
+                                    .foregroundStyle(isSelected ? Color.white : Color.primary)
+                                    .clipShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.vertical, 4)
                     }
                 }
 

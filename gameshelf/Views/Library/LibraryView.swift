@@ -59,6 +59,56 @@ enum OwnershipFilter: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+// MARK: - Speltidsfilter (Main Story / HLTB)
+enum PlaytimeFilter: String, CaseIterable, Identifiable {
+    case all = "Alla speltider"
+    case short = "< 5 timmar"
+    case medium = "5–15 timmar"
+    case long = "15–40 timmar"
+    case epic = "40+ timmar"
+
+    var id: String { rawValue }
+
+    var shortLabel: String {
+        switch self {
+        case .all: return "Speltid: Alla"
+        case .short: return "< 5h"
+        case .medium: return "5–15h"
+        case .long: return "15–40h"
+        case .epic: return "40h+"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .all: return "clock"
+        case .short: return "bolt.fill"
+        case .medium: return "target"
+        case .long: return "shield.fill"
+        case .epic: return "crown.fill"
+        }
+    }
+
+    func matches(hours: Int?) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .short:
+            guard let h = hours, h > 0 else { return false }
+            return h < 5
+        case .medium:
+            guard let h = hours, h > 0 else { return false }
+            return h >= 5 && h < 15
+        case .long:
+            guard let h = hours, h > 0 else { return false }
+            return h >= 15 && h < 40
+        case .epic:
+            guard let h = hours, h > 0 else { return false }
+            return h >= 40
+        }
+    }
+}
+
 // MARK: - Filtermodeller för Plattform och Årsgruppering
 struct LibraryPlatformFilter: Identifiable, Hashable {
     let id: String
@@ -87,6 +137,7 @@ struct LibraryView: View {
     @State private var showingProfileSheet = false
     @State private var searchText = ""
     @State private var selectedPlatformIDs: Set<String> = []
+    @State private var selectedPlaytimeFilter: PlaytimeFilter = .all
     @State private var groupByYear: Bool = true
     @State private var collapsedYears: Set<Int> = []
     @State private var isSearching = false
@@ -245,13 +296,14 @@ struct LibraryView: View {
 
             let matchesStatus = (selectedStatusFilter.status == nil) || (game.status == selectedStatusFilter.status)
             let matchesPlatform = gameMatchesSelectedPlatform(game)
+            let matchesPlaytime = selectedPlaytimeFilter.matches(hours: game.estimatedHours)
             let matchesSearch = query.isEmpty ||
                 game.title.lowercased().contains(query) ||
                 game.title.lowercased().contains(resolvedQuery) ||
                 game.developers.contains(where: { $0.lowercased().contains(query) || $0.lowercased().contains(resolvedQuery) }) ||
                 game.genres.contains(where: { $0.lowercased().contains(query) || $0.lowercased().contains(resolvedQuery) }) ||
                 game.platforms.contains(where: { $0.lowercased().contains(query) })
-            return matchesStatus && matchesPlatform && matchesSearch
+            return matchesStatus && matchesPlatform && matchesPlaytime && matchesSearch
         }
         .sorted(by: sortComparator)
     }
@@ -271,13 +323,14 @@ struct LibraryView: View {
             }
 
             let matchesPlatform = gameMatchesSelectedPlatform(game)
+            let matchesPlaytime = selectedPlaytimeFilter.matches(hours: game.estimatedHours)
             let matchesSearch = query.isEmpty ||
                 game.title.lowercased().contains(query) ||
                 game.title.lowercased().contains(resolvedQuery) ||
                 game.developers.contains(where: { $0.lowercased().contains(query) || $0.lowercased().contains(resolvedQuery) }) ||
                 game.genres.contains(where: { $0.lowercased().contains(query) || $0.lowercased().contains(resolvedQuery) }) ||
                 game.platforms.contains(where: { $0.lowercased().contains(query) })
-            return matchesPlatform && matchesSearch
+            return matchesPlatform && matchesPlaytime && matchesSearch
         }
         .sorted(by: sortComparator)
     }
@@ -601,6 +654,40 @@ struct LibraryView: View {
     }
 
     @ViewBuilder
+    private var playtimeFilterMenu: some View {
+        Menu {
+            Section("Filtrera Speltid (Main Story)") {
+                ForEach(PlaytimeFilter.allCases) { filter in
+                    Button {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            selectedPlaytimeFilter = filter
+                        }
+                    } label: {
+                        Label(filter.rawValue, systemImage: selectedPlaytimeFilter == filter ? "checkmark" : filter.icon)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: selectedPlaytimeFilter != .all ? "clock.fill" : "clock")
+                    .font(.system(size: 10, weight: .bold))
+
+                if selectedPlaytimeFilter != .all {
+                    Text(selectedPlaytimeFilter.shortLabel)
+                        .font(.caption.weight(.bold))
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 7)
+            .padding(.vertical, 5.5)
+            .background(selectedPlaytimeFilter != .all ? Color.red.opacity(0.12) : Color(.secondarySystemGroupedBackground), in: Capsule())
+            .foregroundStyle(selectedPlaytimeFilter != .all ? Color.red : Color.primary)
+            .overlay(Capsule().stroke(selectedPlaytimeFilter != .all ? Color.red.opacity(0.3) : Color.white.opacity(0.12), lineWidth: 0.8))
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
     private var sortMenu: some View {
         Menu {
             Section("Sortera efter") {
@@ -652,9 +739,37 @@ struct LibraryView: View {
 
     @ViewBuilder
     private var activeFilterChips: some View {
-        if !selectedPlatformIDs.isEmpty {
+        if !selectedPlatformIDs.isEmpty || selectedPlaytimeFilter != .all {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
+                    if selectedPlaytimeFilter != .all {
+                        HStack(spacing: 4) {
+                            Image(systemName: selectedPlaytimeFilter.icon)
+                                .font(.system(size: 8.5, weight: .bold))
+                                .foregroundStyle(Color.red)
+
+                            Text(selectedPlaytimeFilter.shortLabel)
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+
+                            Button {
+                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                    selectedPlaytimeFilter = .all
+                                }
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3.5)
+                        .background(Color.red.opacity(0.12), in: Capsule())
+                        .overlay(Capsule().stroke(Color.red.opacity(0.25), lineWidth: 0.8))
+                    }
+
                     ForEach(availablePlatforms.filter { selectedPlatformIDs.contains($0.id) }) { plat in
                         HStack(spacing: 4) {
                             Image(systemName: plat.icon)
@@ -768,6 +883,9 @@ struct LibraryView: View {
 
                     // 2. Dedikerad Plattform (Kompakt ikon + badge)
                     platformFilterMenu
+
+                    // 2b. Dedikerad Speltid (Main Story / HLTB)
+                    playtimeFilterMenu
 
                     // 3. Årsvy vs Rutnät
                     Button {

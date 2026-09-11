@@ -27,6 +27,7 @@ final class ProfileStore: ObservableObject {
         static let playingMood = "profile.playingMood"
         static let gamerBio = "profile.gamerBio"
         static let playstyle = "profile.playstyle"
+        static let gotyByYear = "profile.gotyByYear"
     }
 
     static let defaultBirthdate: Date = Calendar.current.date(byAdding: .year, value: -25, to: Date()) ?? Date()
@@ -176,6 +177,31 @@ final class ProfileStore: ObservableObject {
         }
     }
 
+    @Published var gotyByYear: [String: String] {
+        didSet {
+            if gotyByYear != oldValue {
+                UserDefaults.standard.set(gotyByYear, forKey: currentKey(Keys.gotyByYear))
+                syncToRemote()
+            }
+        }
+    }
+
+    func setGoty(gameId: UUID?, forYear year: Int) {
+        let yearKey = String(year)
+        if let gameId = gameId {
+            gotyByYear[yearKey] = gameId.uuidString
+        } else {
+            gotyByYear.removeValue(forKey: yearKey)
+        }
+    }
+
+    func getGoty(forYear year: Int) -> UUID? {
+        guard let idStr = gotyByYear[String(year)], let uuid = UUID(uuidString: idStr) else {
+            return nil
+        }
+        return uuid
+    }
+
     init() {
         self.username = Self.defaultUsername
         self.avatarType = Self.defaultAvatarType
@@ -191,6 +217,7 @@ final class ProfileStore: ObservableObject {
         self.playingMood = Self.defaultPlayingMood
         self.gamerBio = Self.defaultGamerBio
         self.playstyle = Self.defaultPlaystyle
+        self.gotyByYear = [:]
 
         loadProfile(for: ProfileManager.shared.activeProfileId)
 
@@ -256,6 +283,7 @@ final class ProfileStore: ObservableObject {
         self.playingMood = stringVal(Keys.playingMood, defaultVal: Self.defaultPlayingMood)
         self.gamerBio = stringVal(Keys.gamerBio, defaultVal: Self.defaultGamerBio)
         self.playstyle = Set(arrayVal(Keys.playstyle, defaultVal: Array(Self.defaultPlaystyle)))
+        self.gotyByYear = UserDefaults.standard.dictionary(forKey: currentKey(Keys.gotyByYear, profileId: profileId)) as? [String: String] ?? [:]
     }
 
     public func importAndSyncProfile(userId: UUID) async {
@@ -278,6 +306,7 @@ final class ProfileStore: ObservableObject {
                         if let mood = prefs.playingMood, !mood.isEmpty { self.playingMood = mood }
                         if let bio = prefs.gamerBio { self.gamerBio = bio }
                         if let ps = prefs.playstyle { self.playstyle = Set(ps) }
+                        if let gy = prefs.gotyByYear { self.gotyByYear = gy }
                     }
 
                     UserDefaults.standard.set(self.username, forKey: currentKey(Keys.username, profileId: userId))
@@ -291,6 +320,7 @@ final class ProfileStore: ObservableObject {
                     UserDefaults.standard.set(self.playingMood, forKey: currentKey(Keys.playingMood, profileId: userId))
                     UserDefaults.standard.set(self.gamerBio, forKey: currentKey(Keys.gamerBio, profileId: userId))
                     UserDefaults.standard.set(Array(self.playstyle), forKey: currentKey(Keys.playstyle, profileId: userId))
+                    UserDefaults.standard.set(self.gotyByYear, forKey: currentKey(Keys.gotyByYear, profileId: userId))
                     ProfileManager.shared.updateActiveProfile(name: self.username, avatarType: self.avatarType)
                 }
             }
@@ -312,8 +342,8 @@ final class ProfileStore: ObservableObject {
         Task { [weak self] in
             guard let self = self else { return }
             let userId = await MainActor.run { SupabaseAuthManager.shared.persistentUserId }
-            let (uName, aType, aAge, pPlatforms, fGenres, pPlayFor, fGameIDs, gGoal, tGameIDs, pMood, gBio, pStyle) = await MainActor.run {
-                (self.username, self.avatarType, self.age, Array(self.platforms), Array(self.favoriteGenres), Array(self.playFor), self.favoriteGameIDs, self.annualGamingGoal, self.targetGameIDs, self.playingMood, self.gamerBio, Array(self.playstyle))
+            let (uName, aType, aAge, pPlatforms, fGenres, pPlayFor, fGameIDs, gGoal, tGameIDs, pMood, gBio, pStyle, gGoty) = await MainActor.run {
+                (self.username, self.avatarType, self.age, Array(self.platforms), Array(self.favoriteGenres), Array(self.playFor), self.favoriteGameIDs, self.annualGamingGoal, self.targetGameIDs, self.playingMood, self.gamerBio, Array(self.playstyle), self.gotyByYear)
             }
             let prefs = SupabaseSyncService.ProfilePreferencesData(
                 age: aAge,
@@ -326,7 +356,8 @@ final class ProfileStore: ObservableObject {
                 targetGameIDs: tGameIDs,
                 playingMood: pMood,
                 gamerBio: gBio,
-                playstyle: pStyle
+                playstyle: pStyle,
+                gotyByYear: gGoty
             )
             try? await SupabaseSyncService.shared.upsertProfile(
                 userId: userId,
@@ -368,6 +399,10 @@ final class ProfileStore: ObservableObject {
                         if let mood = prefs.playingMood, !mood.isEmpty { self.playingMood = mood }
                         if let bio = prefs.gamerBio { self.gamerBio = bio }
                         if let ps = prefs.playstyle { self.playstyle = Set(ps) }
+                        if let gy = prefs.gotyByYear {
+                            self.gotyByYear = gy
+                            UserDefaults.standard.set(gy, forKey: currentKey(Keys.gotyByYear, profileId: userId))
+                        }
                     }
                 }
             } else {

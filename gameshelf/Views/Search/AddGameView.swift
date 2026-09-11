@@ -276,6 +276,14 @@ struct AddGameView: View {
                     }
                 }
 
+                // Speltid
+                if filterConfig.playtimeFilter != .all {
+                    filterChip(label: "⏱️ \(filterConfig.playtimeFilter.shortLabel)") {
+                        filterConfig.playtimeFilter = .all
+                        Task { await performSearchAsync() }
+                    }
+                }
+
                 // Rensa alla
                 Button {
                     withAnimation {
@@ -983,12 +991,21 @@ struct AddGameView: View {
                 offset: offset
             )
 
-            // Apply hideOwned filter in-memory
+            // Apply in-memory filters (hideOwned, playtimeFilter)
             let libraryIDs = Set(store.games.compactMap { $0.igdbID })
             let libraryTitles = Set(store.games.map { $0.title.lowercased() })
-            let filtered = filterConfig.hideOwned
+            var filtered = filterConfig.hideOwned
                 ? results.filter { !libraryIDs.contains($0.id) && !libraryTitles.contains($0.name.lowercased()) }
                 : results
+
+            if filterConfig.playtimeFilter != .all {
+                filtered = filtered.filter { igdbGame in
+                    let hours = igdbGame.timeToBeat?.normally.map { Int(round(Double($0) / 3600.0)) }
+                        ?? igdbGame.timeToBeat?.mainStoryHours
+                        ?? store.games.first { $0.igdbID == igdbGame.id }?.estimatedHours
+                    return filterConfig.playtimeFilter.matches(hours: hours)
+                }
+            }
 
             await MainActor.run {
                 if loadMore {

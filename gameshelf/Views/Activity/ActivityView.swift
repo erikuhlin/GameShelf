@@ -11,6 +11,7 @@ struct ActivityView: View {
     @EnvironmentObject var store: LibraryStore
     @EnvironmentObject var profile: ProfileStore
     @State private var showingProfileSheet = false
+    @State private var showingWrappedSheet = false
 
     private var games: [Game] {
         store.games
@@ -188,6 +189,7 @@ struct ActivityView: View {
             } else {
                 VStack(alignment: .leading, spacing: 22) {
                     overviewCard
+                    wrappedGotyCard
                     gamingGoalCard
                     statusDistributionCard
                     genreDistributionCard
@@ -204,9 +206,83 @@ struct ActivityView: View {
                 .padding(.bottom, 75)
             }
         }
+        .sheet(isPresented: $showingWrappedSheet) {
+            YearWrappedSheet()
+        }
     }
 
     // MARK: - Sektioner
+
+    /// 0. GOTY & Wrapped Card
+    private var wrappedGotyCard: some View {
+        let currentYear = Calendar.current.component(.year, from: Date())
+        let crowned = profile.getGoty(forYear: currentYear).flatMap { id in games.first { $0.id == id } }
+
+        return Button {
+            showingWrappedSheet = true
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.orange.opacity(0.18))
+                        .frame(width: 46, height: 46)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.orange.opacity(0.4), lineWidth: 1)
+                        )
+                    Text("👑")
+                        .font(.title3)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text("SPELÅRET \(currentYear) WRAPPED")
+                            .font(.system(size: 9.5, weight: .black))
+                            .foregroundStyle(.orange)
+                            .tracking(1)
+
+                        if crowned != nil {
+                            Text("GOTY KORAT")
+                                .font(.system(size: 8, weight: .black))
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 4.5)
+                                .padding(.vertical, 1.5)
+                                .background(Color.yellow, in: Capsule())
+                        }
+                    }
+
+                    if let goty = crowned {
+                        Text("Ditt GOTY: \(goty.title)")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                    } else {
+                        Text("Kora Game of the Year & Se Wrapped")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(.primary)
+                    }
+
+                    Text("Se årets statistik, toppgenrer och dela story")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.orange)
+            }
+            .padding(14)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
 
     /// 1. Huvud-KPI:er
     private var overviewCard: some View {

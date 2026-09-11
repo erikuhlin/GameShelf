@@ -19,6 +19,7 @@ import { DiscoverView } from '@/components/DiscoverView';
 import { UniversalSearchModal } from '@/components/UniversalSearchModal';
 import { ProfileModal } from '@/components/ProfileModal';
 import { CompanyModal } from '@/components/CompanyModal';
+import { YearWrappedModal } from '@/components/YearWrappedModal';
 import { UserProfile } from '@/types/profile';
 import { loadUserProfile, saveUserProfile, DEFAULT_PROFILE } from '@/lib/profileStore';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -39,6 +40,8 @@ import {
   List,
   ArrowUpDown,
   Flame,
+  Clock,
+  Crown,
 } from 'lucide-react';
 import { fetchDealsForGames, normalizeTitle, GameDeal } from '@/services/priceWatcherService';
 
@@ -65,6 +68,7 @@ export default function HomePage() {
   // Library Sorting & Filtering state
   const [librarySort, setLibrarySort] = useState<LibrarySortOption>('dateAdded');
   const [libraryPlatformFilter, setLibraryPlatformFilter] = useState<string>('Alla');
+  const [libraryPlaytimeFilter, setLibraryPlaytimeFilter] = useState<'all' | 'short' | 'medium' | 'long' | 'epic'>('all');
   const [libraryOwnershipFilter, setLibraryOwnershipFilter] = useState<'all' | 'owned' | 'wishlist'>('all');
   const [filterOnlyOnSale, setFilterOnlyOnSale] = useState(false);
   const [dealsMap, setDealsMap] = useState<Record<string, GameDeal>>({});
@@ -76,6 +80,7 @@ export default function HomePage() {
   const [isPairingModalOpen, setIsPairingModalOpen] = useState(false);
   const [isRouletteModalOpen, setIsRouletteModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isWrappedModalOpen, setIsWrappedModalOpen] = useState(false);
   const [activeCompanyModal, setActiveCompanyModal] = useState<{
     id: number;
     name: string;
@@ -210,6 +215,7 @@ export default function HomePage() {
           playingMood: prefs.playingMood || 'Utforska nya världar',
           gamerBio: prefs.gamerBio || '',
           playstyle: Array.isArray(prefs.playstyle) ? prefs.playstyle : ['Singleplayer'],
+          gotyByYear: prefs.gotyByYear && typeof prefs.gotyByYear === 'object' ? prefs.gotyByYear : {},
         };
         setUserProfile(updated);
         setProfileName(updated.username);
@@ -242,6 +248,7 @@ export default function HomePage() {
         playingMood: updated.playingMood,
         gamerBio: updated.gamerBio,
         playstyle: updated.playstyle,
+        gotyByYear: updated.gotyByYear || {},
       };
       try {
         await supabase.from('profiles').upsert({
@@ -308,6 +315,7 @@ export default function HomePage() {
               playingMood: prefs.playingMood || 'Utforska nya världar',
               gamerBio: prefs.gamerBio || '',
               playstyle: Array.isArray(prefs.playstyle) ? prefs.playstyle : ['Singleplayer'],
+              gotyByYear: prefs.gotyByYear && typeof prefs.gotyByYear === 'object' ? prefs.gotyByYear : {},
             };
             setUserProfile(updated);
             setProfileName(updated.username);
@@ -780,6 +788,20 @@ export default function HomePage() {
         if (!hasPlatform) return false;
       }
 
+      // 3b. Speltidsfilter (Main story / HLTB)
+      if (libraryPlaytimeFilter !== 'all') {
+        const hours = game.estimated_hours || (game.hours_played ? Math.round(game.hours_played) : 0);
+        if (libraryPlaytimeFilter === 'short') {
+          if (!hours || hours >= 5) return false;
+        } else if (libraryPlaytimeFilter === 'medium') {
+          if (!hours || hours < 5 || hours >= 15) return false;
+        } else if (libraryPlaytimeFilter === 'long') {
+          if (!hours || hours < 15 || hours >= 40) return false;
+        } else if (libraryPlaytimeFilter === 'epic') {
+          if (!hours || hours < 40) return false;
+        }
+      }
+
       // 4. Samlingsfilter
       if (selectedCollectionId) {
         const col = collections.find((c) => c.id === selectedCollectionId);
@@ -866,6 +888,7 @@ export default function HomePage() {
     selectedStatus,
     libraryOwnershipFilter,
     libraryPlatformFilter,
+    libraryPlaytimeFilter,
     selectedCollectionId,
     searchQuery,
     collections,
@@ -1325,6 +1348,50 @@ export default function HomePage() {
           </div>
         )}
 
+        {/* GOTY & Spelåret Wrapped Banner */}
+        {viewMode !== 'collections' && viewMode !== 'stats' && viewMode !== 'discover' && games.length > 0 && (() => {
+          const currentYear = new Date().getFullYear().toString();
+          const currentGotyId = userProfile?.gotyByYear?.[currentYear];
+          const currentGotyGame = currentGotyId
+            ? games.find((g) => g.id === currentGotyId || (g.igdb_id && String(g.igdb_id) === currentGotyId))
+            : null;
+
+          return (
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-zinc-900/90 border border-amber-500/30 p-4 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0 shadow-inner">
+                  <Crown className="w-5 h-5 text-amber-400 animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                      GOTY & Spelåret Wrapped {currentYear}
+                    </span>
+                    {currentGotyGame && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30">
+                        Krönt
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-zinc-300 mt-0.5">
+                    {currentGotyGame
+                      ? `Ditt Game of the Year: "${currentGotyGame.title}". Se din årsstatistik & fira årets spelupplevelser!`
+                      : 'Kora ditt personliga Game of the Year och utforska årets gaming-ögonblick & statistik.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsWrappedModalOpen(true)}
+                className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition shadow-md hover:shadow-amber-500/25 shrink-0 cursor-pointer"
+              >
+                <Crown className="w-4 h-4 text-zinc-950 fill-zinc-950" />
+                <span>{currentGotyGame ? 'Se Spelåret Wrapped' : 'Kora ditt GOTY & Se Wrapped'}</span>
+              </button>
+            </div>
+          );
+        })()}
+
         {/* Library Sub-bar: Status Filter Tabs & View Mode Switcher */}
         {viewMode !== 'collections' && viewMode !== 'stats' && viewMode !== 'discover' && games.length > 0 && (
           <div className="space-y-2">
@@ -1479,6 +1546,22 @@ export default function HomePage() {
                   </select>
                 </div>
               )}
+
+              {/* Speltidsfilter */}
+              <div className="flex items-center gap-2">
+                <span className="text-zinc-600 hidden sm:inline">•</span>
+                <select
+                  value={libraryPlaytimeFilter}
+                  onChange={(e) => setLibraryPlaytimeFilter(e.target.value as any)}
+                  className="bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-brand-red cursor-pointer font-medium hover:border-zinc-700 transition"
+                >
+                  <option value="all">Alla speltider</option>
+                  <option value="short">Snabbspel (&lt; 5h)</option>
+                  <option value="medium">Mellan (5–15h)</option>
+                  <option value="long">Långt (15–40h)</option>
+                  <option value="epic">Episkt (40h+)</option>
+                </select>
+              </div>
             </div>
 
             {/* Höger: Ägarskapsfilter (Alla / I ägo / Önskelista) */}
@@ -1565,7 +1648,11 @@ export default function HomePage() {
             onSelectGame={setSelectedGame}
           />
         ) : viewMode === 'stats' ? (
-          <StatsDashboardView games={games} onSelectGame={setSelectedGame} />
+          <StatsDashboardView
+            games={games}
+            onSelectGame={setSelectedGame}
+            onOpenWrapped={() => setIsWrappedModalOpen(true)}
+          />
         ) : games.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 sm:py-28 text-center px-4 rounded-3xl border border-zinc-800/80 bg-gradient-to-b from-zinc-900/40 via-zinc-950/60 to-zinc-950/80 shadow-2xl max-w-2xl mx-auto my-6">
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-brand-red to-rose-500 flex items-center justify-center text-white mb-5 shadow-xl shadow-brand-red/20">
@@ -1806,6 +1893,14 @@ export default function HomePage() {
           }}
         />
       )}
+
+      <YearWrappedModal
+        isOpen={isWrappedModalOpen}
+        onClose={() => setIsWrappedModalOpen(false)}
+        games={games}
+        profile={userProfile}
+        onUpdateProfile={handleUpdateProfile}
+      />
     </div>
   );
 }

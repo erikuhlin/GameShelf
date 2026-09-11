@@ -25,6 +25,7 @@ struct ProfileView: View {
     @State private var showingProfileSwitcher = false
     @State private var showingPairingSheet = false
     @State private var showingAvatarPicker = false
+    @State private var showingWrappedSheet = false
     @State private var isEditingIdentity = false
     @State private var tempUsername = ""
     @State private var tempAgeString = ""
@@ -194,6 +195,9 @@ struct ProfileView: View {
                     .environmentObject(store)
                     .environmentObject(profile)
             }
+            .sheet(isPresented: $showingWrappedSheet) {
+                YearWrappedSheet()
+            }
             .sheet(isPresented: $showingAvatarPicker) {
                 AvatarPickerSheet()
                     .environmentObject(profile)
@@ -333,6 +337,61 @@ struct ProfileView: View {
 
                 Spacer()
             }
+
+            // 🏆 GOTY & Spelåret Wrapped Banner
+            Button {
+                showingWrappedSheet = true
+            } label: {
+                let currentYear = Calendar.current.component(.year, from: Date())
+                let crowned = profile.getGoty(forYear: currentYear).flatMap { id in store.games.first { $0.id == id } }
+
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.orange.opacity(0.18))
+                            .frame(width: 42, height: 42)
+                        Text("👑")
+                            .font(.system(size: 20))
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 5) {
+                            Text("SPELÅRET \(currentYear)")
+                                .font(.system(size: 9.5, weight: .black))
+                                .foregroundStyle(.orange)
+                                .tracking(1)
+
+                            if crowned != nil {
+                                Text("GOTY KORAT")
+                                    .font(.system(size: 8, weight: .black))
+                                    .foregroundStyle(.black)
+                                    .padding(.horizontal, 4.5)
+                                    .padding(.vertical, 1.5)
+                                    .background(Color.yellow, in: Capsule())
+                            }
+                        }
+
+                        Text(crowned != nil ? "Ditt GOTY: \(crowned!.title)" : "Kora årets Game of the Year!")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+
+                        Text("Se årets sammanfattning & dela story-kort")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.orange)
+                }
+                .padding(12)
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.orange.opacity(0.3), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
 
             // Humör-indikator
             Menu {

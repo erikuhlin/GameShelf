@@ -69,6 +69,7 @@ struct ExploreView: View {
     @State private var showingGamingGoalSheet: Bool = false
     @State private var showingAvatarPickerSheet: Bool = false
     @State private var showingPairingSheet: Bool = false
+    @State private var showingWrappedSheet: Bool = false
 
     private var prefs: ExplorePrefs {
         .init(minAge: profile.age, platforms: Array(profile.platforms))
@@ -140,6 +141,9 @@ struct ExploreView: View {
                     } else {
                         // 1. Välkomsthälsning & Spelmål 2026
                         greetingHeader
+
+                        // 🏆 GOTY & Spelåret Wrapped Banner
+                        gotyWrappedBanner
 
                         // Fokusmål Spotlight
                         focusGoalsSection
@@ -244,6 +248,9 @@ struct ExploreView: View {
                         }
                 }
             }
+            .sheet(isPresented: $showingWrappedSheet) {
+                YearWrappedSheet()
+            }
             .alert("Hitta spel i IGDB", isPresented: findAlertBinding) {
                 Button("OK", role: .cancel) { findError = nil }
             } message: {
@@ -307,6 +314,97 @@ struct ExploreView: View {
         store.games.filter {
             $0.status == .completed && $0.isOwned && $0.completedYear == currentYear
         }.count
+    }
+
+    private var gotyWrappedBanner: some View {
+        let currentYear = Calendar.current.component(.year, from: Date())
+        let crownedGame = profile.getGoty(forYear: currentYear).flatMap { id in store.games.first { $0.id == id } }
+
+        return Button {
+            showingWrappedSheet = true
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.yellow.opacity(0.35), Color.orange.opacity(0.2)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 44, height: 44)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.yellow.opacity(0.5), lineWidth: 1)
+                        )
+
+                    Text("👑")
+                        .font(.system(size: 22))
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("SPELÅRET \(currentYear)")
+                            .font(.system(size: 9.5, weight: .black))
+                            .foregroundStyle(.yellow)
+                            .tracking(1)
+
+                        if crownedGame != nil {
+                            Text("GOTY KORAT")
+                                .font(.system(size: 8.5, weight: .heavy))
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1.5)
+                                .background(Color.yellow, in: Capsule())
+                        }
+                    }
+
+                    if let goty = crownedGame {
+                        Text("Ditt GOTY: \(goty.title)")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                    } else {
+                        Text("Kora ditt Game of the Year!")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(.primary)
+                    }
+
+                    Text("Se din Spelåret Wrapped & nominera vinnare")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                HStack(spacing: 4) {
+                    Text(crownedGame != nil ? "Öppna" : "Välj nu")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(Color.yellow)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Color.yellow)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(Color.yellow.opacity(0.12), in: Capsule())
+            }
+            .padding(12)
+            .background(
+                LinearGradient(
+                    colors: [Color.yellow.opacity(0.1), Color(.secondarySystemGroupedBackground)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.yellow.opacity(0.3), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private var goalBadge: some View {

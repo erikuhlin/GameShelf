@@ -462,6 +462,7 @@ actor SupabaseSyncService {
         var playingMood: String?
         var gamerBio: String?
         var playstyle: [String]?
+        var gotyByYear: [String: String]?
     }
 
     func fetchProfile(userId: UUID) async throws -> (username: String?, avatarUrl: String?, preferences: ProfilePreferencesData?)? {

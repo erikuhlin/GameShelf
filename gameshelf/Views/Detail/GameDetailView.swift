@@ -1101,7 +1101,7 @@ struct GameDetailView: View {
                 if let url = deal.dealURL {
                     Link(destination: url) {
                         HStack(spacing: 6) {
-                            Text("Gå till erbjudandet i \(deal.storeName)")
+                            Text("Gå till erbjudandet hos \(deal.storeName)")
                                 .font(.subheadline.weight(.semibold))
                             Image(systemName: "arrow.up.right")
                                 .font(.caption.weight(.bold))

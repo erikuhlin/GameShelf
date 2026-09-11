@@ -23,10 +23,38 @@ const STORE_NAMES: Record<string, string> = {
   '1': 'Steam',
   '2': 'GamersGate',
   '3': 'GreenManGaming',
+  '4': 'Amazon',
+  '5': 'GameStop',
+  '6': 'Direct2Drive',
   '7': 'GOG',
+  '8': 'EA / Origin',
+  '9': 'Get Games',
+  '10': 'Shiny Loot',
   '11': 'Humble Store',
-  '25': 'Epic Games',
-  '31': 'Blizzard',
+  '12': 'Desura',
+  '13': 'Ubisoft Store',
+  '14': 'IndieGameStand',
+  '15': 'Fanatical',
+  '16': 'Gamesrocket',
+  '17': 'Games Republic',
+  '18': 'SilaGames',
+  '19': 'Playfield',
+  '20': 'ImperialGames',
+  '21': 'WinGameStore',
+  '22': 'FunStock',
+  '23': 'GameBillet',
+  '24': 'Voidu',
+  '25': 'Epic Games Store',
+  '26': 'Razer Game Store',
+  '27': 'Gamesplanet',
+  '28': 'Gamesload',
+  '29': '2Game',
+  '30': 'IndieGala',
+  '31': 'Blizzard Shop',
+  '32': 'AllYouPlay',
+  '33': 'DLGamer',
+  '34': 'Noctre',
+  '35': 'DreamGame',
 };
 
 export async function GET(request: NextRequest) {
@@ -71,11 +99,13 @@ export async function GET(request: NextRequest) {
     const savPct = parseFloat(best.savings) || 0;
     const onSale = best.isOnSale === '1' && savPct > 0;
     const storeID = best.storeID || '1';
-    const storeName = STORE_NAMES[storeID] || 'Digital Butik';
+    const storeName = STORE_NAMES[storeID] || 'PC Store';
 
     let dealURL: string | null = null;
-    if (best.dealID) {
-      dealURL = `https://www.cheapshark.com/redirect?dealID=${encodeURIComponent(best.dealID)}`;
+    if (storeID === '1' && best.steamAppID) {
+      dealURL = `https://store.steampowered.com/app/${best.steamAppID}`;
+    } else if (best.dealID) {
+      dealURL = `https://www.cheapshark.com/redirect?dealID=${best.dealID}`;
     }
 
     let cheapestPriceEver: number | null = null;

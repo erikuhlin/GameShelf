@@ -1086,7 +1086,7 @@ export function GameDetailModal({
                       rel="noopener noreferrer"
                       className="flex items-center justify-center gap-1.5 w-full py-2 px-3 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 rounded-lg text-xs font-bold text-orange-300 transition"
                     >
-                      <span>Gå till erbjudandet i {deal.storeName}</span>
+                      <span>Gå till erbjudandet hos {deal.storeName}</span>
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>
                   )}

@@ -26,19 +26,11 @@ struct GameDealInfo: Codable, Hashable, Sendable {
     let fetchedAt: Date
 
     var formattedSalePrice: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: salePrice)) ?? String(format: "$%.2f", salePrice)
+        String(format: "$%.2f", salePrice)
     }
 
     var formattedNormalPrice: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: normalPrice)) ?? String(format: "$%.2f", normalPrice)
+        String(format: "$%.2f", normalPrice)
     }
 
     var savingsFormatted: String {
@@ -86,7 +78,7 @@ final class PriceWatcherService: ObservableObject {
     @Published private(set) var deals: [String: GameDealInfo] = [:]
     @Published private(set) var isLoading: Bool = false
 
-    private let cacheKey = "gameshelf_cached_deals_v1"
+    private let cacheKey = "gameshelf_cached_deals_v2"
     private let cacheTTL: TimeInterval = 4 * 3600 // 4 timmar
     private var inFlightQueries = Set<String>()
 
@@ -268,8 +260,14 @@ final class PriceWatcherService: ObservableObject {
             let stName = storeName(for: stID)
 
             var dealRedirectURL: URL? = nil
-            if let dID = best.dealID, let enc = dID.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
-                dealRedirectURL = URL(string: "https://www.cheapshark.com/redirect?dealID=\(enc)")
+            // Om det är Steam och vi har steamAppID, länka direkt till Steam!
+            if stID == "1", let appID = best.steamAppID, !appID.isEmpty {
+                dealRedirectURL = URL(string: "https://store.steampowered.com/app/\(appID)")
+            } else if let dID = best.dealID, !dID.isEmpty {
+                // VIKTIGT: dID från CheapShark API är redan URL-kodad (t.ex. %2F, %2B, %3D).
+                // Genom att inte köra addingPercentEncoding undviks dubbelkodning (%25)
+                // som fick CheapShark att misslyckas och omdirigera till sin startsida.
+                dealRedirectURL = URL(string: "https://www.cheapshark.com/redirect?dealID=\(dID)")
             }
 
             // Hämta historiskt lägsta pris om gameID finns
@@ -317,11 +315,39 @@ final class PriceWatcherService: ObservableObject {
         case "1": return "Steam"
         case "2": return "GamersGate"
         case "3": return "GreenManGaming"
+        case "4": return "Amazon"
+        case "5": return "GameStop"
+        case "6": return "Direct2Drive"
         case "7": return "GOG"
+        case "8": return "EA / Origin"
+        case "9": return "Get Games"
+        case "10": return "Shiny Loot"
         case "11": return "Humble Store"
-        case "25": return "Epic Games"
-        case "31": return "Blizzard"
-        default: return "Digital Butik"
+        case "12": return "Desura"
+        case "13": return "Ubisoft Store"
+        case "14": return "IndieGameStand"
+        case "15": return "Fanatical"
+        case "16": return "Gamesrocket"
+        case "17": return "Games Republic"
+        case "18": return "SilaGames"
+        case "19": return "Playfield"
+        case "20": return "ImperialGames"
+        case "21": return "WinGameStore"
+        case "22": return "FunStock"
+        case "23": return "GameBillet"
+        case "24": return "Voidu"
+        case "25": return "Epic Games Store"
+        case "26": return "Razer Game Store"
+        case "27": return "Gamesplanet"
+        case "28": return "Gamesload"
+        case "29": return "2Game"
+        case "30": return "IndieGala"
+        case "31": return "Blizzard Shop"
+        case "32": return "AllYouPlay"
+        case "33": return "DLGamer"
+        case "34": return "Noctre"
+        case "35": return "DreamGame"
+        default: return "PC Store"
         }
     }
 

@@ -21,7 +21,7 @@ import { ProfileModal } from '@/components/ProfileModal';
 import { CompanyModal } from '@/components/CompanyModal';
 import { YearWrappedModal } from '@/components/YearWrappedModal';
 import { UserProfile } from '@/types/profile';
-import { loadUserProfile, saveUserProfile, DEFAULT_PROFILE } from '@/lib/profileStore';
+import { loadUserProfile, saveUserProfile, DEFAULT_PROFILE, isGotySeason } from '@/lib/profileStore';
 import { StatusBadge } from '@/components/StatusBadge';
 import {
   Layers,
@@ -1348,8 +1348,8 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* GOTY & Spelåret Wrapped Banner */}
-        {viewMode !== 'collections' && viewMode !== 'stats' && viewMode !== 'discover' && games.length > 0 && (() => {
+        {/* GOTY & Spelåret Wrapped Banner (dyker upp automatiskt i början av december varje år) */}
+        {isGotySeason() && viewMode !== 'collections' && viewMode !== 'stats' && viewMode !== 'discover' && games.length > 0 && (() => {
           const currentYear = new Date().getFullYear().toString();
           const currentGotyId = userProfile?.gotyByYear?.[currentYear];
           const currentGotyGame = currentGotyId

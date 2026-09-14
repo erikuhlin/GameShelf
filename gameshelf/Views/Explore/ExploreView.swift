@@ -142,8 +142,10 @@ struct ExploreView: View {
                         // 1. Välkomsthälsning & Spelmål 2026
                         greetingHeader
 
-                        // 🏆 GOTY & Spelåret Wrapped Banner
-                        gotyWrappedBanner
+                        // 🏆 GOTY & Spelåret Wrapped Banner (dyker upp i början av december varje år)
+                        if ProfileStore.isGotySeason {
+                            gotyWrappedBanner
+                        }
 
                         // Fokusmål Spotlight
                         focusGoalsSection

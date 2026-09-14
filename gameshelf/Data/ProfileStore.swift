@@ -41,6 +41,12 @@ final class ProfileStore: ObservableObject {
     static let defaultGamerBio = ""
     static let defaultPlaystyle: Set<String> = []
 
+    /// Avgör om GOTY & Spelåret Wrapped är aktivt (dyker upp i början av december och är aktivt t.o.m. januari)
+    public static var isGotySeason: Bool {
+        let month = Calendar.current.component(.month, from: Date())
+        return month == 12 || month == 1
+    }
+
     private var isUpdatingFromRemote = false
 
     private func currentKey(_ base: String, profileId: UUID? = nil) -> String {

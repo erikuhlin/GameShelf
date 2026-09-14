@@ -189,7 +189,9 @@ struct ActivityView: View {
             } else {
                 VStack(alignment: .leading, spacing: 22) {
                     overviewCard
-                    wrappedGotyCard
+                    if ProfileStore.isGotySeason {
+                        wrappedGotyCard
+                    }
                     gamingGoalCard
                     statusDistributionCard
                     genreDistributionCard

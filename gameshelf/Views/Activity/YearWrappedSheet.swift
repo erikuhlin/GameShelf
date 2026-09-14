@@ -18,8 +18,12 @@ struct YearWrappedSheet: View {
     @State private var isExporting = false
 
     init(initialYear: Int? = nil) {
-        let currentYear = Calendar.current.component(.year, from: Date())
-        _selectedYear = State(initialValue: initialYear ?? currentYear)
+        let now = Date()
+        let cal = Calendar.current
+        let currentYear = cal.component(.year, from: now)
+        let month = cal.component(.month, from: now)
+        let defaultYear = (month == 1) ? (currentYear - 1) : currentYear
+        _selectedYear = State(initialValue: initialYear ?? defaultYear)
     }
 
     private var availableYears: [Int] {

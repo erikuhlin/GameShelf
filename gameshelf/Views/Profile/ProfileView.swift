@@ -338,60 +338,62 @@ struct ProfileView: View {
                 Spacer()
             }
 
-            // 🏆 GOTY & Spelåret Wrapped Banner
-            Button {
-                showingWrappedSheet = true
-            } label: {
-                let currentYear = Calendar.current.component(.year, from: Date())
-                let crowned = profile.getGoty(forYear: currentYear).flatMap { id in store.games.first { $0.id == id } }
+            // 🏆 GOTY & Spelåret Wrapped Banner (dyker upp i början av december varje år)
+            if ProfileStore.isGotySeason {
+                Button {
+                    showingWrappedSheet = true
+                } label: {
+                    let currentYear = Calendar.current.component(.year, from: Date())
+                    let crowned = profile.getGoty(forYear: currentYear).flatMap { id in store.games.first { $0.id == id } }
 
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.orange.opacity(0.18))
-                            .frame(width: 42, height: 42)
-                        Text("👑")
-                            .font(.system(size: 20))
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 5) {
-                            Text("SPELÅRET \(currentYear)")
-                                .font(.system(size: 9.5, weight: .black))
-                                .foregroundStyle(.orange)
-                                .tracking(1)
-
-                            if crowned != nil {
-                                Text("GOTY KORAT")
-                                    .font(.system(size: 8, weight: .black))
-                                    .foregroundStyle(.black)
-                                    .padding(.horizontal, 4.5)
-                                    .padding(.vertical, 1.5)
-                                    .background(Color.yellow, in: Capsule())
-                            }
+                    HStack(spacing: 12) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.orange.opacity(0.18))
+                                .frame(width: 42, height: 42)
+                            Text("👑")
+                                .font(.system(size: 20))
                         }
 
-                        Text(crowned != nil ? "Ditt GOTY: \(crowned!.title)" : "Kora årets Game of the Year!")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 5) {
+                                Text("SPELÅRET \(currentYear)")
+                                    .font(.system(size: 9.5, weight: .black))
+                                    .foregroundStyle(.orange)
+                                    .tracking(1)
 
-                        Text("Se årets sammanfattning & dela story-kort")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                                if crowned != nil {
+                                    Text("GOTY KORAT")
+                                        .font(.system(size: 8, weight: .black))
+                                        .foregroundStyle(.black)
+                                        .padding(.horizontal, 4.5)
+                                        .padding(.vertical, 1.5)
+                                        .background(Color.yellow, in: Capsule())
+                                }
+                            }
+
+                            Text(crowned != nil ? "Ditt GOTY: \(crowned!.title)" : "Kora ditt Game of the Year!")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+
+                            Text("Se din personliga årsstatistik & sammanfattning")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.orange)
                     }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.orange)
+                    .padding(12)
+                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.orange.opacity(0.3), lineWidth: 1))
                 }
-                .padding(12)
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.orange.opacity(0.3), lineWidth: 1))
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
 
             // Humör-indikator
             Menu {

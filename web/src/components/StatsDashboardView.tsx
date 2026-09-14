@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { Game, PlayStatus, PLAY_STATUSES } from '@/types/game';
 import { getStatusDisplayTitle } from '@/lib/statusHelper';
+import { isGotySeason } from '@/lib/profileStore';
 import {
   BarChart3,
   Trophy,
@@ -226,7 +227,7 @@ export function StatsDashboardView({ games, onSelectGame, onOpenWrapped }: Stats
         </div>
 
         <div className="flex items-center gap-2.5">
-          {onOpenWrapped && (
+          {onOpenWrapped && isGotySeason() && (
             <button
               type="button"
               onClick={onOpenWrapped}

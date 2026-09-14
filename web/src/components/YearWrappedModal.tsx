@@ -34,7 +34,8 @@ export function YearWrappedModal({
   onUpdateProfile,
 }: YearWrappedModalProps) {
   const currentYear = new Date().getFullYear();
-  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
+  const defaultYear = new Date().getMonth() === 0 ? currentYear - 1 : currentYear;
+  const [selectedYear, setSelectedYear] = useState<number>(defaultYear);
   const [showStoryPreview, setShowStoryPreview] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 

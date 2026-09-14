@@ -142,3 +142,12 @@ export function saveUserProfile(profile: UserProfile): void {
     console.error('Kunde inte spara profilen i localStorage:', e);
   }
 }
+
+/**
+ * Avgör om GOTY & Spelåret Wrapped är aktivt.
+ * Dyker upp automatiskt i början av december varje år och är aktivt under december och januari.
+ */
+export function isGotySeason(): boolean {
+  const month = new Date().getMonth(); // 0 = Jan, 11 = Dec
+  return month === 11 || month === 0;
+}

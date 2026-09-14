@@ -15,6 +15,7 @@ import {
   Trophy,
   HelpCircle,
   Upload,
+  Crown,
 } from 'lucide-react';
 import { Game } from '@/types/game';
 import { UserProfile } from '@/types/profile';
@@ -36,6 +37,7 @@ interface ProfileModalProps {
   onUpdateProfile: (updated: UserProfile) => void;
   libraryGames: Game[];
   onSelectGame?: (igdbId: number) => void;
+  onOpenWrapped?: (year?: number) => void;
 }
 
 export function ProfileModal({
@@ -45,6 +47,7 @@ export function ProfileModal({
   onUpdateProfile,
   libraryGames,
   onSelectGame,
+  onOpenWrapped,
 }: ProfileModalProps) {
   const [activeTab, setActiveTab] = useState<'profile' | 'avatar'>('profile');
   const [editingName, setEditingName] = useState(false);
@@ -87,6 +90,28 @@ export function ProfileModal({
       return g.title.toLowerCase().includes(search);
     });
   }, [libraryGames, profile.favoriteGameIDs, favoriteSearch]);
+
+  // Hämta alla krönta Game of the Year sorterade med senaste år först
+  const crownedGotyList = useMemo(() => {
+    if (!profile.gotyByYear) return [];
+    const years = Object.keys(profile.gotyByYear)
+      .map(Number)
+      .filter((y) => !isNaN(y))
+      .sort((a, b) => b - a);
+
+    return years
+      .map((year) => {
+        const id = profile.gotyByYear?.[String(year)];
+        if (!id) return null;
+        const lower = id.toLowerCase();
+        const game = libraryGames.find(
+          (g) => g.id.toLowerCase() === lower || (g.igdb_id && String(g.igdb_id) === id)
+        );
+        if (!game) return null;
+        return { year, game };
+      })
+      .filter((x): x is { year: number; game: Game } => Boolean(x));
+  }, [profile.gotyByYear, libraryGames]);
 
   if (!isOpen) return null;
 
@@ -614,6 +639,98 @@ export function ProfileModal({
                   </p>
                 </div>
               )}
+
+              {/* 🏆 Mina Game of the Year (Hall of Fame) */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Crown className="w-4 h-4 text-amber-400" />
+                    <h4 className="text-sm font-bold text-white">Mina Game of the Year</h4>
+                    {crownedGotyList.length > 0 && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        {crownedGotyList.length}
+                      </span>
+                    )}
+                  </div>
+                  {onOpenWrapped && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenWrapped()}
+                      className="text-xs font-semibold text-amber-400 hover:text-amber-300 transition flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>Spelåret Wrapped</span>
+                      <span>↗</span>
+                    </button>
+                  )}
+                </div>
+
+                {crownedGotyList.length === 0 ? (
+                  <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                        <Trophy className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-zinc-200">Din GOTY Hall of Fame</div>
+                        <div className="text-[11px] text-zinc-400 mt-0.5">
+                          Kora dina favoritspel genom tiderna så samlas och firas de här år för år.
+                        </div>
+                      </div>
+                    </div>
+                    {onOpenWrapped && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenWrapped()}
+                        className="px-3.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition shrink-0 cursor-pointer"
+                      >
+                        Kora GOTY 👑
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {crownedGotyList.map(({ year, game }) => (
+                      <div
+                        key={year}
+                        onClick={() =>
+                          onOpenWrapped
+                            ? onOpenWrapped(year)
+                            : onSelectGame && game.igdb_id
+                            ? onSelectGame(game.igdb_id)
+                            : undefined
+                        }
+                        className="group relative p-2.5 rounded-2xl bg-zinc-900/80 hover:bg-zinc-850 border border-zinc-800 hover:border-amber-500/40 transition cursor-pointer flex flex-col justify-between"
+                      >
+                        <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-zinc-950 mb-2 shadow-md">
+                          {game.cover_url ? (
+                            <img
+                              src={game.cover_url}
+                              alt={game.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-zinc-600">
+                              <Gamepad2 className="w-8 h-8" />
+                            </div>
+                          )}
+                          <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-amber-500 text-zinc-950 text-[10px] font-black shadow-md flex items-center gap-1">
+                            <span>👑</span>
+                            <span>{year}</span>
+                          </div>
+                        </div>
+                        <div className="space-y-0.5">
+                          <div className="text-xs font-bold text-white truncate group-hover:text-amber-400 transition">
+                            {game.title}
+                          </div>
+                          <div className="text-[10px] text-amber-400 font-medium">
+                            Årets spel {year}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {/* 3. Min setup */}
               <div className="space-y-3">

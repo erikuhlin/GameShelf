@@ -81,6 +81,7 @@ export default function HomePage() {
   const [isRouletteModalOpen, setIsRouletteModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isWrappedModalOpen, setIsWrappedModalOpen] = useState(false);
+  const [wrappedInitialYear, setWrappedInitialYear] = useState<number | undefined>(undefined);
   const [activeCompanyModal, setActiveCompanyModal] = useState<{
     id: number;
     name: string;
@@ -1856,6 +1857,11 @@ export default function HomePage() {
             setSelectedGame(local);
           }
         }}
+        onOpenWrapped={(year) => {
+          setIsProfileModalOpen(false);
+          setWrappedInitialYear(year);
+          setIsWrappedModalOpen(true);
+        }}
       />
 
       {activeCompanyModal && (
@@ -1896,10 +1902,14 @@ export default function HomePage() {
 
       <YearWrappedModal
         isOpen={isWrappedModalOpen}
-        onClose={() => setIsWrappedModalOpen(false)}
+        onClose={() => {
+          setIsWrappedModalOpen(false);
+          setWrappedInitialYear(undefined);
+        }}
         games={games}
         profile={userProfile}
         onUpdateProfile={handleUpdateProfile}
+        initialYear={wrappedInitialYear}
       />
     </div>
   );

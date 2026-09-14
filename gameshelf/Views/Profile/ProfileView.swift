@@ -26,6 +26,7 @@ struct ProfileView: View {
     @State private var showingPairingSheet = false
     @State private var showingAvatarPicker = false
     @State private var showingWrappedSheet = false
+    @State private var wrappedSelectedYear: Int? = nil
     @State private var isEditingIdentity = false
     @State private var tempUsername = ""
     @State private var tempAgeString = ""
@@ -196,7 +197,7 @@ struct ProfileView: View {
                     .environmentObject(profile)
             }
             .sheet(isPresented: $showingWrappedSheet) {
-                YearWrappedSheet()
+                YearWrappedSheet(initialYear: wrappedSelectedYear)
             }
             .sheet(isPresented: $showingAvatarPicker) {
                 AvatarPickerSheet()
@@ -214,6 +215,9 @@ struct ProfileView: View {
             VStack(alignment: .leading, spacing: 22) {
                 // 1. Identitet
                 identitySection
+
+                // 🏆 Mina Game of the Year (Hall of Fame)
+                gotyHallOfFameSection
 
                 // 2. Spel-DNA Hero-sektion (10 arketyper)
                 SpelDNACard(profile: computedSpelDNA) {
@@ -436,6 +440,145 @@ struct ProfileView: View {
             .buttonStyle(.plain)
         }
         .padding(.vertical, 4)
+    }
+
+    // MARK: - 🏆 GOTY Hall of Fame Sektion
+    private var gotyHallOfFameSection: some View {
+        let sortedYears = profile.gotyByYear.keys.compactMap { Int($0) }.sorted(by: >)
+        let crownedEntries: [(year: Int, game: Game)] = sortedYears.compactMap { year in
+            if let uuid = profile.getGoty(forYear: year), let game = store.games.first(where: { $0.id == uuid }) {
+                return (year: year, game: game)
+            }
+            return nil
+        }
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                HStack(spacing: 6) {
+                    Text("👑")
+                        .font(.subheadline)
+                    Text("Mina Game of the Year")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                }
+
+                if !crownedEntries.isEmpty {
+                    Text("(\(crownedEntries.count))")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button {
+                    wrappedSelectedYear = nil
+                    showingWrappedSheet = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("Spelåret Wrapped")
+                            .font(.caption.weight(.semibold))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundStyle(Color.orange)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if crownedEntries.isEmpty {
+                // Inbjudande tomt läge
+                Button {
+                    wrappedSelectedYear = nil
+                    showingWrappedSheet = true
+                } label: {
+                    HStack(spacing: 14) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color.orange.opacity(0.15))
+                                .frame(width: 48, height: 48)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                                )
+                            Text("🏆")
+                                .font(.system(size: 24))
+                        }
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Din GOTY Hall of Fame")
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(.primary)
+                            Text("Kora dina favoritspel genom tiderna så samlas och firas de här år för år.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.orange)
+                    }
+                    .padding(14)
+                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
+                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.orange.opacity(0.2), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            } else {
+                // Horisontell karusell med krönta spel
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 14) {
+                        ForEach(crownedEntries, id: \.year) { item in
+                            Button {
+                                wrappedSelectedYear = item.year
+                                showingWrappedSheet = true
+                            } label: {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    ZStack(alignment: .topTrailing) {
+                                        CoverView(title: item.game.title, url: item.game.coverURL, corner: 14, height: 155)
+                                            .frame(width: 105, height: 155)
+                                            .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                    .stroke(Color.yellow.opacity(0.4), lineWidth: 1)
+                                            )
+
+                                        // Årsbadge & Krona
+                                        HStack(spacing: 3) {
+                                            Text("👑")
+                                                .font(.system(size: 9))
+                                            Text(String(item.year))
+                                                .font(.system(size: 10.5, weight: .black))
+                                                .foregroundStyle(.black)
+                                        }
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 3)
+                                        .background(Color.yellow, in: Capsule())
+                                        .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
+                                        .padding(6)
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.game.title)
+                                            .font(.system(size: 11.5, weight: .bold))
+                                            .foregroundStyle(.primary)
+                                            .lineLimit(1)
+                                            .frame(width: 105, alignment: .leading)
+
+                                        Text("Årets spel \(String(item.year))")
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .foregroundStyle(.orange)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+        }
     }
 
     // MARK: - 3. Min setup

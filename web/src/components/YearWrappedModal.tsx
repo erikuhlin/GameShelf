@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Game } from '@/types/game';
 import { UserProfile } from '@/types/profile';
 import {
@@ -24,6 +24,7 @@ interface YearWrappedModalProps {
   games: Game[];
   profile: UserProfile | null;
   onUpdateProfile: (updated: UserProfile) => void;
+  initialYear?: number;
 }
 
 export function YearWrappedModal({
@@ -32,12 +33,19 @@ export function YearWrappedModal({
   games,
   profile,
   onUpdateProfile,
+  initialYear,
 }: YearWrappedModalProps) {
   const currentYear = new Date().getFullYear();
   const defaultYear = new Date().getMonth() === 0 ? currentYear - 1 : currentYear;
-  const [selectedYear, setSelectedYear] = useState<number>(defaultYear);
+  const [selectedYear, setSelectedYear] = useState<number>(initialYear || defaultYear);
   const [showStoryPreview, setShowStoryPreview] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  useEffect(() => {
+    if (initialYear) {
+      setSelectedYear(initialYear);
+    }
+  }, [initialYear, isOpen]);
 
   // Samla alla tillgängliga år
   const availableYears = useMemo(() => {

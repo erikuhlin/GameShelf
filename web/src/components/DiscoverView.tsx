@@ -28,10 +28,12 @@ import {
   Hourglass,
   Trophy,
   Heart,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { UserProfile } from '@/types/profile';
 import { AVATAR_PRESETS } from '@/lib/profileStore';
 import { GamingGoalModal } from './GamingGoalModal';
+import { NewsSourcesModal } from './NewsSourcesModal';
 
 interface DiscoverViewProps {
   games: Game[];
@@ -406,16 +408,32 @@ export function DiscoverView({
     'all' | '24h' | '7d' | '30d' | 'older'
   >('all');
   const [savedNewsIds, setSavedNewsIds] = useState<string[]>([]);
+  const [isSourcesModalOpen, setIsSourcesModalOpen] = useState(false);
+  const [enabledNewsSources, setEnabledNewsSources] = useState<string[]>([]);
 
-  // Ladda sparade bokmärken
+  // Ladda sparade bokmärken och valda källor
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem('gameshelf_saved_news_ids');
         if (saved) setSavedNewsIds(JSON.parse(saved));
+        const savedSources = localStorage.getItem('gameshelf_enabled_news_sources');
+        if (savedSources) {
+          const parsed = JSON.parse(savedSources);
+          if (Array.isArray(parsed)) setEnabledNewsSources(parsed);
+        }
       } catch (e) {}
     }
   }, []);
+
+  const handleUpdateEnabledSources = (sources: string[]) => {
+    setEnabledNewsSources(sources);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('gameshelf_enabled_news_sources', JSON.stringify(sources));
+      } catch (e) {}
+    }
+  };
 
   const toggleSaveArticle = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
@@ -791,13 +809,26 @@ export function DiscoverView({
     });
   };
 
-  const newsSources = useMemo(() => {
-    const sources = Array.from(new Set(newsItems.map((n) => n.source))).filter(Boolean);
-    return ['Alla källor', ...sources];
+  const rawNewsSources = useMemo(() => {
+    return Array.from(new Set(newsItems.map((n) => n.source))).filter(Boolean);
   }, [newsItems]);
+
+  const newsSources = useMemo(() => {
+    return ['Alla källor', ...rawNewsSources];
+  }, [rawNewsSources]);
+
+  const enabledNewsSourcesSet = useMemo(() => {
+    if (enabledNewsSources.length === 0) return null;
+    return new Set(enabledNewsSources);
+  }, [enabledNewsSources]);
 
   const filteredNews = useMemo(() => {
     let result = newsItems;
+
+    // Filtrera på användarens aktiverade källor
+    if (enabledNewsSourcesSet) {
+      result = result.filter((n) => enabledNewsSourcesSet.has(n.source));
+    }
 
     if (newsSearch.trim()) {
       const q = newsSearch.toLowerCase();
@@ -2469,6 +2500,26 @@ export function DiscoverView({
                   ))}
                 </select>
 
+                {/* Anpassa källor Modal Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsSourcesModalOpen(true)}
+                  className={`flex items-center gap-1.5 px-3 py-2 border rounded-xl text-xs font-semibold transition cursor-pointer ${
+                    enabledNewsSources.length > 0 && enabledNewsSources.length < rawNewsSources.length
+                      ? 'bg-brand-red/20 text-white border-brand-red/50 shadow-sm'
+                      : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border-zinc-800'
+                  }`}
+                  title="Anpassa vilka nyhetskällor du vill följa"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-brand-red" />
+                  <span className="hidden sm:inline">Källor</span>
+                  {enabledNewsSources.length > 0 && enabledNewsSources.length < rawNewsSources.length && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-brand-red text-[10px] font-bold text-white">
+                      {enabledNewsSources.length}
+                    </span>
+                  )}
+                </button>
+
                 <select
                   value={selectedNewsSource}
                   onChange={(e) => setSelectedNewsSource(e.target.value)}
@@ -2871,6 +2922,13 @@ export function DiscoverView({
         }}
         libraryGames={games}
         completedGamesCount={completedGamesCount}
+      />
+      <NewsSourcesModal
+        isOpen={isSourcesModalOpen}
+        onClose={() => setIsSourcesModalOpen(false)}
+        allSources={rawNewsSources}
+        enabledSources={enabledNewsSources.length > 0 ? enabledNewsSources : rawNewsSources}
+        onChangeEnabledSources={handleUpdateEnabledSources}
       />
     </div>
   );

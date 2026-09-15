@@ -45,12 +45,14 @@ private enum NewsSheetRoute: Identifiable {
     case safari(URL)
     case game(Int)
     case trending
+    case sources
 
     var id: String {
         switch self {
         case .safari(let u): return "safari:\(u.absoluteString)"
         case .game(let id): return "game:\(id)"
         case .trending: return "trending"
+        case .sources: return "sources"
         }
     }
 }
@@ -126,6 +128,26 @@ struct NewsFeedView: View {
                         .foregroundStyle(selectedTimeFilter != .all ? Color.red : Color.primary)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
+
+                    // Källfilter-knapp
+                    let isCustomSources = !news.enabledSources.isEmpty && news.enabledSources.count < news.allAvailableSources.count
+                    Button {
+                        sheet = .sources
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "slider.horizontal.3")
+                            if isCustomSources {
+                                Text("\(news.enabledSources.count)")
+                                    .font(.caption2.bold())
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 10)
+                        .background(isCustomSources ? Color.red.opacity(0.15) : Color(.secondarySystemGroupedBackground))
+                        .foregroundStyle(isCustomSources ? Color.red : Color.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .accessibilityLabel("Anpassa nyhetskällor")
                 }
                 .onChange(of: newsSearchText) { _, _ in
                     applyNewsFilters()
@@ -297,6 +319,9 @@ struct NewsFeedView: View {
                     sheet = .game(id)
                 }
                 .presentationDetents([.large])
+            case .sources:
+                NewsSourcesSheet(news: news)
+                    .presentationDetents([.medium, .large])
             }
         }
         .alert("Hitta spel i IGDB", isPresented: Binding<Bool>(

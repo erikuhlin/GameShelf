@@ -133,6 +133,7 @@ final class NewsFetcher: ObservableObject {
     @Published var isLoadingMore = false
     @Published var canLoadMore = false
     @Published var selectedTimeFilter: NewsTimeFilter = .all
+    @Published var enabledSources: Set<String> = []
 
     // Client-side filters & paging
     private var filterKeywords: [String] = []
@@ -151,6 +152,8 @@ final class NewsFetcher: ObservableObject {
 
     private let feedStrings: [String] = [
         // 1. Svenska Spelmedier
+        "https://www.fz.se/feeds/nyheter", // FZ.se Nyheter
+        "https://www.fz.se/feeds/recensioner", // FZ.se Recensioner
         "https://www.gamereactor.se/rss/rss.php?texttype=4", // Nyheter SE
         "https://www.gamereactor.se/rss/rss.php?texttype=1", // Recensioner SE
         "https://www.gamereactor.se/rss/rss.php?texttype=2", // Förhandstittar SE
@@ -164,6 +167,7 @@ final class NewsFetcher: ObservableObject {
         "https://www.purexbox.com/feeds/reviews",
 
         // 3. Ledande Globala Spelmedier
+        "https://gameinformer.com/rss.xml", // Game Informer
         "https://feeds.feedburner.com/ign/all",
         "https://www.eurogamer.net/feed",
         "https://www.pcgamer.com/rss/",
@@ -180,6 +184,7 @@ final class NewsFetcher: ObservableObject {
         "https://www.siliconera.com/feed/",
 
         // 4. Officiella & Plattformsspecifika
+        "https://blog.playstation.com/feed/", // PlayStation Blog
         "https://news.xbox.com/en-us/feed/",
         "https://www.nintendolife.com/feeds/latest",
         "https://nintendoeverything.com/feed/",
@@ -189,12 +194,38 @@ final class NewsFetcher: ObservableObject {
     ]
 
     init() {
+        // Läs in sparade källinställningar
+        if let saved = UserDefaults.standard.stringArray(forKey: "gameshelf_enabled_news_sources"), !saved.isEmpty {
+            self.enabledSources = Set(saved)
+        }
+
         // Läs in sparat arkiv från disk omedelbart vid start så användaren ser nyheter direkt
         let cached = loadArchiveFromDisk()
         if !cached.isEmpty {
             self.allItems = cached
             self.recompute()
         }
+    }
+
+    var allAvailableSources: [String] {
+        let defaultKnown = [
+            "FZ.se", "Gamereactor SE", "PlayStation Blog", "Xbox Wire",
+            "Game Informer", "IGN", "Eurogamer", "GameSpot", "Polygon",
+            "Kotaku", "VGC", "GamesRadar+", "VG247", "Destructoid",
+            "Push Square", "Nintendo Life", "Pure Xbox", "PC Gamer",
+            "Rock Paper Shotgun", "PCGamesN", "Nintendo Everything",
+            "Gematsu", "Siliconera", "TouchArcade"
+        ]
+        let found = Set(allItems.map { $0.source })
+        let combined = Set(defaultKnown).union(found)
+        return combined.sorted()
+    }
+
+    func updateEnabledSources(_ sources: Set<String>) {
+        self.enabledSources = sources
+        UserDefaults.standard.set(Array(sources), forKey: "gameshelf_enabled_news_sources")
+        self.currentPage = 1
+        self.recompute()
     }
 
     private func loadArchiveFromDisk() -> [NewsItem] {
@@ -335,6 +366,11 @@ final class NewsFetcher: ObservableObject {
 
     private func recompute() {
         var list = allItems
+
+        // 0. Filtrera på aktiverade källor om specifika källor valts
+        if !enabledSources.isEmpty {
+            list = list.filter { enabledSources.contains($0.source) }
+        }
 
         // 1. Filtrera på tidsintervall
         let now = Date()

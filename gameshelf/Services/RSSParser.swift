@@ -93,9 +93,10 @@ enum RSSParser: Sendable {
                 if currentImage.isEmpty, let img = RSSParser.extractFirstImageURL(fromHTML: currentContent) {
                     currentImage = img
                 }
-                let src = currentSource.isEmpty
+                let rawSrc = currentSource.isEmpty
                     ? (URL(string: currentLink)?.host?.replacingOccurrences(of: "www.", with: "") ?? "")
                     : currentSource
+                let src = RSSParser.normalizeSource(hostOrSource: rawSrc)
                 let date = RFC822DateFormatter.date(from: currentPubDate)
                     ?? ISO8601DateFormatter().date(from: currentPubDate)
 
@@ -273,6 +274,35 @@ enum RSSParser: Sendable {
 
         // Default
         return .news
+    }
+
+    nonisolated static func normalizeSource(hostOrSource: String) -> String {
+        let lower = hostOrSource.lowercased()
+        if lower.contains("fz.se") { return "FZ.se" }
+        if lower.contains("gamereactor") { return "Gamereactor SE" }
+        if lower.contains("playstation.com") { return "PlayStation Blog" }
+        if lower.contains("gameinformer.com") { return "Game Informer" }
+        if lower.contains("ign.com") || lower == "ign" { return "IGN" }
+        if lower.contains("eurogamer.net") { return "Eurogamer" }
+        if lower.contains("gamespot.com") { return "GameSpot" }
+        if lower.contains("pushsquare.com") { return "Push Square" }
+        if lower.contains("nintendolife.com") { return "Nintendo Life" }
+        if lower.contains("purexbox.com") { return "Pure Xbox" }
+        if lower.contains("pcgamer.com") { return "PC Gamer" }
+        if lower.contains("rockpapershotgun.com") { return "Rock Paper Shotgun" }
+        if lower.contains("destructoid.com") { return "Destructoid" }
+        if lower.contains("polygon.com") { return "Polygon" }
+        if lower.contains("kotaku.com") { return "Kotaku" }
+        if lower.contains("videogameschronicle.com") || lower == "vgc" { return "VGC" }
+        if lower.contains("gamesradar.com") { return "GamesRadar+" }
+        if lower.contains("vg247.com") { return "VG247" }
+        if lower.contains("pcgamesn.com") { return "PCGamesN" }
+        if lower.contains("gematsu.com") { return "Gematsu" }
+        if lower.contains("siliconera.com") { return "Siliconera" }
+        if lower.contains("news.xbox.com") { return "Xbox Wire" }
+        if lower.contains("nintendoeverything.com") { return "Nintendo Everything" }
+        if lower.contains("toucharcade.com") { return "TouchArcade" }
+        return hostOrSource
     }
 }
 

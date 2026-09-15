@@ -18,6 +18,8 @@ interface NewsItem {
 
 const FEEDS = [
   // 1. Svenska Spelmedier
+  { name: 'FZ.se Nyheter', source: 'FZ.se', url: 'https://www.fz.se/feeds/nyheter', defaultCategory: 'Nyhet' as const },
+  { name: 'FZ.se Recensioner', source: 'FZ.se', url: 'https://www.fz.se/feeds/recensioner', defaultCategory: 'Recension' as const },
   { name: 'Gamereactor Nyheter', source: 'Gamereactor SE', url: 'https://www.gamereactor.se/rss/rss.php?texttype=4' },
   { name: 'Gamereactor Recensioner', source: 'Gamereactor SE', url: 'https://www.gamereactor.se/rss/rss.php?texttype=1', defaultCategory: 'Recension' as const },
   { name: 'Gamereactor Förhandstittar', source: 'Gamereactor SE', url: 'https://www.gamereactor.se/rss/rss.php?texttype=2', defaultCategory: 'Förhandstitt' as const },
@@ -31,6 +33,7 @@ const FEEDS = [
   { name: 'Pure Xbox Reviews', source: 'Pure Xbox', url: 'https://www.purexbox.com/feeds/reviews', defaultCategory: 'Recension' as const, defaultPlatform: 'Xbox' as const },
 
   // 3. Ledande Globala Spelmedier (Allmänt & Nyheter)
+  { name: 'Game Informer', source: 'Game Informer', url: 'https://gameinformer.com/rss.xml' },
   { name: 'IGN', source: 'IGN', url: 'https://feeds.feedburner.com/ign/all' },
   { name: 'Eurogamer', source: 'Eurogamer', url: 'https://www.eurogamer.net/feed' },
   { name: 'PC Gamer', source: 'PC Gamer', url: 'https://www.pcgamer.com/rss/', defaultPlatform: 'PC' as const },
@@ -50,6 +53,7 @@ const FEEDS = [
   { name: 'Siliconera', source: 'Siliconera', url: 'https://www.siliconera.com/feed/' },
 
   // 4. Officiella & Plattformsspecifika
+  { name: 'PlayStation Blog', source: 'PlayStation Blog', url: 'https://blog.playstation.com/feed/', defaultPlatform: 'PlayStation' as const },
   { name: 'Xbox Wire', source: 'Xbox Wire', url: 'https://news.xbox.com/en-us/feed/', defaultPlatform: 'Xbox' as const },
   { name: 'Nintendo Everything', source: 'Nintendo Everything', url: 'https://nintendoeverything.com/feed/', defaultPlatform: 'Nintendo' as const },
   { name: 'TouchArcade', source: 'TouchArcade', url: 'https://toucharcade.com/feed/' },

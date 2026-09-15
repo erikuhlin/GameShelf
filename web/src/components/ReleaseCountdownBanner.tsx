@@ -4,9 +4,62 @@ import React, { useState, useEffect } from 'react';
 import { Hourglass, Sparkles, Calendar, Bookmark } from 'lucide-react';
 
 interface ReleaseCountdownBannerProps {
-  releaseDate?: number | null; // Unix timestamp in seconds
+  releaseDate?: number | string | null; // Unix timestamp in seconds or milliseconds, or numeric string
   releaseYear?: number | null;
   isInWishlist?: boolean;
+}
+
+function parseTargetTime(val?: number | string | null): number | null {
+  if (!val) return null;
+  const num = typeof val === 'number' ? val : Number(val);
+  if (isNaN(num) || num <= 0) return null;
+  // If in seconds (< 10000000000), convert to ms
+  return num < 10000000000 ? num * 1000 : num;
+}
+
+function isYearPlaceholderDate(targetMs: number): boolean {
+  const dUtc = new Date(targetMs);
+  if (dUtc.getUTCMonth() === 11 && dUtc.getUTCDate() === 31) return true;
+  const dLocal = new Date(targetMs);
+  return dLocal.getMonth() === 11 && dLocal.getDate() === 31;
+}
+
+function computeTimeLeft(targetMs: number) {
+  const now = Date.now();
+  const diff = targetMs - now;
+
+  const targetDateObj = new Date(targetMs);
+  const nowDateObj = new Date(now);
+  const sameDay =
+    targetDateObj.getFullYear() === nowDateObj.getFullYear() &&
+    targetDateObj.getMonth() === nowDateObj.getMonth() &&
+    targetDateObj.getDate() === nowDateObj.getDate();
+
+  if (diff <= 0) {
+    return {
+      days: 0,
+      hours: 0,
+      minutes: 0,
+      seconds: 0,
+      isPast: !sameDay,
+      isToday: sameDay,
+    };
+  }
+
+  const totalSeconds = Math.floor(diff / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  return {
+    days,
+    hours,
+    minutes,
+    seconds,
+    isPast: false,
+    isToday: false,
+  };
 }
 
 export function ReleaseCountdownBanner({
@@ -14,6 +67,13 @@ export function ReleaseCountdownBanner({
   releaseYear,
   isInWishlist = false,
 }: ReleaseCountdownBannerProps) {
+  const targetMs = parseTargetTime(releaseDate);
+  const isPlaceholder = targetMs ? isYearPlaceholderDate(targetMs) : false;
+  const currentYear = new Date().getFullYear();
+  const effectiveYear = releaseYear || (targetMs ? new Date(targetMs).getFullYear() : null);
+  const isFutureYearOnly =
+    (!targetMs || isPlaceholder) && Boolean(effectiveYear && effectiveYear > currentYear);
+
   const [timeLeft, setTimeLeft] = useState<{
     days: number;
     hours: number;
@@ -21,82 +81,41 @@ export function ReleaseCountdownBanner({
     seconds: number;
     isPast: boolean;
     isToday: boolean;
-  } | null>(null);
+  } | null>(() => (targetMs && !isPlaceholder ? computeTimeLeft(targetMs) : null));
 
   useEffect(() => {
-    if (!releaseDate) {
+    if (!targetMs || isPlaceholder) {
       setTimeLeft(null);
       return;
     }
 
-    const targetMs = releaseDate * 1000;
-
     const calculate = () => {
-      const now = Date.now();
-      const diff = targetMs - now;
-
-      if (diff <= 0) {
-        // Kontrollera om det är samma kalenderdag
-        const targetDateObj = new Date(targetMs);
-        const nowDateObj = new Date(now);
-        const sameDay =
-          targetDateObj.getFullYear() === nowDateObj.getFullYear() &&
-          targetDateObj.getMonth() === nowDateObj.getMonth() &&
-          targetDateObj.getDate() === nowDateObj.getDate();
-
-        setTimeLeft({
-          days: 0,
-          hours: 0,
-          minutes: 0,
-          seconds: 0,
-          isPast: !sameDay,
-          isToday: sameDay,
-        });
-        return;
-      }
-
-      const totalSeconds = Math.floor(diff / 1000);
-      const days = Math.floor(totalSeconds / 86400);
-      const hours = Math.floor((totalSeconds % 86400) / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
-      const seconds = totalSeconds % 60;
-
-      setTimeLeft({
-        days,
-        hours,
-        minutes,
-        seconds,
-        isPast: false,
-        isToday: false,
-      });
+      setTimeLeft(computeTimeLeft(targetMs));
     };
 
     calculate();
     const interval = setInterval(calculate, 1000);
     return () => clearInterval(interval);
-  }, [releaseDate]);
-
-  const currentYear = new Date().getFullYear();
-  const isFutureYearOnly = !releaseDate && releaseYear && releaseYear > currentYear;
+  }, [targetMs, isPlaceholder]);
 
   // Om spelet redan släppts i det förflutna visar vi ingen nedräkning
-  if (timeLeft?.isPast && !timeLeft?.isToday) {
+  if (targetMs && !isPlaceholder && timeLeft?.isPast && !timeLeft?.isToday) {
     return null;
   }
 
   // Om varken datum eller framtida år finns, visa ingenting
-  if (!releaseDate && !isFutureYearOnly) {
+  if (!targetMs && !isFutureYearOnly) {
     return null;
   }
 
-  const formattedDate = releaseDate
-    ? new Date(releaseDate * 1000).toLocaleDateString('sv-SE', {
+  const formattedDate = targetMs && !isPlaceholder
+    ? new Date(targetMs).toLocaleDateString('sv-SE', {
         weekday: 'short',
         year: 'numeric',
         month: 'short',
         day: 'numeric',
       })
-    : `${releaseYear}`;
+    : effectiveYear ? `${effectiveYear}` : '';
 
   return (
     <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-red-950/40 via-zinc-900/90 to-zinc-950 border border-red-900/30 p-4 sm:p-5 shadow-lg">
@@ -176,7 +195,7 @@ export function ReleaseCountdownBanner({
         ) : isFutureYearOnly ? (
           <div className="px-4 py-2 rounded-xl bg-zinc-950/80 border border-zinc-800 text-center">
             <span className="text-xs text-zinc-400 block font-semibold">Planerat släppår</span>
-            <span className="text-lg font-black text-white font-mono">{releaseYear}</span>
+            <span className="text-lg font-black text-white font-mono">{effectiveYear}</span>
           </div>
         ) : null}
       </div>

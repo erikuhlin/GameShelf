@@ -48,6 +48,7 @@ import {
   Flame,
 } from 'lucide-react';
 import { GameShareModal } from './GameShareModal';
+import { ReleaseCountdownBanner } from './ReleaseCountdownBanner';
 import { fetchGameDeal, getStoreLinks, GameDeal, StoreQuickLink } from '@/services/priceWatcherService';
 
 interface GameDetailModalProps {
@@ -973,6 +974,13 @@ export function GameDetailModal({
               </div>
             </div>
           </div>
+
+          {/* Nedräkning för kommande spel */}
+          <ReleaseCountdownBanner
+            releaseDate={liveReleaseDate}
+            releaseYear={game.release_year ?? effectiveGame?.release_year ?? null}
+            isInWishlist={isWishlist}
+          />
 
           {/* ===== STATE-BASERADE HANDLINGSRADER ===== */}
 

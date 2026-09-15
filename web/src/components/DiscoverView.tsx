@@ -1516,12 +1516,13 @@ export function DiscoverView({
                   const matching = getMatchingGame(game.igdb_id, game.title);
                   const inLibrary = Boolean(matching);
                   const inWishlist = Boolean(matching && matching.is_owned === false);
-                  const isToday = game.first_release_date
+                  const targetMs = game.first_release_date
+                    ? Number(game.first_release_date) *
+                      (Number(game.first_release_date) < 10000000000 ? 1000 : 1)
+                    : null;
+                  const isToday = targetMs
                     ? (() => {
-                        const ms =
-                          Number(game.first_release_date) *
-                          (Number(game.first_release_date) < 10000000000 ? 1000 : 1);
-                        const d = new Date(ms);
+                        const d = new Date(targetMs);
                         const today = new Date();
                         return (
                           d.getFullYear() === today.getFullYear() &&
@@ -1530,11 +1531,18 @@ export function DiscoverView({
                         );
                       })()
                     : false;
-                  const relDate = game.first_release_date
-                    ? new Date(
-                        Number(game.first_release_date) *
-                          (Number(game.first_release_date) < 10000000000 ? 1000 : 1)
-                      ).toLocaleDateString('sv-SE', {
+                  const daysUntil = targetMs
+                    ? Math.ceil((targetMs - Date.now()) / (1000 * 60 * 60 * 24))
+                    : null;
+                  const countdownText = isToday
+                    ? 'Idag'
+                    : daysUntil === 1
+                    ? 'Imorgon'
+                    : daysUntil !== null && daysUntil > 1 && daysUntil <= 60
+                    ? `Om ${daysUntil}d`
+                    : null;
+                  const relDate = targetMs
+                    ? new Date(targetMs).toLocaleDateString('sv-SE', {
                         month: 'short',
                         day: 'numeric',
                       })
@@ -1545,16 +1553,19 @@ export function DiscoverView({
                       key={game.id}
                       className="flex-shrink-0 w-36 sm:w-44 flex flex-col group bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden p-2.5 transition hover:border-zinc-700 relative"
                     >
-                      {/* Datum-badge */}
-                      {(isToday || relDate) && (
+                      {/* Datum & Nedräkningsbadge */}
+                      {(isToday || countdownText || relDate) && (
                         <div
                           className={`absolute top-4 left-4 z-10 px-2 py-0.5 rounded-md text-[10px] font-black shadow-md backdrop-blur-md capitalize ${
                             isToday
                               ? 'bg-emerald-600 text-white border border-emerald-400 animate-pulse'
-                              : 'bg-red-600/90 text-white border border-red-400/40'
+                              : countdownText
+                              ? 'bg-red-600/90 text-white border border-red-400/40'
+                              : 'bg-zinc-800/90 text-zinc-300 border border-zinc-700'
                           }`}
+                          title={countdownText && relDate ? `${relDate} (${countdownText})` : relDate || ''}
                         >
-                          {isToday ? 'Idag' : relDate}
+                          {countdownText || relDate}
                         </div>
                       )}
 

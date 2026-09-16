@@ -1221,7 +1221,7 @@ struct GameDetailView: View {
                             Image(systemName: "flag.checkered")
                                 .font(.caption2.bold())
                                 .foregroundStyle(.teal)
-                            Text(g.completedYear != nil ? "Klarat \(String(g.completedYear!))" : "Klarat (år ej valt)")
+                            Text(g.completedYear.map { "Klarat \($0)" } ?? "Klarat (år ej valt)")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.primary)
                             Image(systemName: "chevron.down")
@@ -1513,297 +1513,307 @@ struct GameDetailView: View {
 
         return detailCard(title: "Spelframsteg") {
             VStack(alignment: .leading, spacing: 16) {
-                // 1. Tidsangivelse
-                if isEditingHours {
-                    HStack(spacing: 8) {
-                        TextField("0", text: $manualHoursInput)
-                            .keyboardType(.decimalPad)
-                            .font(.system(size: 18, weight: .bold, design: .rounded))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color(.tertiarySystemFill))
-                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            .frame(width: 80)
-                            .onSubmit {
-                                saveManualHours(for: g)
-                            }
+                playtimeHoursSection(g, hours: hours, hoursDisplay: hoursDisplay)
+                if hasHLTB {
+                    playtimeHLTBSection(hours: hours, mainHours: mainHours, extraHours: extraHours, compHours: compHours, isOverflow: isOverflow)
+                }
+                playtimeMilestonesSection(g, currentMilestone: currentMilestone)
+                playtimeNoteSection(g)
+            }
+        }
+    }
 
-                        Text("timmar")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+    @ViewBuilder
+    private func playtimeHoursSection(_ g: Game, hours: Double, hoursDisplay: String) -> some View {
+        if isEditingHours {
+            HStack(spacing: 8) {
+                TextField("0", text: $manualHoursInput)
+                    .keyboardType(.decimalPad)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color(.tertiarySystemFill))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .frame(width: 80)
+                    .onSubmit {
+                        saveManualHours(for: g)
+                    }
 
-                        Spacer()
+                Text("timmar")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
 
-                        Button("Klar") {
-                            saveManualHours(for: g)
-                        }
-                        .font(.caption.bold())
+                Spacer()
+
+                Button("Klar") {
+                    saveManualHours(for: g)
+                }
+                .font(.caption.bold())
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(Color.red)
+                .foregroundStyle(.white)
+                .clipShape(Capsule())
+                .buttonStyle(.plain)
+
+                Button("Avbryt") {
+                    isEditingHours = false
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .buttonStyle(.plain)
+            }
+        } else if hours == 0 {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Speltid")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text("Ingen tid loggad")
+                        .font(.subheadline)
+                        .foregroundStyle(.tertiary)
+                }
+
+                Spacer()
+
+                Button {
+                    manualHoursInput = ""
+                    isEditingHours = true
+                } label: {
+                    Label("Logga tid", systemImage: "plus")
+                        .font(.subheadline.weight(.semibold))
                         .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
+                        .padding(.vertical, 8)
                         .background(Color.red)
                         .foregroundStyle(.white)
                         .clipShape(Capsule())
-                        .buttonStyle(.plain)
+                }
+                .buttonStyle(.plain)
+            }
+        } else {
+            HStack(alignment: .center) {
+                Button {
+                    manualHoursInput = hours.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(hours))" : String(format: "%.1f", hours)
+                    isEditingHours = true
+                } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        Text("\(hoursDisplay) spelade")
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.primary)
+                        Image(systemName: "pencil")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                HStack(spacing: 6) {
+                    Button("-1h") {
+                        adjustPlaytime(by: -1.0, for: g)
+                    }
+                    .font(.system(size: 12, weight: .bold))
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(Color(.tertiarySystemFill))
+                    .foregroundStyle(.secondary)
+                    .clipShape(Capsule())
+                    .buttonStyle(.plain)
+
+                    Button("+1h") {
+                        adjustPlaytime(by: 1.0, for: g)
+                    }
+                    .font(.system(size: 12, weight: .bold))
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(Color(.tertiarySystemFill))
+                    .foregroundStyle(.primary)
+                    .clipShape(Capsule())
+                    .buttonStyle(.plain)
+
+                    Button("+5h") {
+                        adjustPlaytime(by: 5.0, for: g)
+                    }
+                    .font(.system(size: 12, weight: .bold))
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(Color.red.opacity(0.15))
+                    .foregroundStyle(.red)
+                    .clipShape(Capsule())
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func playtimeHLTBSection(hours: Double, mainHours: Int, extraHours: Int, compHours: Int, isOverflow: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("REFERENS · HOWLONGTOBEAT")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.tertiary)
+                    .tracking(0.5)
+                Spacer()
+            }
+
+            VStack(spacing: 12) {
+                if mainHours > 0 {
+                    progressHLTBBandRow(name: "Main Story", targetHours: mainHours, hoursPlayed: hours, icon: "📖")
+                }
+                if extraHours > 0 {
+                    progressHLTBBandRow(name: "Main + Extra", targetHours: extraHours, hoursPlayed: hours, icon: "➕")
+                }
+                if compHours > 0 {
+                    progressHLTBBandRow(name: "Completionist", targetHours: compHours, hoursPlayed: hours, icon: "🏆")
+                }
+            }
+
+            if isOverflow {
+                HStack(spacing: 5) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text("Du har spelat mer än genomsnittet för 100%-genomgång")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 2)
+            }
+        }
+        .padding(.top, 2)
+    }
+
+    @ViewBuilder
+    private func playtimeMilestonesSection(_ g: Game, currentMilestone: GameStoryProgress) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Var är du i spelet?")
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 6) {
+                ForEach(GameStoryProgress.allCases) { milestone in
+                    let isSelected = (currentMilestone == milestone)
+                    Button {
+                        var copy = g
+                        copy.storyProgress = milestone
+                        updateLocal(copy)
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    } label: {
+                        Text(milestone.rawValue)
+                            .font(.system(size: 11, weight: .semibold))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.7)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .padding(.horizontal, 4)
+                            .background(isSelected ? (milestone == .completed ? Color.green : Color.red) : Color(.tertiarySystemFill))
+                            .foregroundStyle(isSelected ? Color.white : Color.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func playtimeNoteSection(_ g: Game) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Lägesanteckning")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if let updated = g.noteUpdatedAt {
+                    Text("Uppdaterad \(formattedRelativeDate(updated))")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
+            if isEditingProgressNote {
+                VStack(alignment: .trailing, spacing: 8) {
+                    TextField("T.ex. Nuvarande kapitel, quest eller mål...", text: $progressNoteDraft, axis: .vertical)
+                        .lineLimit(2...4)
+                        .font(.subheadline)
+                        .padding(12)
+                        .background(Color(.tertiarySystemFill))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .onChange(of: progressNoteDraft) { _, newValue in
+                            if newValue.count > 140 {
+                                progressNoteDraft = String(newValue.prefix(140))
+                            }
+                        }
+
+                    HStack {
+                        Text("\(progressNoteDraft.count)/140")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
 
                         Button("Avbryt") {
-                            isEditingHours = false
+                            isEditingProgressNote = false
                         }
-                        .font(.caption)
+                        .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
-                        .buttonStyle(.plain)
-                    }
-                } else if hours == 0 {
-                    // Tomt läge: Ingen tid loggad + Tydlig "Logga tid"-knapp
-                    HStack(alignment: .center) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Speltid")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                            Text("Ingen tid loggad")
-                                .font(.subheadline)
-                                .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+
+                        Button("Spara") {
+                            var copy = g
+                            copy.progressNote = progressNoteDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                            copy.noteUpdatedAt = Date()
+                            updateLocal(copy)
+                            isEditingProgressNote = false
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         }
-
-                        Spacer()
-
-                        Button {
-                            manualHoursInput = ""
-                            isEditingHours = true
-                        } label: {
-                            Label("Logga tid", systemImage: "plus")
-                                .font(.subheadline.weight(.semibold))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(Color.red)
-                                .foregroundStyle(.white)
-                                .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                } else {
-                    // Aktivt läge: Visa loggad tid + Snabbknappar
-                    HStack(alignment: .center) {
-                        Button {
-                            manualHoursInput = hours.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(hours))" : String(format: "%.1f", hours)
-                            isEditingHours = true
-                        } label: {
-                            HStack(alignment: .firstTextBaseline, spacing: 5) {
-                                Text("\(hoursDisplay) spelade")
-                                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                                    .foregroundStyle(Color.primary)
-                                Image(systemName: "pencil")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .buttonStyle(.plain)
-
-                        Spacer()
-
-                        HStack(spacing: 6) {
-                            Button("-1h") {
-                                adjustPlaytime(by: -1.0, for: g)
-                            }
-                            .font(.system(size: 12, weight: .bold))
-                            .lineLimit(1)
-                            .fixedSize()
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
-                            .background(Color(.tertiarySystemFill))
-                            .foregroundStyle(.secondary)
-                            .clipShape(Capsule())
-                            .buttonStyle(.plain)
-
-                            Button("+1h") {
-                                adjustPlaytime(by: 1.0, for: g)
-                            }
-                            .font(.system(size: 12, weight: .bold))
-                            .lineLimit(1)
-                            .fixedSize()
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
-                            .background(Color(.tertiarySystemFill))
-                            .foregroundStyle(.primary)
-                            .clipShape(Capsule())
-                            .buttonStyle(.plain)
-
-                            Button("+5h") {
-                                adjustPlaytime(by: 5.0, for: g)
-                            }
-                            .font(.system(size: 12, weight: .bold))
-                            .lineLimit(1)
-                            .fixedSize()
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
-                            .background(Color.red.opacity(0.15))
-                            .foregroundStyle(.red)
-                            .clipShape(Capsule())
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-
-                // 2. HLTB-band (Snygga referensband med ikonbrickor och tydliga tracks)
-                if hasHLTB {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("REFERENS · HOWLONGTOBEAT")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(.tertiary)
-                                .tracking(0.5)
-                            Spacer()
-                        }
-
-                        VStack(spacing: 12) {
-                            if mainHours > 0 {
-                                progressHLTBBandRow(name: "Main Story", targetHours: mainHours, hoursPlayed: hours, icon: "📖")
-                            }
-                            if extraHours > 0 {
-                                progressHLTBBandRow(name: "Main + Extra", targetHours: extraHours, hoursPlayed: hours, icon: "➕")
-                            }
-                            if compHours > 0 {
-                                progressHLTBBandRow(name: "Completionist", targetHours: compHours, hoursPlayed: hours, icon: "🏆")
-                            }
-                        }
-
-                        // Overflow-hantering enligt specifikation
-                        if isOverflow {
-                            HStack(spacing: 5) {
-                                Image(systemName: "info.circle.fill")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                Text("Du har spelat mer än genomsnittet för 100%-genomgång")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(.top, 2)
-                        }
-                    }
-                    .padding(.top, 2)
-                }
-
-                // 3. Kvalitativt läge (Enhetlig 44pt höjd, ingen avklippt text)
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Var är du i spelet?")
                         .font(.caption.bold())
-                        .foregroundStyle(.secondary)
-
-                    HStack(spacing: 6) {
-                        ForEach(GameStoryProgress.allCases) { milestone in
-                            let isSelected = (currentMilestone == milestone)
-                            Button {
-                                var copy = g
-                                copy.storyProgress = milestone
-                                updateLocal(copy)
-                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            } label: {
-                                Text(milestone.rawValue)
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .multilineTextAlignment(.center)
-                                    .lineLimit(2)
-                                    .minimumScaleFactor(0.7)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 44)
-                                    .padding(.horizontal, 4)
-                                    .background(isSelected ? (milestone == .completed ? Color.green : Color.red) : Color(.tertiarySystemFill))
-                                    .foregroundStyle(isSelected ? Color.white : Color.primary)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(Color.red)
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
                     }
                 }
+            } else {
+                Button {
+                    progressNoteDraft = g.progressNote ?? ""
+                    isEditingProgressNote = true
+                } label: {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "square.and.pencil")
+                            .font(.subheadline)
+                            .foregroundStyle(.red)
+                            .padding(.top, 1)
 
-                // 4. Anteckning (Valfri fritext, max 140 tecken)
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text("Lägesanteckning")
-                            .font(.caption.bold())
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        if let updated = g.noteUpdatedAt {
-                            Text("Uppdaterad \(formattedRelativeDate(updated))")
-                                .font(.caption2)
+                        if let note = g.progressNote, !note.isEmpty {
+                            Text(note)
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
+                                .multilineTextAlignment(.leading)
+                        } else {
+                            Text("Lägg till en lägesanteckning (t.ex. kapitel, quest)...")
+                                .font(.subheadline)
                                 .foregroundStyle(.tertiary)
                         }
+
+                        Spacer()
                     }
-
-                    if isEditingProgressNote {
-                        VStack(alignment: .trailing, spacing: 8) {
-                            TextField("T.ex. Nuvarande kapitel, quest eller mål...", text: $progressNoteDraft, axis: .vertical)
-                                .lineLimit(2...4)
-                                .font(.subheadline)
-                                .padding(12)
-                                .background(Color(.tertiarySystemFill))
-                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                .onChange(of: progressNoteDraft) { _, newValue in
-                                    if newValue.count > 140 {
-                                        progressNoteDraft = String(newValue.prefix(140))
-                                    }
-                                }
-
-                            HStack {
-                                Text("\(progressNoteDraft.count)/140")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-
-                                Spacer()
-
-                                Button("Avbryt") {
-                                    isEditingProgressNote = false
-                                }
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-
-                                Button("Spara") {
-                                    var copy = g
-                                    copy.progressNote = progressNoteDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-                                    copy.noteUpdatedAt = Date()
-                                    updateLocal(copy)
-                                    isEditingProgressNote = false
-                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                }
-                                .font(.caption.bold())
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 6)
-                                .background(Color.red)
-                                .foregroundStyle(.white)
-                                .clipShape(Capsule())
-                            }
-                        }
-                    } else {
-                        Button {
-                            progressNoteDraft = g.progressNote ?? ""
-                            isEditingProgressNote = true
-                        } label: {
-                            HStack(alignment: .top, spacing: 10) {
-                                Image(systemName: "square.and.pencil")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.red)
-                                    .padding(.top, 1)
-
-                                if let note = g.progressNote, !note.isEmpty {
-                                    Text(note)
-                                        .font(.subheadline)
-                                        .foregroundStyle(.primary)
-                                        .multilineTextAlignment(.leading)
-                                } else {
-                                    Text("Lägg till en lägesanteckning (t.ex. kapitel, quest)...")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.tertiary)
-                                }
-
-                                Spacer()
-                            }
-                            .padding(12)
-                            .background(Color(.tertiarySystemFill))
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-                    }
+                    .padding(12)
+                    .background(Color(.tertiarySystemFill))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -3157,7 +3167,7 @@ struct GameDetailView: View {
                 .font(.headline)
                 .foregroundStyle(.primary)
 
-            content()
+            AnyView(content())
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -3176,8 +3186,7 @@ struct GameDetailView: View {
                         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     }
                 } label: {
-                    Image(systemName: isTarget ? "target" : "target")
-                        .symbolVariant(isTarget ? .fill : .none)
+                    Image(systemName: "target")
                         .foregroundStyle(isTarget ? .yellow : .primary)
                 }
                 .accessibilityLabel(isTarget ? "Ta bort som fokusmål" : "Sätt som fokusmål")

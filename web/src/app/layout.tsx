@@ -4,6 +4,16 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Gameshelf - Din Personliga Spelsamling & Hylla',
   description: 'Organisera, spåra och upptäck spel med Gameshelf. Synkroniserad med iOS och IGDB.',
+  manifest: '/manifest.json',
+  icons: {
+    icon: [
+      { url: '/favicon.ico' },
+      { url: '/icon.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
+  },
 };
 
 export default function RootLayout({

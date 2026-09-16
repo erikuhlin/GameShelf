@@ -129,6 +129,7 @@ enum NewsTimeFilter: String, CaseIterable, Identifiable {
 @MainActor
 final class NewsFetcher: ObservableObject {
     @Published var items: [NewsItem] = []
+    @Published var hotNews: [NewsItem] = []
     @Published var isLoading = false
     @Published var isLoadingMore = false
     @Published var canLoadMore = false
@@ -445,5 +446,74 @@ final class NewsFetcher: ObservableObject {
         let limit = min(currentPage * pageSize, totalAvailable)
         self.items = Array(list.prefix(limit))
         self.canLoadMore = limit < totalAvailable
+        self.hotNews = computeHotNews()
+    }
+
+    private func computeHotNews() -> [NewsItem] {
+        var pool = allItems
+        if !enabledSources.isEmpty {
+            pool = pool.filter { enabledSources.contains($0.source) }
+        }
+
+        // Kräver bild och fungerande länk
+        let candidateItems = pool.filter { $0.image != nil && $0.link != nil }
+        guard !candidateItems.isEmpty else { return [] }
+
+        let now = Date().timeIntervalSince1970
+
+        let scored = candidateItems.map { item -> (NewsItem, Double) in
+            var score: Double = 0.0
+
+            // Aktualitetsfaktor (nyare nyheter premieras)
+            let pubTime = item.published?.timeIntervalSince1970 ?? (now - 86400 * 7)
+            let ageInHours = max(0.0, (now - pubTime) / 3600.0)
+            score += max(0.0, 100.0 - (ageInHours * 2.0))
+
+            // Kraftig bonus om spelet finns i användarens bibliotek
+            if item.matchedGameTitle != nil {
+                score += 60.0
+            }
+
+            // Bonus för recensioner och förhandstittar
+            if item.kind == .review {
+                score += 35.0
+            } else if item.kind == .preview {
+                score += 20.0
+            } else if item.kind == .news {
+                score += 10.0
+            }
+
+            return (item, score)
+        }
+
+        let sorted = scored.sorted { $0.1 > $1.1 }.map { $0.0 }
+
+        // Källmångfald: max 2 artiklar per källa i karusellen
+        var result: [NewsItem] = []
+        var sourceCounts: [String: Int] = [:]
+        for item in sorted {
+            let count = sourceCounts[item.source, default: 0]
+            if count < 2 {
+                result.append(item)
+                sourceCounts[item.source] = count + 1
+            }
+            if result.count >= 10 {
+                break
+            }
+        }
+
+        // Om vi har färre än 6 pga källtak, fyll på med resterande
+        if result.count < 6 {
+            for item in sorted {
+                if !result.contains(where: { $0.id == item.id }) {
+                    result.append(item)
+                }
+                if result.count >= 8 {
+                    break
+                }
+            }
+        }
+
+        return result
     }
 }

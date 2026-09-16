@@ -33,7 +33,6 @@ import {
   X,
   Smartphone,
   Trash2,
-  Gamepad2,
   Plus,
   Library,
   LayoutGrid,
@@ -1656,8 +1655,12 @@ export default function HomePage() {
           />
         ) : games.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 sm:py-28 text-center px-4 rounded-3xl border border-zinc-800/80 bg-gradient-to-b from-zinc-900/40 via-zinc-950/60 to-zinc-950/80 shadow-2xl max-w-2xl mx-auto my-6">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-brand-red to-rose-500 flex items-center justify-center text-white mb-5 shadow-xl shadow-brand-red/20">
-              <Gamepad2 className="w-8 h-8 sm:w-10 sm:h-10" />
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl bg-zinc-900 border border-zinc-800/80 flex items-center justify-center mb-5 shadow-xl shadow-brand-red/15 overflow-hidden">
+              <img
+                src="/icon.png"
+                alt="Gameshelf"
+                className="w-full h-full object-contain p-2 select-none"
+              />
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2 tracking-tight">
               Välkommen till Gameshelf

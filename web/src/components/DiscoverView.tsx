@@ -822,6 +822,59 @@ export function DiscoverView({
     return new Set(enabledNewsSources);
   }, [enabledNewsSources]);
 
+  const hotNewsItems = useMemo(() => {
+    let pool = newsItems;
+    if (enabledNewsSourcesSet) {
+      pool = pool.filter((n) => enabledNewsSourcesSet.has(n.source));
+    }
+    const withImages = pool.filter((n) => !!n.image && !!n.link);
+    if (withImages.length === 0) return [];
+
+    const now = Date.now();
+    const scored = withImages.map((item) => {
+      let score = 0;
+      const pubTime = item.publishedTimestamp ? item.publishedTimestamp * 1000 : new Date(item.published).getTime();
+      const ageHours = Math.max(0, (now - pubTime) / (1000 * 3600));
+      score += Math.max(0, 100 - ageHours * 2);
+
+      if (findMatchingLibraryGame(item.title)) {
+        score += 60;
+      }
+      if (item.category === 'Recension') {
+        score += 35;
+      } else if (item.category === 'Förhandstitt') {
+        score += 20;
+      } else if (item.category === 'Nyhet') {
+        score += 10;
+      }
+      return { item, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+
+    const result: NewsItem[] = [];
+    const sourceCounts: Record<string, number> = {};
+    for (const { item } of scored) {
+      const count = sourceCounts[item.source] || 0;
+      if (count < 2) {
+        result.push(item);
+        sourceCounts[item.source] = count + 1;
+      }
+      if (result.length >= 10) break;
+    }
+
+    if (result.length < 6) {
+      for (const { item } of scored) {
+        if (!result.some((r) => r.id === item.id)) {
+          result.push(item);
+        }
+        if (result.length >= 8) break;
+      }
+    }
+
+    return result;
+  }, [newsItems, enabledNewsSourcesSet, games]);
+
   const filteredNews = useMemo(() => {
     let result = newsItems;
 
@@ -2586,53 +2639,71 @@ export function DiscoverView({
             </div>
           </div>
 
-          {/* Trendar just nu mini-karusell i nyhetsflödet (identiskt med iOS NewsFeedView) */}
-          {trendingGames.length > 0 && !newsSearch.trim() && selectedNewsCategory === 'all' && (
-            <div className="p-4 rounded-3xl bg-zinc-900/40 border border-zinc-800/70 space-y-2.5 shadow-sm">
+          {/* Hetaste nyheterna just nu karusell i nyhetsflödet */}
+          {hotNewsItems.length > 0 && !newsSearch.trim() && selectedNewsCategory === 'all' && (
+            <div className="p-4 rounded-3xl bg-zinc-900/40 border border-zinc-800/70 space-y-3 shadow-sm">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Flame className="w-4 h-4 text-brand-red" />
-                  <span className="text-xs sm:text-sm font-bold text-white">Trendar just nu</span>
+                  <span className="text-xs sm:text-sm font-bold text-white">Hetaste nyheterna just nu</span>
                 </div>
-                <button
-                  onClick={() => setActiveTab('discover')}
-                  className="text-xs text-brand-red hover:text-red-400 font-semibold transition cursor-pointer"
-                >
-                  Visa alla →
-                </button>
               </div>
 
               <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-zinc-800">
-                {trendingGames.slice(0, 10).map((game) => (
-                  <div
-                    key={game.id}
-                    onClick={() => onSelectGame(game)}
-                    className="flex-shrink-0 w-24 sm:w-28 cursor-pointer group space-y-1.5"
-                  >
-                    <div className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 relative">
-                      {game.cover_url ? (
-                        <img
-                          src={game.cover_url}
-                          alt={game.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Gamepad className="w-5 h-5 text-zinc-600" />
+                {hotNewsItems.map((item) => {
+                  const matched = findMatchingLibraryGame(item.title);
+                  return (
+                    <a
+                      key={item.id}
+                      href={item.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-shrink-0 w-52 sm:w-56 group space-y-2 block"
+                    >
+                      <div className="w-full h-28 rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 relative">
+                        {item.image ? (
+                          <img
+                            src={item.image}
+                            alt={item.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Newspaper className="w-5 h-5 text-zinc-600" />
+                          </div>
+                        )}
+                        <div className="absolute top-2 left-2 flex items-center gap-1.5 max-w-[90%]">
+                          {item.category && (
+                            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-black/70 backdrop-blur-md text-zinc-200 border border-white/10">
+                              {item.category}
+                            </span>
+                          )}
+                          {matched && (
+                            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-600/90 text-white truncate max-w-[100px]">
+                              🎮 {matched.title}
+                            </span>
+                          )}
                         </div>
-                      )}
-                      {game.badge_text && (
-                        <div className="absolute bottom-1 left-1 right-1 px-1 py-0.5 rounded text-[8px] font-black bg-black/80 text-white border border-white/20 truncate text-center">
-                          {game.badge_text}
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold text-zinc-200 line-clamp-2 leading-snug min-h-[2rem] group-hover:text-red-400 transition">
+                          {cleanArticleTitle(item.title)}
+                        </p>
+                        <div className="flex items-center gap-1.5 text-[10px] text-zinc-400">
+                          <span className="font-bold text-brand-red">{item.source}</span>
+                          <span>•</span>
+                          <span>
+                            {new Date(item.published).toLocaleDateString('sv-SE', {
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                          </span>
                         </div>
-                      )}
-                    </div>
-                    <p className="text-[11px] font-bold text-zinc-200 line-clamp-2 leading-snug min-h-[2rem] group-hover:text-red-400 transition">
-                      {game.title}
-                    </p>
-                  </div>
-                ))}
+                      </div>
+                    </a>
+                  );
+                })}
               </div>
             </div>
           )}

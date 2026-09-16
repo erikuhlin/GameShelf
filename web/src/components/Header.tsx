@@ -2,7 +2,6 @@
 
 import React from 'react';
 import {
-  Gamepad2,
   Plus,
   LayoutGrid,
   Library,
@@ -67,8 +66,12 @@ export function Header({
             className="flex items-center gap-3 cursor-pointer select-none shrink-0"
             onClick={() => onViewModeChange('shelf')}
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-red to-rose-500 flex items-center justify-center shadow-lg shadow-brand-red/25 text-white shrink-0">
-              <Gamepad2 className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-800/80 flex items-center justify-center shadow-lg shadow-brand-red/15 overflow-hidden shrink-0">
+              <img
+                src="/icon.png"
+                alt="Gameshelf"
+                className="w-full h-full object-contain p-0.5 select-none"
+              />
             </div>
             <div>
               <div className="flex items-center gap-2">

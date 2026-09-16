@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Gamepad2, Mail, Lock, Sparkles, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, Sparkles, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function LoginPage() {
@@ -72,8 +72,12 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-8">
         {/* Header & Logo */}
         <div className="text-center">
-          <div className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-tr from-brand-red to-rose-500 flex items-center justify-center shadow-xl shadow-brand-red/25 text-white">
-            <Gamepad2 className="w-8 h-8" />
+          <div className="mx-auto w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-xl shadow-brand-red/15 overflow-hidden">
+            <img
+              src="/icon.png"
+              alt="Gameshelf"
+              className="w-full h-full object-contain p-1 select-none"
+            />
           </div>
           <h2 className="mt-5 text-2xl sm:text-3xl font-bold tracking-tight text-white">
             Logga in på Gameshelf

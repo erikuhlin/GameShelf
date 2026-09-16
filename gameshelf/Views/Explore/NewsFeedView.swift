@@ -44,14 +44,12 @@ enum NewsFilterCategory: String, CaseIterable, Identifiable {
 private enum NewsSheetRoute: Identifiable {
     case safari(URL)
     case game(Int)
-    case trending
     case sources
 
     var id: String {
         switch self {
         case .safari(let u): return "safari:\(u.absoluteString)"
         case .game(let id): return "game:\(id)"
-        case .trending: return "trending"
         case .sources: return "sources"
         }
     }
@@ -62,7 +60,6 @@ struct NewsFeedView: View {
     @EnvironmentObject var store: LibraryStore
 
     @StateObject private var news = NewsFetcher()
-    @StateObject private var trending = TrendingFetcher()
 
     @State private var selectedNewsCategory: NewsFilterCategory = .all
     @State private var selectedTimeFilter: NewsTimeFilter = .all
@@ -183,13 +180,15 @@ struct NewsFeedView: View {
                     .padding(.vertical, 2)
                 }
 
-                // 3. Trendar just nu (Karusell)
-                TrendingSection(
-                    items: trending.items,
-                    isLoading: trending.isLoading,
-                    onSelect: { sheet = .game($0) },
-                    onSeeAll: { sheet = .trending }
-                )
+                // 3. Hetaste nyheterna just nu (Karusell)
+                if newsSearchText.isEmpty && (!news.hotNews.isEmpty || news.isLoading) {
+                    HotNewsSection(
+                        items: news.hotNews,
+                        isLoading: news.isLoading && news.hotNews.isEmpty,
+                        onSelect: { sheet = .safari($0) },
+                        onFindIGDB: { openIGDBFrom(title: $0) }
+                    )
+                }
 
                 // 4. Nyhetsflöde
                 VStack(alignment: .leading, spacing: 14) {
@@ -298,11 +297,9 @@ struct NewsFeedView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             news.reload(platforms: prefs.platforms, minAge: prefs.minAge, libraryGames: store.games)
-            await trending.fetch(platformFamilies: prefs.platforms, news: news.items)
         }
         .refreshable {
             news.reload(platforms: prefs.platforms, minAge: prefs.minAge, libraryGames: store.games)
-            await trending.fetch(platformFamilies: prefs.platforms, news: news.items, forceReload: true)
         }
         .sheet(item: $sheet) { route in
             switch route {
@@ -312,13 +309,6 @@ struct NewsFeedView: View {
             case .game(let id):
                 GameDetailView(igdbID: id)
                     .ignoresSafeArea(edges: .bottom)
-            case .trending:
-                TrendingListView(items: trending.items, onRefresh: {
-                    await trending.fetch(platformFamilies: prefs.platforms, news: news.items, forceReload: true)
-                }) { id in
-                    sheet = .game(id)
-                }
-                .presentationDetents([.large])
             case .sources:
                 NewsSourcesSheet(news: news)
                     .presentationDetents([.medium, .large])

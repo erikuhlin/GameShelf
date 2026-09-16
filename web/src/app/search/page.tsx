@@ -219,8 +219,12 @@ export default function SearchPage() {
         {/* Empty state */}
         {!query && (
           <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-600 mb-4">
-              <Gamepad2 className="w-8 h-8" />
+            <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-4 overflow-hidden">
+              <img
+                src="/icon.png"
+                alt="Gameshelf"
+                className="w-full h-full object-contain p-2 select-none opacity-80"
+              />
             </div>
             <h3 className="text-base font-semibold text-zinc-300">Sök och lägg till nya spel</h3>
             <p className="text-xs text-zinc-500 max-w-sm mt-1">

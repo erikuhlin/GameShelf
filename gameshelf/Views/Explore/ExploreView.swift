@@ -70,6 +70,8 @@ struct ExploreView: View {
     @State private var showingAvatarPickerSheet: Bool = false
     @State private var showingPairingSheet: Bool = false
     @State private var showingWrappedSheet: Bool = false
+    @State private var selectedGameForDetail: Game? = nil
+    @State private var sheetSelectedGameForDetail: Game? = nil
 
     private var prefs: ExplorePrefs {
         .init(minAge: profile.age, platforms: Array(profile.platforms))
@@ -230,6 +232,13 @@ struct ExploreView: View {
             }
             .sheet(isPresented: $showingGamingGoalSheet) {
                 gamingGoalSheet
+                    .environmentObject(store)
+                    .environmentObject(profile)
+            }
+            .navigationDestination(item: $selectedGameForDetail) { game in
+                GameDetailView(game: game)
+                    .environmentObject(store)
+                    .environmentObject(profile)
             }
             .sheet(isPresented: $showingAvatarPickerSheet) {
                 AvatarPickerSheet()
@@ -479,7 +488,9 @@ struct ExploreView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         ForEach(activeFocusGames) { game in
-                            NavigationLink(destination: GameDetailView(game: game)) {
+                            Button {
+                                selectedGameForDetail = game
+                            } label: {
                                 focusGameCard(game)
                             }
                             .buttonStyle(.plain)
@@ -718,30 +729,37 @@ struct ExploreView: View {
                             VStack(spacing: 8) {
                                 ForEach(activeFocusGames) { game in
                                     HStack(spacing: 12) {
-                                        if let url = game.coverURL {
-                                            AsyncImage(url: url) { phase in
-                                                if let img = phase.image {
-                                                    img.resizable().aspectRatio(contentMode: .fill)
-                                                } else {
-                                                    Color.gray.opacity(0.3)
+                                        Button {
+                                            sheetSelectedGameForDetail = game
+                                        } label: {
+                                            HStack(spacing: 12) {
+                                                if let url = game.coverURL {
+                                                    AsyncImage(url: url) { phase in
+                                                        if let img = phase.image {
+                                                            img.resizable().aspectRatio(contentMode: .fill)
+                                                        } else {
+                                                            Color.gray.opacity(0.3)
+                                                        }
+                                                    }
+                                                    .frame(width: 36, height: 48)
+                                                    .clipShape(RoundedRectangle(cornerRadius: 6))
                                                 }
+
+                                                VStack(alignment: .leading, spacing: 3) {
+                                                    Text(game.title)
+                                                        .font(.subheadline.bold())
+                                                        .foregroundStyle(.primary)
+                                                        .lineLimit(2)
+                                                        .multilineTextAlignment(.leading)
+                                                    Text(game.status == .completed ? "Klarat! 🏆" : game.statusDisplayTitle)
+                                                        .font(.caption)
+                                                        .foregroundStyle(game.status == .completed ? .green : .secondary)
+                                                }
+
+                                                Spacer()
                                             }
-                                            .frame(width: 36, height: 48)
-                                            .clipShape(RoundedRectangle(cornerRadius: 6))
                                         }
-
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text(game.title)
-                                                .font(.subheadline.bold())
-                                                .foregroundStyle(.primary)
-                                                .lineLimit(2)
-                                                .multilineTextAlignment(.leading)
-                                            Text(game.status == .completed ? "Klarat! 🏆" : game.statusDisplayTitle)
-                                                .font(.caption)
-                                                .foregroundStyle(game.status == .completed ? .green : .secondary)
-                                        }
-
-                                        Spacer()
+                                        .buttonStyle(.plain)
 
                                         Button {
                                             withAnimation {
@@ -798,6 +816,11 @@ struct ExploreView: View {
                     }
                     .fontWeight(.semibold)
                 }
+            }
+            .navigationDestination(item: $sheetSelectedGameForDetail) { game in
+                GameDetailView(game: game)
+                    .environmentObject(store)
+                    .environmentObject(profile)
             }
         }
         .presentationDetents([.large])
@@ -876,7 +899,9 @@ struct ExploreView: View {
     }
 
     private func heroActiveCard(game: Game) -> some View {
-        NavigationLink(destination: GameDetailView(game: game)) {
+        Button {
+            selectedGameForDetail = game
+        } label: {
             HStack(spacing: 14) {
                 CoverView(title: game.title, url: game.coverURL, corner: 10, height: 105)
                     .frame(width: 76, height: 105)
@@ -1415,7 +1440,9 @@ struct ExploreView: View {
 
     // MARK: - 5. Önskeliste-nedräkning
     private func wishlistCountdownCard(game: Game) -> some View {
-        NavigationLink(destination: GameDetailView(game: game)) {
+        Button {
+            selectedGameForDetail = game
+        } label: {
             HStack(spacing: 12) {
                 Image(systemName: "calendar.badge.clock")
                     .font(.title2)

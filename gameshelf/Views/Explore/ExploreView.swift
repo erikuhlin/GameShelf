@@ -1464,9 +1464,17 @@ struct ExploreView: View {
                 Spacer()
 
                 if let date = game.releaseDate {
-                    let days = Calendar.current.dateComponents([.day], from: Date(), to: date).day ?? 0
+                    let diff = date.timeIntervalSinceNow
+                    let days = max(0, Int(ceil(diff / 86400.0)))
                     if days > 0 && days <= 60 {
-                        Text("Om \(days) dagar")
+                        Text(days == 1 ? "Om 1 dag" : "Om \(days) dagar")
+                            .font(.caption.bold())
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.red.opacity(0.12), in: Capsule())
+                            .foregroundStyle(.red)
+                    } else if days == 0 && Calendar.current.isDateInToday(date) {
+                        Text("Släpps idag")
                             .font(.caption.bold())
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)

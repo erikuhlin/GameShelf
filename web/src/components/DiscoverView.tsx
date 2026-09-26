@@ -518,13 +518,27 @@ export function DiscoverView({
   }, [games, currentYear]);
 
   const targetGames = useMemo(() => {
-    const ids = new Set((userProfile?.targetGameIDs || []).map((id) => id.toLowerCase()));
-    if (ids.size === 0) return [];
-    return games.filter(
-      (g) =>
-        ids.has(g.id.toLowerCase()) ||
-        (g.igdb_id !== undefined && g.igdb_id !== null && ids.has(String(g.igdb_id).toLowerCase()))
+    const targetIDs = userProfile?.targetGameIDs || [];
+    if (targetIDs.length === 0) return [];
+
+    const gameById = new Map(games.map((g) => [g.id.toLowerCase(), g]));
+    const gameByIgdb = new Map(
+      games
+        .filter((g) => g.igdb_id !== undefined && g.igdb_id !== null)
+        .map((g) => [String(g.igdb_id).toLowerCase(), g])
     );
+
+    const result: Game[] = [];
+    const seen = new Set<string>();
+    for (const rawId of targetIDs) {
+      const lower = rawId.toLowerCase();
+      const g = gameById.get(lower) || gameByIgdb.get(lower);
+      if (g && !seen.has(g.id.toLowerCase())) {
+        seen.add(g.id.toLowerCase());
+        result.push(g);
+      }
+    }
+    return result;
   }, [games, userProfile?.targetGameIDs]);
 
   const completedTargetCount = useMemo(() => {

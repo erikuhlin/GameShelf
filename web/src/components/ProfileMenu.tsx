@@ -145,7 +145,7 @@ export function ProfileMenu({
                 <h4 className="text-sm font-bold text-white truncate">{profileName}</h4>
                 <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  <span>Ansluten iPhone</span>
+                  <span>Synkroniserat bibliotek</span>
                 </div>
               </div>
             </div>

@@ -177,14 +177,29 @@ struct DevicePairingView: View {
             .padding(.horizontal, 20)
 
             // Alternativ: godkänn kod om den andra enheten visar en kod
-            VStack(spacing: 8) {
-                Text("Visar din andra enhet en kod istället?")
-                    .font(.caption)
+            // Koppla till webbläsare / godkänn kod
+            VStack(spacing: 12) {
+                Text("Koppla till webbläsare på datorn:")
+                    .font(.caption.bold())
                     .foregroundStyle(.secondary)
 
+                Button {
+                    isShowingScanner = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "camera.fill")
+                        Text("Skanna webbläsarens QR-kod")
+                            .font(.subheadline.bold())
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Color.ds.brandRed)
+
                 HStack(spacing: 10) {
-                    TextField("t.ex. GS-4821", text: $manualInputCode)
-                        .font(.system(size: 18, weight: .bold, design: .monospaced))
+                    TextField("Eller skriv in t.ex. GS-4821", text: $manualInputCode)
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
                         .multilineTextAlignment(.center)
@@ -200,13 +215,13 @@ struct DevicePairingView: View {
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.bordered)
                     .tint(Color.ds.brandRed)
                     .disabled(manualInputCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .padding(16)
-            .background(Color(.secondarySystemGroupedBackground).opacity(0.6))
+            .background(Color(.secondarySystemGroupedBackground).opacity(0.8))
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .padding(.horizontal, 20)
         }
@@ -442,14 +457,18 @@ struct DevicePairingView: View {
         }
     }
 
-    // MARK: - Logik: Hämta bibliotek till denna enhet
+    // MARK: - Logik: Hantera skannad QR-kod
     private func handleScannedCode(_ rawCode: String) {
         var code = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Kontrollera om det är en direkt QR-länk: gameshelf://pair?id=<UUID>&name=<Name>
+        // 1. Kontrollera om det är en direktlänk från webben: gameshelf://pair?code=GS-XXXX
         if let url = URL(string: code),
-           url.scheme == "gameshelf",
            let components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            if let pairCode = components.queryItems?.first(where: { $0.name == "code" })?.value {
+                self.manualInputCode = pairCode
+                approveRemoteDeviceCode()
+                return
+            }
             if let idStr = components.queryItems?.first(where: { $0.name == "id" })?.value,
                let targetUUID = UUID(uuidString: idStr) {
                 let name = components.queryItems?.first(where: { $0.name == "name" })?.value ?? "Spelare"
@@ -458,7 +477,7 @@ struct DevicePairingView: View {
             }
         }
 
-        // Om det är en GS-kod i QR
+        // 2. Extrahera GS-kod om den finns i råtexten
         if code.contains("GS-") {
             if let range = code.range(of: "GS-[A-Z0-9]{4,6}", options: .regularExpression) {
                 code = String(code[range])
@@ -466,7 +485,13 @@ struct DevicePairingView: View {
         }
 
         self.manualInputCode = code
-        fetchLibraryUsingCode()
+
+        // Om vi är i rollen att ansluta/dela till webben eller om koden är en typisk webbkod: godkänn webbläsaren!
+        if selectedRole == .shareFromThis || code.hasPrefix("GS-") {
+            approveRemoteDeviceCode()
+        } else {
+            fetchLibraryUsingCode()
+        }
     }
 
     private func fetchLibraryUsingCode() {

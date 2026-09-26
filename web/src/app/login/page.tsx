@@ -41,20 +41,28 @@ export default function LoginPage() {
           password,
         });
         if (error) throw error;
-        if (data.session) {
+        if (data.session && data.user) {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('gameshelf_paired_user_id', data.user.id);
+            localStorage.setItem('gameshelf_profile_name', data.user.user_metadata?.username || email.split('@')[0]);
+          }
           router.push('/');
         } else {
           setMessage({
             type: 'success',
-            text: 'Konto skapat! Kontrollera din e-post för att bekräfta kontot.',
+            text: 'Konto skapat! Kontrollera din e-post för att bekräfta kontot, eller logga in.',
           });
         }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
+        if (data?.user && typeof window !== 'undefined') {
+          localStorage.setItem('gameshelf_paired_user_id', data.user.id);
+          localStorage.setItem('gameshelf_profile_name', data.user.user_metadata?.username || email.split('@')[0]);
+        }
         router.push('/');
       }
     } catch (err: any) {

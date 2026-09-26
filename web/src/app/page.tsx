@@ -140,16 +140,44 @@ export default function HomePage() {
       const loaded = loadUserProfile();
       setUserProfile(loaded);
 
-      // Sätt endast inloggat tillstånd om en länkad användare faktiskt finns sparad
-      if (savedUserId) {
-        setPairedUserId(savedUserId);
-        const storedName = localStorage.getItem('gameshelf_profile_name') || loaded.username;
-        setProfileName(storedName);
-        fetchRemoteProfile(savedUserId);
-      } else {
-        setPairedUserId(null);
-        setProfileName('');
-      }
+      // Koppla ihop Supabase Auth med Gameshelf-tillståndet
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          const uid = session.user.id;
+          const email = session.user.email || '';
+          const name = session.user.user_metadata?.username || email.split('@')[0] || 'Spelare';
+          setPairedUserId(uid);
+          localStorage.setItem('gameshelf_paired_user_id', uid);
+          localStorage.setItem('gameshelf_profile_name', name);
+          setProfileName(name);
+          fetchRemoteProfile(uid);
+          handlePairedAndMerge(uid, name);
+        } else if (savedUserId) {
+          setPairedUserId(savedUserId);
+          const storedName = localStorage.getItem('gameshelf_profile_name') || loaded.username;
+          setProfileName(storedName);
+          fetchRemoteProfile(savedUserId);
+        } else {
+          setPairedUserId(null);
+          setProfileName('');
+        }
+      });
+
+      const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+        if (session?.user) {
+          const uid = session.user.id;
+          const email = session.user.email || '';
+          const name = session.user.user_metadata?.username || email.split('@')[0] || 'Spelare';
+          setPairedUserId(uid);
+          localStorage.setItem('gameshelf_paired_user_id', uid);
+          localStorage.setItem('gameshelf_profile_name', name);
+          setProfileName(name);
+          fetchRemoteProfile(uid);
+          handlePairedAndMerge(uid, name);
+        } else if (event === 'SIGNED_OUT') {
+          handleLogout();
+        }
+      });
 
       const handleProfileUpdate = () => {
         const p = loadUserProfile();
@@ -162,7 +190,10 @@ export default function HomePage() {
         }
       };
       window.addEventListener('gameshelf_profile_updated', handleProfileUpdate);
-      return () => window.removeEventListener('gameshelf_profile_updated', handleProfileUpdate);
+      return () => {
+        window.removeEventListener('gameshelf_profile_updated', handleProfileUpdate);
+        authListener.subscription.unsubscribe();
+      };
     }
   }, []);
 
@@ -199,16 +230,16 @@ export default function HomePage() {
           playFor: Array.isArray(prefs.playFor) ? prefs.playFor : ['Story', 'Utforskning'],
           favoriteGameIDs: Array.isArray(prefs.favoriteGameIDs) ? prefs.favoriteGameIDs : [],
           targetGameIDs:
-            Array.isArray(data.target_game_ids) && data.target_game_ids.length > 0
-              ? data.target_game_ids
-              : Array.isArray(prefs.targetGameIDs)
+            Array.isArray(prefs.targetGameIDs)
               ? prefs.targetGameIDs
+              : Array.isArray(data.target_game_ids)
+              ? data.target_game_ids
               : [],
           annualGamingGoal:
-            data.annual_gaming_goal !== undefined && data.annual_gaming_goal !== null
-              ? Number(data.annual_gaming_goal)
-              : prefs.annualGamingGoal !== undefined && prefs.annualGamingGoal !== null
+            prefs.annualGamingGoal !== undefined && prefs.annualGamingGoal !== null
               ? Number(prefs.annualGamingGoal)
+              : data.annual_gaming_goal !== undefined && data.annual_gaming_goal !== null
+              ? Number(data.annual_gaming_goal)
               : 12,
           avatarType: data.avatar_url || prefs.avatarType || 'initial',
           avatarCustomImage: data.avatar_url?.startsWith('data:') ? data.avatar_url : undefined,
@@ -250,18 +281,42 @@ export default function HomePage() {
         playstyle: updated.playstyle,
         gotyByYear: updated.gotyByYear || {},
       };
+
+      const basePayload: Record<string, any> = {
+        id: activeUserId,
+        username: updated.username,
+        full_name: JSON.stringify(prefs),
+        avatar_url: updated.avatarCustomImage || updated.avatarType,
+        updated_at: new Date().toISOString(),
+      };
+
       try {
-        await supabase.from('profiles').upsert({
-          id: activeUserId,
-          username: updated.username,
-          full_name: JSON.stringify(prefs),
-          avatar_url: updated.avatarCustomImage || updated.avatarType,
+        const extendedPayload = {
+          ...basePayload,
           annual_gaming_goal: updated.annualGamingGoal,
           target_game_ids: updated.targetGameIDs || [],
-          updated_at: new Date().toISOString(),
-        });
+        };
+
+        const { error } = await supabase.from('profiles').upsert(extendedPayload);
+        if (error) {
+          // Om databasschemat saknar de dedikerade kolumnerna (t.ex. PGRST204 eller 42703),
+          // gör en fallback till basePayload där preferenserna ligger säkert packade i full_name JSON (som iOS läser)
+          if (
+            error.code === 'PGRST204' ||
+            error.code === '42703' ||
+            error.message?.includes('column') ||
+            error.message?.includes('schema cache')
+          ) {
+            const { error: retryError } = await supabase.from('profiles').upsert(basePayload);
+            if (retryError) {
+              console.error('Kunde inte synka profil till Supabase (basePayload fallback):', retryError);
+            }
+          } else {
+            console.error('Kunde inte synka profil till Supabase:', error);
+          }
+        }
       } catch (err) {
-        console.error('Kunde inte synka profil till Supabase:', err);
+        console.error('Exception vid synkning av profil till Supabase:', err);
       }
     }
   };
@@ -299,16 +354,16 @@ export default function HomePage() {
               playFor: Array.isArray(prefs.playFor) ? prefs.playFor : ['Story', 'Utforskning'],
               favoriteGameIDs: Array.isArray(prefs.favoriteGameIDs) ? prefs.favoriteGameIDs : [],
               targetGameIDs:
-                Array.isArray(data.target_game_ids) && data.target_game_ids.length > 0
-                  ? data.target_game_ids
-                  : Array.isArray(prefs.targetGameIDs)
+                Array.isArray(prefs.targetGameIDs)
                   ? prefs.targetGameIDs
+                  : Array.isArray(data.target_game_ids)
+                  ? data.target_game_ids
                   : [],
               annualGamingGoal:
-                data.annual_gaming_goal !== undefined && data.annual_gaming_goal !== null
-                  ? Number(data.annual_gaming_goal)
-                  : prefs.annualGamingGoal !== undefined && prefs.annualGamingGoal !== null
+                prefs.annualGamingGoal !== undefined && prefs.annualGamingGoal !== null
                   ? Number(prefs.annualGamingGoal)
+                  : data.annual_gaming_goal !== undefined && data.annual_gaming_goal !== null
+                  ? Number(data.annual_gaming_goal)
                   : 12,
               avatarType: data.avatar_url || prefs.avatarType || 'initial',
               avatarCustomImage: data.avatar_url?.startsWith('data:') ? data.avatar_url : undefined,
@@ -1107,13 +1162,41 @@ export default function HomePage() {
   const handleToggleTargetGoal = (gameId: string) => {
     if (!userProfile) return;
     const current = userProfile.targetGameIDs || [];
-    const lowerId = gameId.toLowerCase();
-    let next: string[];
-    if (current.some((id) => id.toLowerCase() === lowerId)) {
-      next = current.filter((id) => id.toLowerCase() !== lowerId);
-    } else {
-      next = current.length >= 3 ? [...current.slice(1), lowerId] : [...current, lowerId];
+    const lowerInput = gameId.toLowerCase();
+
+    // Hitta spelet i biblioteket för att hantera både dess interna UUID och ev. IGDB-id
+    const targetGame = games.find(
+      (g) =>
+        g.id.toLowerCase() === lowerInput ||
+        (g.igdb_id !== undefined && g.igdb_id !== null && String(g.igdb_id).toLowerCase() === lowerInput)
+    );
+
+    const matchIds = new Set<string>();
+    matchIds.add(lowerInput);
+    if (targetGame) {
+      matchIds.add(targetGame.id.toLowerCase());
+      if (targetGame.igdb_id !== undefined && targetGame.igdb_id !== null) {
+        matchIds.add(String(targetGame.igdb_id).toLowerCase());
+      }
     }
+
+    const isCurrentlyTarget = current.some((id) => matchIds.has(id.toLowerCase()));
+
+    let next: string[];
+    if (isCurrentlyTarget) {
+      // Ta bort alla förekomster som matchar detta spel (antingen UUID eller IGDB-id)
+      next = current.filter((id) => !matchIds.has(id.toLowerCase()));
+    } else {
+      // Spara alltid spelets kanoniska UUID (targetGame.id) så att iOS-appen matchar
+      const idToStore = targetGame ? targetGame.id.toLowerCase() : lowerInput;
+      const trimmed = current.filter((id) => !matchIds.has(id.toLowerCase()));
+      while (trimmed.length >= 3) {
+        trimmed.shift();
+      }
+      trimmed.push(idToStore);
+      next = trimmed;
+    }
+
     handleUpdateProfile({
       ...userProfile,
       targetGameIDs: next,
@@ -1174,7 +1257,11 @@ export default function HomePage() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {}
+
     if (typeof window !== 'undefined') {
       localStorage.removeItem('gameshelf_profile_name');
       localStorage.removeItem('gameshelf_paired_user_id');
@@ -1198,6 +1285,7 @@ export default function HomePage() {
     }
     setProfileName(user);
     if (userId) {
+      setPairedUserId(userId);
       await fetchRemoteProfile(userId);
     }
 
@@ -1802,7 +1890,16 @@ export default function HomePage() {
         onOpenCompany={(companyId, companyName, role) => {
           setActiveCompanyModal({ id: companyId, name: companyName, role });
         }}
-        isTargetGoal={Boolean(selectedGame && userProfile?.targetGameIDs?.some((id) => id.toLowerCase() === selectedGame.id.toLowerCase()))}
+        isTargetGoal={Boolean(
+          selectedGame &&
+            userProfile?.targetGameIDs?.some((id) => {
+              const lower = id.toLowerCase();
+              return (
+                lower === selectedGame.id.toLowerCase() ||
+                (selectedGame.igdb_id != null && lower === String(selectedGame.igdb_id).toLowerCase())
+              );
+            })
+        )}
         onToggleTargetGoal={handleToggleTargetGoal}
       />
 

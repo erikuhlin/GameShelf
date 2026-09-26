@@ -46,12 +46,25 @@ export function GamingGoalModal({
   }, [annualGoal, isOpen]);
 
   const targetGames = useMemo(() => {
-    const ids = new Set(targetGameIds.map((id) => id.toLowerCase()));
-    return libraryGames.filter(
-      (g) =>
-        ids.has(g.id.toLowerCase()) ||
-        (g.igdb_id !== undefined && g.igdb_id !== null && ids.has(String(g.igdb_id).toLowerCase()))
+    if (!targetGameIds || targetGameIds.length === 0) return [];
+    const gameById = new Map(libraryGames.map((g) => [g.id.toLowerCase(), g]));
+    const gameByIgdb = new Map(
+      libraryGames
+        .filter((g) => g.igdb_id !== undefined && g.igdb_id !== null)
+        .map((g) => [String(g.igdb_id).toLowerCase(), g])
     );
+
+    const result: Game[] = [];
+    const seen = new Set<string>();
+    for (const rawId of targetGameIds) {
+      const lower = rawId.toLowerCase();
+      const g = gameById.get(lower) || gameByIgdb.get(lower);
+      if (g && !seen.has(g.id.toLowerCase())) {
+        seen.add(g.id.toLowerCase());
+        result.push(g);
+      }
+    }
+    return result;
   }, [libraryGames, targetGameIds]);
 
   // Tillgängliga biblioteksspel som inte redan är fokusmål
@@ -64,7 +77,7 @@ export function GamingGoalModal({
       .filter(
         (g) =>
           !targetSet.has(g.id.toLowerCase()) &&
-          (!g.igdb_id || !targetSet.has(String(g.igdb_id).toLowerCase()))
+          (g.igdb_id === undefined || g.igdb_id === null || !targetSet.has(String(g.igdb_id).toLowerCase()))
       )
       .filter((g) => {
         if (!q) return true;
@@ -150,6 +163,7 @@ export function GamingGoalModal({
                     const v = parseInt(e.target.value, 10);
                     if (!isNaN(v)) handleGoalChange(v);
                   }}
+                  onBlur={() => handleGoalChange(goalInput)}
                   className="w-full py-2 px-4 text-center bg-zinc-900 border border-zinc-700 focus:border-amber-400 rounded-xl text-xl font-bold font-mono text-white focus:outline-none"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500 pointer-events-none font-medium">
@@ -387,7 +401,10 @@ export function GamingGoalModal({
         <div className="p-4 sm:px-6 border-t border-zinc-800 flex justify-end bg-zinc-900/80">
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => {
+              handleGoalChange(goalInput);
+              onClose();
+            }}
             className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition cursor-pointer shadow-md"
           >
             Klar

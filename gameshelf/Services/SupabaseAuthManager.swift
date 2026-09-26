@@ -164,33 +164,31 @@ public final class SupabaseAuthManager: ObservableObject {
         }
     }
 
-    // MARK: - Link Account (E-post & Lösenord)
-    /// Länkar en e-post och ett lösenord till den aktuella användaren så att samma konto kan användas på webben
-    public func linkAccount(email: String, password: String) async throws {
-        guard let currentSession = session else {
-            throw URLError(.userAuthenticationRequired)
-        }
-
+    // MARK: - Sign Up (Skapa nytt konto)
+    public func signUp(email: String, password: String, username: String? = nil) async throws {
         isLoading = true
         defer { isLoading = false }
         authError = nil
 
-        guard let url = URL(string: "\(SupabaseConfig.baseURLString)/auth/v1/user") else {
+        guard let url = URL(string: "\(SupabaseConfig.baseURLString)/auth/v1/signup") else {
             throw URLError(.badURL)
         }
 
         var request = URLRequest(url: url)
-        request.httpMethod = "PUT"
+        request.httpMethod = "POST"
         request.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
-        request.setValue("Bearer \(currentSession.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+        let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let cleanUsername = username?.trimmingCharacters(in: .whitespacesAndNewlines) ?? (cleanEmail.components(separatedBy: "@").first ?? "Spelare")
+
         let body: [String: Any] = [
-            "email": email,
+            "email": cleanEmail,
             "password": password,
             "data": [
                 "is_anonymous": false,
-                "username": email.components(separatedBy: "@").first ?? "Spelare"
+                "username": cleanUsername
             ]
         ]
 
@@ -202,20 +200,90 @@ public final class SupabaseAuthManager: ObservableObject {
         }
 
         if (200...299).contains(httpRes.statusCode) {
-            var updatedUser = currentSession.user
-            updatedUser.email = email
-            updatedUser.isAnonymous = false
-            let updatedSession = SupabaseSession(
-                accessToken: currentSession.accessToken,
-                refreshToken: currentSession.refreshToken,
-                user: updatedUser
-            )
-            saveSession(updatedSession)
+            // Försök avkoda direkt session (om bekräftelse ej krävs)
+            if let decoded = try? JSONDecoder().decode(SupabaseSession.self, from: data),
+               !decoded.accessToken.isEmpty {
+                saveSession(decoded)
+                return
+            }
+
+            // Om Supabase skickade user-objekt utan session (e-postbekräftelse krävs)
+            if let rawJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let idStr = rawJson["id"] as? String,
+               let userId = UUID(uuidString: idStr) {
+                let user = SupabaseUser(id: userId, email: cleanEmail, isAnonymous: false)
+                let tempSession = SupabaseSession(accessToken: SupabaseConfig.anonKey, refreshToken: nil, user: user)
+                saveSession(tempSession)
+                return
+            }
+
+            // Fallback: prova direkt inloggning med samma uppgifter
+            try await signIn(email: cleanEmail, password: password)
         } else {
-            let errorText = String(data: data, encoding: .utf8) ?? "Kunde inte länka kontot"
-            self.authError = errorText
-            throw NSError(domain: "SupabaseAuth", code: httpRes.statusCode, userInfo: [NSLocalizedDescriptionKey: errorText])
+            let errorJson = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+            var errorMsg = errorJson["msg"] as? String ?? errorJson["message"] as? String ?? errorJson["error_description"] as? String ?? "Kunde inte skapa konto"
+
+            if errorMsg.localizedCaseInsensitiveContains("already registered") {
+                errorMsg = "Det finns redan ett konto med denna e-postadress. Välj 'Logga in' istället."
+            } else if errorMsg.localizedCaseInsensitiveContains("password") {
+                errorMsg = "Lösenordet är för svagt. Ange minst 6 tecken."
+            }
+
+            self.authError = errorMsg
+            throw NSError(domain: "SupabaseAuth", code: httpRes.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMsg])
         }
+    }
+
+    // MARK: - Link Account (E-post & Lösenord)
+    /// Länkar en e-post och ett lösenord till den aktuella användaren så att samma konto kan användas på webben
+    public func linkAccount(email: String, password: String) async throws {
+        let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        // Om vi har en giltig användartoken som inte är default anonKey: prova PUT /auth/v1/user
+        if let currentSession = session, currentSession.accessToken != SupabaseConfig.anonKey {
+            isLoading = true
+            defer { isLoading = false }
+            authError = nil
+
+            guard let url = URL(string: "\(SupabaseConfig.baseURLString)/auth/v1/user") else {
+                throw URLError(.badURL)
+            }
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "PUT"
+            request.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
+            request.setValue("Bearer \(currentSession.accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+            let body: [String: Any] = [
+                "email": cleanEmail,
+                "password": password,
+                "data": [
+                    "is_anonymous": false,
+                    "username": cleanEmail.components(separatedBy: "@").first ?? "Spelare"
+                ]
+            ]
+
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+            if let (data, response) = try? await urlSession.data(for: request),
+               let httpRes = response as? HTTPURLResponse,
+               (200...299).contains(httpRes.statusCode) {
+                var updatedUser = currentSession.user
+                updatedUser.email = cleanEmail
+                updatedUser.isAnonymous = false
+                let updatedSession = SupabaseSession(
+                    accessToken: currentSession.accessToken,
+                    refreshToken: currentSession.refreshToken,
+                    user: updatedUser
+                )
+                saveSession(updatedSession)
+                return
+            }
+        }
+
+        // Standard: Registrera kontot via signUp
+        try await signUp(email: cleanEmail, password: password)
     }
 
     // MARK: - Sign In Existing User
@@ -233,8 +301,9 @@ public final class SupabaseAuthManager: ObservableObject {
         request.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+        let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let body: [String: Any] = [
-            "email": email,
+            "email": cleanEmail,
             "password": password
         ]
 
@@ -242,12 +311,27 @@ public final class SupabaseAuthManager: ObservableObject {
 
         let (data, response) = try await urlSession.data(for: request)
         guard let httpRes = response as? HTTPURLResponse, (200...299).contains(httpRes.statusCode) else {
-            let errorText = String(data: data, encoding: .utf8) ?? "Inloggning misslyckades"
-            self.authError = errorText
-            throw NSError(domain: "SupabaseAuth", code: 401, userInfo: [NSLocalizedDescriptionKey: errorText])
+            let errorJson = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+            var errorMsg = errorJson["error_description"] as? String ?? errorJson["msg"] as? String ?? errorJson["message"] as? String ?? "Inloggning misslyckades"
+
+            if errorMsg.localizedCaseInsensitiveContains("invalid login credentials") ||
+               errorMsg.localizedCaseInsensitiveContains("invalid_grant") {
+                errorMsg = "Felaktig e-postadress eller lösenord. Kontrollera dina uppgifter."
+            } else if errorMsg.localizedCaseInsensitiveContains("email not confirmed") {
+                errorMsg = "E-postadressen är inte bekräftad än. Kontrollera din inkorg."
+            }
+
+            self.authError = errorMsg
+            throw NSError(domain: "SupabaseAuth", code: (response as? HTTPURLResponse)?.statusCode ?? 401, userInfo: [NSLocalizedDescriptionKey: errorMsg])
         }
 
         let decoded = try JSONDecoder().decode(SupabaseSession.self, from: data)
         saveSession(decoded)
+    }
+
+    // MARK: - Sign Out
+    public func signOut() {
+        clearSession()
+        authError = nil
     }
 }

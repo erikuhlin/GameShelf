@@ -148,12 +148,13 @@ struct AccountSyncSheet: View {
                 } else {
                     Section("Hantering") {
                         Button(role: .destructive) {
-                            authManager.clearSession()
-                            Task {
-                                await authManager.ensureAnonymousAuth()
-                            }
+                            authManager.signOut()
+                            successMessage = "Du har loggats ut."
                         } label: {
-                            Text("Logga ut från Gameshelf-kontot")
+                            HStack {
+                                Image(systemName: "rectangle.portrait.and.arrow.right")
+                                Text("Logga ut från Gameshelf-kontot")
+                            }
                         }
                     }
                 }
@@ -181,15 +182,24 @@ struct AccountSyncSheet: View {
                     try await authManager.signIn(email: email, password: password)
                     await profile.syncWithRemote()
                     await store.syncWithRemote()
-                    successMessage = "Inloggad! Spelsamlingen synkroniseras nu mot ditt konto."
+                    await MainActor.run {
+                        successMessage = "Inloggad! Spelsamlingen synkroniseras nu mot ditt konto."
+                    }
                 } else {
-                    try await authManager.linkAccount(email: email, password: password)
+                    try await authManager.signUp(email: email, password: password, username: profile.username)
+                    // Ladda upp befintliga lokala spel till det nya kontot
+                    try? await SupabaseSyncService.shared.upsertGames(store.games)
+                    for col in store.collections {
+                        try? await SupabaseSyncService.shared.upsertCollection(col)
+                    }
                     await profile.syncWithRemote()
                     await store.syncWithRemote()
-                    successMessage = "Ditt konto är nu länkat! Du kan nu logga in på webben eller andra enheter med samma uppgifter."
+                    await MainActor.run {
+                        successMessage = "Ditt konto har skapats! Spelen är nu säkert sparade i molnet och tillgängliga på webben."
+                    }
                 }
             } catch {
-                // Felmeddelandet sätts automatiskt i authManager.authError
+                // Felmeddelandet sätts i authManager.authError
             }
         }
     }

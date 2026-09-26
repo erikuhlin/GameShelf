@@ -24,6 +24,7 @@ struct ProfileView: View {
     @State private var showingSettingsSheet = false
     @State private var showingProfileSwitcher = false
     @State private var showingPairingSheet = false
+    @State private var showingAccountSyncSheet = false
     @State private var showingAvatarPicker = false
     @State private var showingWrappedSheet = false
     @State private var wrappedSelectedYear: Int? = nil
@@ -191,6 +192,11 @@ struct ProfileView: View {
                     .environmentObject(store)
                     .environmentObject(profile)
             }
+            .sheet(isPresented: $showingAccountSyncSheet) {
+                AccountSyncSheet()
+                    .environmentObject(store)
+                    .environmentObject(profile)
+            }
             .sheet(isPresented: $showingSettingsSheet) {
                 ProfileSettingsSheet()
                     .environmentObject(store)
@@ -320,12 +326,12 @@ struct ProfileView: View {
                         .buttonStyle(.plain)
 
                         Button {
-                            showingPairingSheet = true
+                            showingAccountSyncSheet = true
                         } label: {
                             HStack(spacing: 4) {
-                                Image(systemName: "arrow.triangle.2.circlepath")
+                                Image(systemName: "icloud.and.arrow.up")
                                     .font(.system(size: 10))
-                                Text("Koppla enhet")
+                                Text("Konto & Synk")
                                     .font(.caption2.bold())
                             }
                             .padding(.horizontal, 9)

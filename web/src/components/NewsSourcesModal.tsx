@@ -31,7 +31,7 @@ const KNOWN_CATEGORIES: SourceCategory[] = [
     id: 'swedish',
     name: 'Svenska spelmedier',
     icon: '🇸🇪',
-    sources: ['FZ.se', 'Gamereactor SE'],
+    sources: ['FZ.se', 'Gamereactor SE', 'MISSIL'],
   },
   {
     id: 'official',
@@ -134,13 +134,13 @@ export function NewsSourcesModal({
   };
 
   const selectSwedishOnly = () => {
-    const swedish = allSources.filter((s) => ['FZ.se', 'Gamereactor SE'].includes(s));
+    const swedish = allSources.filter((s) => ['FZ.se', 'Gamereactor SE', 'MISSIL'].includes(s));
     onChangeEnabledSources(swedish.length > 0 ? swedish : allSources);
   };
 
   const selectMajorOnly = () => {
     const major = allSources.filter((s) =>
-      ['FZ.se', 'Gamereactor SE', 'Game Informer', 'IGN', 'Eurogamer', 'PlayStation Blog', 'Xbox Wire'].includes(s)
+      ['FZ.se', 'Gamereactor SE', 'MISSIL', 'Game Informer', 'IGN', 'Eurogamer', 'PlayStation Blog', 'Xbox Wire'].includes(s)
     );
     onChangeEnabledSources(major.length > 0 ? major : allSources);
   };

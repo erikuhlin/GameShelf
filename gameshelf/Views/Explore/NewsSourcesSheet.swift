@@ -26,7 +26,7 @@ struct NewsSourcesSheet: View {
             id: "swedish",
             title: "Svenska spelmedier",
             icon: "🇸🇪",
-            sources: ["FZ.se", "Gamereactor SE"]
+            sources: ["FZ.se", "Gamereactor SE", "MISSIL"]
         ),
         SourceCategory(
             id: "official",
@@ -235,7 +235,7 @@ struct NewsSourcesSheet: View {
     }
 
     private func selectSwedishOnly() {
-        let swedish = news.allAvailableSources.filter { ["FZ.se", "Gamereactor SE"].contains($0) }
+        let swedish = news.allAvailableSources.filter { ["FZ.se", "Gamereactor SE", "MISSIL"].contains($0) }
         if !swedish.isEmpty {
             selectedSources = Set(swedish)
         }
@@ -243,7 +243,7 @@ struct NewsSourcesSheet: View {
 
     private func selectMajorOnly() {
         let major = news.allAvailableSources.filter {
-            ["FZ.se", "Gamereactor SE", "Game Informer", "IGN", "Eurogamer", "PlayStation Blog", "Xbox Wire"].contains($0)
+            ["FZ.se", "Gamereactor SE", "MISSIL", "Game Informer", "IGN", "Eurogamer", "PlayStation Blog", "Xbox Wire"].contains($0)
         }
         if !major.isEmpty {
             selectedSources = Set(major)

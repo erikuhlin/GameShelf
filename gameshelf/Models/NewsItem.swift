@@ -153,6 +153,11 @@ final class NewsFetcher: ObservableObject {
 
     private let feedStrings: [String] = [
         // 1. Svenska Spelmedier
+        "https://missil.se/nyheter/feed/", // MISSIL Nyheter
+        "https://missil.se/spelrecensioner/feed/", // MISSIL Spelrecensioner
+        "https://missil.se/artiklar/feed/", // MISSIL Artiklar
+        "https://missil.se/kopguider/feed/", // MISSIL Köpguider
+        "https://missil.se/bloggar/feed/", // MISSIL Bloggar
         "https://www.fz.se/feeds/nyheter", // FZ.se Nyheter
         "https://www.fz.se/feeds/recensioner", // FZ.se Recensioner
         "https://www.gamereactor.se/rss/rss.php?texttype=4", // Nyheter SE
@@ -210,7 +215,7 @@ final class NewsFetcher: ObservableObject {
 
     var allAvailableSources: [String] {
         let defaultKnown = [
-            "FZ.se", "Gamereactor SE", "PlayStation Blog", "Xbox Wire",
+            "FZ.se", "Gamereactor SE", "MISSIL", "PlayStation Blog", "Xbox Wire",
             "Game Informer", "IGN", "Eurogamer", "GameSpot", "Polygon",
             "Kotaku", "VGC", "GamesRadar+", "VG247", "Destructoid",
             "Push Square", "Nintendo Life", "Pure Xbox", "PC Gamer",

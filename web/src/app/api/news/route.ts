@@ -18,6 +18,11 @@ interface NewsItem {
 
 const FEEDS = [
   // 1. Svenska Spelmedier
+  { name: 'MISSIL Nyheter', source: 'MISSIL', url: 'https://missil.se/nyheter/feed/', defaultCategory: 'Nyhet' as const },
+  { name: 'MISSIL Spelrecensioner', source: 'MISSIL', url: 'https://missil.se/spelrecensioner/feed/', defaultCategory: 'Recension' as const },
+  { name: 'MISSIL Artiklar', source: 'MISSIL', url: 'https://missil.se/artiklar/feed/', defaultCategory: 'Nyhet' as const },
+  { name: 'MISSIL Köpguider', source: 'MISSIL', url: 'https://missil.se/kopguider/feed/', defaultCategory: 'Guide' as const },
+  { name: 'MISSIL Bloggar', source: 'MISSIL', url: 'https://missil.se/bloggar/feed/', defaultCategory: 'Nyhet' as const },
   { name: 'FZ.se Nyheter', source: 'FZ.se', url: 'https://www.fz.se/feeds/nyheter', defaultCategory: 'Nyhet' as const },
   { name: 'FZ.se Recensioner', source: 'FZ.se', url: 'https://www.fz.se/feeds/recensioner', defaultCategory: 'Recension' as const },
   { name: 'Gamereactor Nyheter', source: 'Gamereactor SE', url: 'https://www.gamereactor.se/rss/rss.php?texttype=4' },
@@ -149,7 +154,9 @@ function parseFeedItems(
 
       // 1. Filtrera bort icke-spel (Bio, filmer, sport, politik & världshändelser)
       const nonGamingCategories = [
-        'världens nyheter', 'sport', 'filmrecensioner', 'bio', 'filmer', 'film', 'blu-ray', 'tv-serier'
+        'världens nyheter', 'sport', 'filmrecensioner', 'bio', 'filmer', 'film', 'blu-ray', 'tv-serier',
+        'filmnyhet', 'filmrecension', 'film & serierecensioner', 'film & serier', 'film- & serierecensioner',
+        'technyhet', 'techrecension', 'techrecensioner', 'serienyhet', 'tv-serie'
       ];
       const isNonGamingCat = itemCategories.some((c) => nonGamingCategories.includes(c.trim()));
 
@@ -218,6 +225,9 @@ function parseFeedItems(
         lower.includes(' review') ||
         lower.includes(' recension') ||
         lower.includes('verdict') ||
+        link.includes('/spelrecensioner/') ||
+        link.includes('/recensioner/') ||
+        itemCategories.some((c) => c.includes('recension') || c.includes('review')) ||
         feedConfig.defaultCategory === 'Recension' ||
         feedConfig.name.includes('Reviews')
       ) {

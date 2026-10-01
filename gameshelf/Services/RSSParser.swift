@@ -132,8 +132,12 @@ enum RSSParser: Sendable {
         let text = (title + " " + categories.joined(separator: " ") + " " + contentHTML).lowercased()
         let catsLC = categories.map { $0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) }
 
-        // 1. Kategorier som är icke-spel (främst Gamereactor)
-        let nonGamingCats = ["världens nyheter", "sport", "filmrecensioner", "bio", "filmer", "film", "blu-ray", "tv-serier"]
+        // 1. Kategorier som är icke-spel (främst Gamereactor & MISSIL)
+        let nonGamingCats = [
+            "världens nyheter", "sport", "filmrecensioner", "bio", "filmer", "film", "blu-ray", "tv-serier",
+            "filmnyhet", "filmrecension", "film & serierecensioner", "film & serier", "film- & serierecensioner",
+            "technyhet", "techrecension", "techrecensioner", "serienyhet", "tv-serie"
+        ]
         if catsLC.contains(where: { nonGamingCats.contains($0) }) {
             let hasGamingSignal = text.contains("game") || text.contains("spel") || text.contains("ps5") || text.contains("xbox") || text.contains("nintendo") || text.contains("steam") || text.contains("rpg")
             if !hasGamingSignal { return true }
@@ -195,21 +199,21 @@ enum RSSParser: Sendable {
         let previewTokens = [
             "preview", "hands-on", "hands on",
             "first look", "first-look",
-            "impressions", "first impressions", "förhandstitt"
+            "impressions", "first impressions", "förhandstitt", "forhandstitt"
         ]
-        if has(previewTokens) || catsContain(["preview", "previews"]) ||
+        if has(previewTokens) || catsContain(["preview", "previews", "förhandstitt", "forhandstitt"]) ||
             linkLC.contains("/preview/") || linkLC.contains("/previews/") || linkLC.contains("/hands-on/") {
             return .preview
         }
 
         // --- Strong, early review signals (use word boundaries to avoid matching 'preview') ---
         let reviewWords = ["review", "recension", "anmeldelse", "recensione"]
-        let urlIsReview = linkLC.contains("/review/") || linkLC.contains("/reviews/") || linkLC.contains("/recension/") || linkLC.contains("/tests/")
+        let urlIsReview = linkLC.contains("/review/") || linkLC.contains("/reviews/") || linkLC.contains("/recension/") || linkLC.contains("/recensioner/") || linkLC.contains("/spelrecensioner/") || linkLC.contains("/tests/")
         let strongTitleReview = titleLC.hasPrefix("review:") || titleLC.hasPrefix("recension:") || titleLC.hasSuffix(" review")
         let hasNegativeReviewContext = has(negativeReviewPhrases)
 
-        // Accept immediately when URL or strong title indicates a review
-        if urlIsReview || strongTitleReview {
+        // Accept immediately when URL, strong title or category indicates a review
+        if urlIsReview || strongTitleReview || catsContain(["recension", "spelrecension", "review"]) {
             return .review
         }
 
@@ -227,19 +231,19 @@ enum RSSParser: Sendable {
         }
 
         // --- Guides / How-to ---
-        let guideWords = ["guide", "walkthrough"]
+        let guideWords = ["guide", "walkthrough", "köpguide", "kopguide"]
         let hasGuideWord = guideWords.contains { containsWord(haystack, $0) }
         let guideTokens = [
-            "tips ", "how to", "how-to", "explained", "build guide", "tier list", "best build"
+            "tips ", "how to", "how-to", "explained", "build guide", "tier list", "best build", "köpguide"
         ]
-        if hasGuideWord || has(guideTokens) || catsContain(["guide", "guides"]) ||
-            linkLC.contains("/guide/") || linkLC.contains("/guides/") || linkLC.contains("/how-to/") || linkLC.contains("/walkthrough/") {
+        if hasGuideWord || has(guideTokens) || catsContain(["guide", "guides", "köpguide", "kopguide"]) ||
+            linkLC.contains("/guide/") || linkLC.contains("/guides/") || linkLC.contains("/how-to/") || linkLC.contains("/walkthrough/") || linkLC.contains("/kopguider/") {
             return .guide
         }
 
-        // --- Opinion / Editorial ---
-        let opinionWords = ["opinion", "editorial", "commentary", "op-ed", "op ed", "kr\u{00F6}nika"]
-        if opinionWords.contains(where: { containsWord(haystack, $0) }) || catsContain(["opinion", "editorial"]) {
+        // --- Opinion / Editorial / Blog ---
+        let opinionWords = ["opinion", "editorial", "commentary", "op-ed", "op ed", "kr\u{00F6}nika", "kronika", "blogg"]
+        if opinionWords.contains(where: { containsWord(haystack, $0) }) || catsContain(["opinion", "editorial", "krönika", "kronika", "blogg", "bloggar"]) || linkLC.contains("/bloggar/") {
             return .opinion
         }
 
@@ -255,14 +259,16 @@ enum RSSParser: Sendable {
         }
 
         // --- Deals ---
-        let dealTokens = ["deal", "reapris", "sale", "discount", "offer", "bundle", "free weekend", "gratis"]
-        if has(dealTokens) || catsContain(["deal", "deals"]) || linkLC.contains("/deals/") {
+        let dealWords = ["deal", "deals", "reapris", "rea", "sale", "sales", "discount", "discounts", "rabatt", "gratis"]
+        let titleHasDeal = dealWords.contains { containsWord(titleLC, $0) }
+        let dealTokens = ["free weekend", "på rea", "veckans rea", "stora rean"]
+        if titleHasDeal || has(dealTokens) || catsContain(["deal", "deals", "rea", "erbjudande", "rabatt"]) || linkLC.contains("/deals/") || linkLC.contains("/rea/") {
             return .deal
         }
 
         // --- Feature / Long reads ---
-        let featureWords = ["feature"]
-        if featureWords.contains(where: { containsWord(haystack, $0) }) || has(["in-depth", "retrospective", "history of", "behind the scenes", "ranking"]) || catsContain(["feature"]) {
+        let featureWords = ["feature", "artikel"]
+        if featureWords.contains(where: { containsWord(haystack, $0) }) || has(["in-depth", "retrospective", "history of", "behind the scenes", "ranking"]) || catsContain(["feature", "artikel", "artiklar"]) || linkLC.contains("/artiklar/") {
             return .feature
         }
 
@@ -280,6 +286,7 @@ enum RSSParser: Sendable {
         let lower = hostOrSource.lowercased()
         if lower.contains("fz.se") { return "FZ.se" }
         if lower.contains("gamereactor") { return "Gamereactor SE" }
+        if lower.contains("missil") { return "MISSIL" }
         if lower.contains("playstation.com") { return "PlayStation Blog" }
         if lower.contains("gameinformer.com") { return "Game Informer" }
         if lower.contains("ign.com") || lower == "ign" { return "IGN" }

@@ -55,11 +55,6 @@ struct ActivityView: View {
         libraryGames.filter { $0.status == .paused }.count
     }
 
-    /// Avbrutna
-    private var abandonedGamesCount: Int {
-        libraryGames.filter { $0.status == .abandoned }.count
-    }
-
     /// Inte påbörjade
     private var notStartedGamesCount: Int {
         libraryGames.filter { $0.status == .notStarted }.count

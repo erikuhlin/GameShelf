@@ -42,6 +42,10 @@ export function normalizePlayStatus(raw?: string | null): {
     case 'klart':
     case 'genomspelat':
     case 'inte aktiv längre':
+    case 'arkiverad':
+    case 'archived':
+    case 'arkiv':
+    case 'slutat spela':
     case '100%':
     case '100 %':
     case 'hundredpercent':
@@ -52,8 +56,7 @@ export function normalizePlayStatus(raw?: string | null): {
     case 'avbrutet':
     case 'droppat':
     case 'dropped':
-    case 'slutat spela':
-      return { status: 'abandoned', is_backlog: false };
+      return { status: 'paused', is_backlog: false };
 
     case 'wishlist':
     case 'önskelista':
@@ -286,11 +289,9 @@ export function getStatusDisplayTitle(
       case 'playing':
         return 'Aktiv';
       case 'paused':
-        return 'Tar paus';
+        return 'Pausat';
       case 'completed':
-        return 'Inte aktiv längre';
-      case 'abandoned':
-        return 'Slutat spela';
+        return 'Arkiverad';
     }
   } else {
     switch (status) {
@@ -302,8 +303,6 @@ export function getStatusDisplayTitle(
         return 'Pausat';
       case 'completed':
         return 'Genomspelat';
-      case 'abandoned':
-        return 'Avbrutet';
     }
   }
 }
@@ -345,13 +344,6 @@ export function getStatusColor(status: PlayStatus): {
         border: 'border-teal-500/40',
         text: 'text-teal-300',
         indicator: 'bg-teal-500',
-      };
-    case 'abandoned':
-      return {
-        bg: 'bg-zinc-800/70',
-        border: 'border-zinc-600/40',
-        text: 'text-zinc-400',
-        indicator: 'bg-zinc-600',
       };
   }
 }

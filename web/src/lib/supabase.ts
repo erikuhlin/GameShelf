@@ -169,7 +169,6 @@ export function normalizeLocalGame(g: any): Game {
     normalized.status === 'playing' ||
     normalized.status === 'completed' ||
     normalized.status === 'paused' ||
-    normalized.status === 'abandoned' ||
     isBacklog ||
     (g.rating !== undefined && g.rating !== null && Number(g.rating) > 0) ||
     (g.completed_year !== undefined && g.completed_year !== null) ||

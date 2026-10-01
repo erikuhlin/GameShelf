@@ -572,7 +572,7 @@ struct GameDetailView: View {
                 Section("Status") {
                     ForEach(PlayStatus.allCases) { st in
                         Button {
-                            if st == .completed && g.status != .completed {
+                            if st == .completed && g.status != .completed && !g.isMultiplayerOrOngoing {
                                 showingCompletionCelebration = true
                             } else {
                                 var copy = g

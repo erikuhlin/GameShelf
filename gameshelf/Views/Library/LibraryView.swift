@@ -34,7 +34,6 @@ enum PlayStatusFilter: String, CaseIterable, Identifiable {
     case notStarted = "Inte påbörjat"
     case paused = "Pausat"
     case completed = "Genomspelat"
-    case abandoned = "Avbrutet"
 
     var id: String { rawValue }
 
@@ -45,7 +44,6 @@ enum PlayStatusFilter: String, CaseIterable, Identifiable {
         case .notStarted: return .notStarted
         case .paused: return .paused
         case .completed: return .completed
-        case .abandoned: return .abandoned
         }
     }
 }
@@ -502,10 +500,6 @@ struct LibraryView: View {
                                             Circle()
                                                 .strokeBorder(isSelected ? Color.white : Color.secondary, lineWidth: 1.2)
                                                 .frame(width: 6, height: 6)
-                                        } else if filter == .abandoned {
-                                            Image(systemName: "xmark")
-                                                .font(.system(size: 7, weight: .bold))
-                                                .foregroundStyle(isSelected ? Color.white : Color.secondary)
                                         }
                                         Text(filter == .all ? "Alla" : filter.rawValue)
                                             .font(.caption2.weight(isSelected ? .bold : .medium))
@@ -1455,8 +1449,6 @@ struct LibraryView: View {
             return base.filter { $0.status == .paused }.count
         case .completed:
             return base.filter { $0.status == .completed }.count
-        case .abandoned:
-            return base.filter { $0.status == .abandoned }.count
         }
     }
 
@@ -1467,7 +1459,6 @@ struct LibraryView: View {
         case .notStarted: return "circle"
         case .paused: return "pause.fill"
         case .completed: return "checkmark"
-        case .abandoned: return "xmark"
         }
     }
 
@@ -1476,7 +1467,6 @@ struct LibraryView: View {
         case .playing: return .green
         case .completed: return .teal
         case .paused: return .orange
-        case .abandoned: return .gray
         case .notStarted: return Color(.systemGray)
         default: return .secondary
         }

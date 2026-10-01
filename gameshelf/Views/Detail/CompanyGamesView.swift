@@ -231,9 +231,6 @@ struct CompanyGamesView: View {
         case .paused:
             Image(systemName: "pause.fill").font(.system(size: 7, weight: .bold)).foregroundStyle(Color.orange)
                 .padding(4).background(Color.black.opacity(0.7), in: Circle())
-        case .abandoned:
-            Image(systemName: "xmark").font(.system(size: 7, weight: .bold)).foregroundStyle(Color.gray)
-                .padding(4).background(Color.black.opacity(0.7), in: Circle())
         case .notStarted:
             EmptyView()
         }

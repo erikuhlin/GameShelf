@@ -12,7 +12,7 @@ import {
 } from '@/types/game';
 import { supabase, sanitizeUserGamePayload } from '@/lib/supabase';
 import { StatusBadge } from './StatusBadge';
-import { getStatusDisplayTitle, inferPlayTypes } from '@/lib/statusHelper';
+import { getStatusDisplayTitle, inferPlayTypes, isMultiplayerOrOngoing } from '@/lib/statusHelper';
 import {
   X,
   Star,
@@ -143,6 +143,7 @@ export function GameDetailModal({
       ? game.play_types
       : inferPlayTypes({ title: game.title, genres: game.genres })
   );
+  const isMultiplayer = isMultiplayerOrOngoing({ ...effectiveGame, play_types: playTypes });
   const [rating, setRating] = useState<number | null>(game.rating || null);
   const [notes, setNotes] = useState<string>(game.notes || '');
   const [todos, setTodos] = useState<GameTodoItem[]>(game.todos || []);
@@ -1146,11 +1147,16 @@ export function GameDetailModal({
                     onChange={(e) => handleStatusChange(e.target.value as PlayStatus)}
                     className="bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-brand-red cursor-pointer"
                   >
-                    <option value="playing">🎮 Spelar nu</option>
-                    <option value="notStarted">📦 Backlog / Ej påbörjat</option>
+                    <option value="playing">
+                      {isMultiplayer ? '🟢 Aktiv' : '🎮 Spelar nu'}
+                    </option>
+                    <option value="notStarted">
+                      {isMultiplayer ? '⚪ Inte spelat' : '📦 Backlog / Inte påbörjat'}
+                    </option>
                     <option value="paused">⏸️ Pausat</option>
-                    <option value="completed">🏆 Klar</option>
-                    <option value="abandoned">❌ Avbrutet</option>
+                    <option value="completed">
+                      {isMultiplayer ? '📦 Arkiverad' : '🏆 Genomspelat'}
+                    </option>
                   </select>
                 </div>
 

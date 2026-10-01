@@ -106,7 +106,6 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
     case playing = "playing"
     case paused = "paused"
     case completed = "completed"
-    case abandoned = "abandoned"
 
     var id: String { rawValue }
 
@@ -117,7 +116,7 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
 
     // Dynamic title based on play types
     func title(for playTypes: [GamePlayType]) -> String {
-        let isMulti = playTypes.contains(.multiplayer) || playTypes.contains(.ongoing)
+        let isMulti = playTypes.contains(.ongoing) || (playTypes.contains(.multiplayer) && !playTypes.contains(.singlePlayer))
         return title(isMultiplayerOrOngoing: isMulti)
     }
 
@@ -126,9 +125,8 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
             switch self {
             case .notStarted: return "Inte spelat"
             case .playing: return "Aktiv"
-            case .paused: return "Tar paus"
-            case .completed: return "Inte aktiv längre"
-            case .abandoned: return "Slutat spela"
+            case .paused: return "Pausat"
+            case .completed: return "Arkiverad"
             }
         } else {
             switch self {
@@ -136,14 +134,13 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
             case .playing: return "Spelar nu"
             case .paused: return "Pausat"
             case .completed: return "Genomspelat"
-            case .abandoned: return "Avbrutet"
             }
         }
     }
 
     // Dynamic icon based on play types
     func icon(for playTypes: [GamePlayType]) -> String {
-        let isMulti = playTypes.contains(.multiplayer) || playTypes.contains(.ongoing)
+        let isMulti = playTypes.contains(.ongoing) || (playTypes.contains(.multiplayer) && !playTypes.contains(.singlePlayer))
         return icon(isMultiplayerOrOngoing: isMulti)
     }
 
@@ -153,8 +150,7 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
             case .notStarted: return "circle"
             case .playing: return "circle.fill"
             case .paused: return "pause.fill"
-            case .completed: return "circle.slash"
-            case .abandoned: return "xmark.circle.fill"
+            case .completed: return "archivebox.fill"
             }
         } else {
             switch self {
@@ -162,7 +158,6 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
             case .playing: return "play.fill"
             case .paused: return "pause.fill"
             case .completed: return "checkmark.seal.fill"
-            case .abandoned: return "xmark.circle.fill"
             }
         }
     }
@@ -179,7 +174,6 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
         case .playing: return .green
         case .paused: return .orange
         case .completed: return .teal
-        case .abandoned: return Color(.systemGray2)
         }
     }
 
@@ -195,10 +189,14 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
             self = .playing
         case "paused", "pausat", "paus", "tar paus":
             self = .paused
-        case "completed", "klar", "klart", "genomspelat", "inte aktiv längre", "hundredpercent", "100 %", "100%":
+        case "completed", "klar", "klart", "genomspelat", "hundredpercent", "100 %", "100%":
             self = .completed
-        case "abandoned", "avbruten", "avbrutet", "droppat", "dropped", "slutat spela":
-            self = .abandoned
+        case "inte aktiv längre", "arkiverad", "archived", "arkiv":
+            self = .completed
+        case "abandoned", "avbruten", "avbrutet", "droppat", "dropped":
+            self = .paused
+        case "slutat spela":
+            self = .completed
         case "backlog":
             self = .notStarted
         case "wishlist", "önskelista":

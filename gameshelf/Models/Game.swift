@@ -63,7 +63,7 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         }
     }
     var isMultiplayerOrOngoing: Bool {
-        playTypes.contains(.multiplayer) || playTypes.contains(.ongoing)
+        playTypes.contains(.ongoing) || (playTypes.contains(.multiplayer) && !playTypes.contains(.singlePlayer))
     }
 
     var isSinglePlayer: Bool {

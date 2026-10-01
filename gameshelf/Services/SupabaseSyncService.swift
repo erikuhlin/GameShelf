@@ -120,10 +120,14 @@ actor SupabaseSyncService {
                 playStatus = .notStarted
             case "paused", "pausat", "tar paus":
                 playStatus = .paused
-            case "completed", "klar", "klart", "genomspelat", "inte aktiv längre", "hundredpercent", "100 %", "100%":
+            case "completed", "klar", "klart", "genomspelat", "hundredpercent", "100 %", "100%":
                 playStatus = .completed
-            case "abandoned", "avbruten", "avbrutet", "droppat", "dropped", "slutat spela":
-                playStatus = .abandoned
+            case "inte aktiv längre", "arkiverad", "archived", "arkiv":
+                playStatus = .completed
+            case "abandoned", "avbruten", "avbrutet", "droppat", "dropped":
+                playStatus = .paused
+            case "slutat spela":
+                playStatus = .completed
             case "wishlist", "önskelista":
                 playStatus = .notStarted
                 isOwnedGame = false

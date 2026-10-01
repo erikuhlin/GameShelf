@@ -6,7 +6,7 @@ import {
   getStatusColor,
   isMultiplayerOrOngoing,
 } from '@/lib/statusHelper';
-import { Play, Pause, CheckCircle, XCircle, Circle } from 'lucide-react';
+import { Play, Pause, CheckCircle, Archive, Circle } from 'lucide-react';
 
 interface StatusBadgeProps {
   status?: PlayStatus | string;
@@ -49,9 +49,11 @@ export function StatusBadge({
       case 'paused':
         return <Pause className="w-3 h-3 fill-current text-amber-400" />;
       case 'completed':
-        return <CheckCircle className="w-3 h-3 text-teal-400" />;
-      case 'abandoned':
-        return <XCircle className="w-3 h-3 text-zinc-400" />;
+        return multi ? (
+          <Archive className="w-3 h-3 text-teal-400" />
+        ) : (
+          <CheckCircle className="w-3 h-3 text-teal-400" />
+        );
     }
   };
 

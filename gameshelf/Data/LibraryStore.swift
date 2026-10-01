@@ -85,6 +85,13 @@ final class LibraryStore: ObservableObject {
                 }
                 UserDefaults.standard.set(true, forKey: cleanupKey)
             }
+
+            // Engångsmigrering för att spara om eventuella tidigare abandoned-statusar
+            let statusCleanupKey = "has_migrated_play_statuses_v2"
+            if !UserDefaults.standard.bool(forKey: statusCleanupKey) {
+                try? saveGames()
+                UserDefaults.standard.set(true, forKey: statusCleanupKey)
+            }
         } catch {
             self.games = []
             self.collections = []

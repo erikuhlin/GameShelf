@@ -35,6 +35,7 @@ struct AddGameView: View {
     @State private var hasMoreResults: Bool = false
     @State private var isLoadingMore: Bool = false
     private let pageSize = 20
+    private let maxResultsCap = 100
 
     // Senaste sökningar
     @AppStorage("gameshelf_ios_recent_searches") private var recentSearchesRaw: String = ""
@@ -96,16 +97,27 @@ struct AddGameView: View {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || filterConfig.isActive
     }
 
+    private var hasLocalMatches: Bool {
+        !matchingOwnedGames.isEmpty || !matchingWishlistGames.isEmpty
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Aktiva filter-chips under sökfältet
+                // Varning om användaren söker fritext med aktiva filter
+                filterWarningBanner
+
+                // Aktiva filter-chips under sökfältet ELLER snabbval
                 if filterConfig.isActive {
                     activeFilterChipsBar
+                } else if !isSearchingOrFiltering {
+                    quickDiscoveryChipsBar
                 }
 
                 Group {
-                    if isLoading {
+                    if let errorMsg = errorMessage, searchResults.isEmpty && !hasLocalMatches {
+                        errorView(message: errorMsg)
+                    } else if isLoading && searchResults.isEmpty && !hasLocalMatches {
                         VStack(spacing: 12) {
                             ProgressView()
                                 .controlSize(.large)
@@ -115,17 +127,15 @@ struct AddGameView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else if let errorMsg = errorMessage {
-                        errorView(message: errorMsg)
-                    } else if searchResults.isEmpty && isSearchingOrFiltering {
+                    } else if !searchResults.isEmpty || hasLocalMatches {
+                        searchResultsList
+                    } else if isSearchingOrFiltering && !isLoading {
                         ContentUnavailableView(
                             "Inga spel hittades",
                             systemImage: "magnifyingglass",
                             description: Text("Inga resultat matchar din sökning och dina filter. Prova att ändra filtren eller sökorden.")
                         )
                         .padding(.top, 40)
-                    } else if !searchResults.isEmpty {
-                        searchResultsList
                     } else {
                         discoveryView
                     }
@@ -147,15 +157,25 @@ struct AddGameView: View {
             }
             .onChange(of: searchText) { _, newValue in
                 searchDebounceTask?.cancel()
-                if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !filterConfig.isActive {
+                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty && !filterConfig.isActive {
                     searchResults = []
                     isLoading = false
                     errorMessage = nil
+                    currentOffset = 0
+                    hasMoreResults = false
+                    return
+                }
+
+                // Kräver minst 2 tecken för att trigga automatisk IGDB-sökning om inga filter är aktiva
+                if trimmed.count < 2 && !filterConfig.isActive {
+                    searchResults = []
+                    isLoading = false
                     return
                 }
 
                 searchDebounceTask = Task {
-                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    try? await Task.sleep(nanoseconds: 280_000_000)
                     if Task.isCancelled { return }
                     await performSearchAsync()
                 }
@@ -200,6 +220,121 @@ struct AddGameView: View {
                     Task { await performSearchAsync() }
                 }
             }
+        }
+    }
+
+    // MARK: - Filter Varning vid Sökning
+    @ViewBuilder
+    private var filterWarningBanner: some View {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.count >= 2 && filterConfig.isActive {
+            HStack(spacing: 8) {
+                Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                Text("Söker med \(filterConfig.activeFilterCount) aktiva filter")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    withAnimation {
+                        filterConfig.reset()
+                        Task { await performSearchAsync() }
+                    }
+                } label: {
+                    Text("Rensa filter för allt")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.red)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 7)
+            .background(Color.orange.opacity(0.12))
+        }
+    }
+
+    // MARK: - Snabbval för Utforskning
+    private var quickDiscoveryChipsBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                // Dölj ägda
+                Button {
+                    filterConfig.hideOwned = true
+                    Task { await performSearchAsync() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "eye.slash")
+                        Text("Dölj ägda")
+                    }
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .foregroundStyle(.primary)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
+                }
+
+                // Toppbetyg 85+
+                Button {
+                    filterConfig.minRating = 85
+                    filterConfig.sortOption = .rating
+                    Task { await performSearchAsync() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "star.fill")
+                            .foregroundStyle(.yellow)
+                        Text("Toppbetyg 85+")
+                    }
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .foregroundStyle(.primary)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
+                }
+
+                // 2000-talets Nostalgi
+                Button {
+                    filterConfig.startYear = 2000
+                    filterConfig.endYear = 2009
+                    filterConfig.sortOption = .rating
+                    Task { await performSearchAsync() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock.arrow.circlepath")
+                        Text("2000-talets Nostalgi")
+                    }
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .foregroundStyle(.primary)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
+                }
+
+                // Korta spel (< 10h)
+                Button {
+                    filterConfig.playtimeFilter = .short
+                    Task { await performSearchAsync() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "timer")
+                        Text("Korta spel (< 10h)")
+                    }
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .foregroundStyle(.primary)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
         }
     }
 
@@ -535,6 +670,23 @@ struct AddGameView: View {
                 }
             }
 
+            if isLoading && searchResults.isEmpty {
+                Section {
+                    HStack(spacing: 8) {
+                        Spacer()
+                        ProgressView()
+                            .tint(.red)
+                        Text(filterConfig.isActive ? "Filtrerar spel från IGDB..." : "Söker i IGDB...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                    .padding(.vertical, 16)
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                }
+            }
+
             // 2. IGDB Resultat
             Section {
                 ForEach(searchResults, id: \.id) { game in
@@ -562,23 +714,26 @@ struct AddGameView: View {
                     .listRowBackground(Color.clear)
                 }
             } header: {
-                HStack {
+                HStack(spacing: 6) {
                     Image(systemName: "globe")
                         .foregroundStyle(.red)
-                    Text("Hitta på IGDB (\(searchResults.count))")
+                    Text("Hitta på IGDB")
                         .font(.caption.bold())
+                        .foregroundStyle(.primary)
+                    Text("· Visar \(searchResults.count)")
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
                     Spacer()
                     if filterConfig.sortOption != .popularity {
                         Text(filterConfig.sortOption.rawValue)
-                            .font(.caption2)
+                            .font(.caption2.bold())
                             .foregroundStyle(.red)
                     }
                 }
                 .padding(.vertical, 8)
             } footer: {
                 VStack(spacing: 0) {
-                    if hasMoreResults {
+                    if hasMoreResults && searchResults.count < maxResultsCap {
                         HStack {
                             Spacer()
                             if isLoadingMore {
@@ -588,14 +743,27 @@ struct AddGameView: View {
                                 Button {
                                     Task { await performSearchAsync(loadMore: true) }
                                 } label: {
-                                    Label("Ladda fler resultat", systemImage: "arrow.down.circle")
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.red)
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "arrow.down.circle")
+                                        Text("Visa fler (20 till)")
+                                    }
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.red)
                                 }
                             }
                             Spacer()
                         }
                         .padding(.vertical, 12)
+                    } else if searchResults.count >= maxResultsCap {
+                        HStack {
+                            Spacer()
+                            Text("Visar de 100 mest relevanta spelen. Förfina dina filter för mer specifika träffar.")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                            Spacer()
+                        }
+                        .padding(.vertical, 14)
                     }
 
                     // Extra utrymme i botten så att sista sökträffen inte täcks av den flytande tab-baren
@@ -965,6 +1133,13 @@ struct AddGameView: View {
         let offset = loadMore ? currentOffset + pageSize : 0
 
         if loadMore {
+            if currentOffset + pageSize >= maxResultsCap {
+                await MainActor.run {
+                    self.hasMoreResults = false
+                    self.isLoadingMore = false
+                }
+                return
+            }
             await MainActor.run { isLoadingMore = true }
         } else {
             await MainActor.run {
@@ -1019,7 +1194,7 @@ struct AddGameView: View {
                         }
                     }
                 }
-                self.hasMoreResults = results.count == pageSize
+                self.hasMoreResults = (results.count == pageSize) && (offset + pageSize < maxResultsCap)
                 self.isLoading = false
                 self.isLoadingMore = false
             }
@@ -1116,9 +1291,38 @@ private struct IGDBSearchRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            CoverView(title: igdbGame.name, url: igdbGame.coverURL, corner: 8, height: 75)
-                .frame(width: 55, height: 75)
-                .shadow(color: .black.opacity(0.12), radius: 3, x: 0, y: 1)
+            ZStack(alignment: .topTrailing) {
+                CoverView(title: igdbGame.name, url: igdbGame.coverURL, corner: 8, height: 75)
+                    .frame(width: 55, height: 75)
+                    .shadow(color: .black.opacity(0.12), radius: 3, x: 0, y: 1)
+
+                let isOwned = localGame?.isOwned == true
+                let isWishlisted = (localGame != nil && !isOwned)
+
+                if !isOwned {
+                    Button {
+                        if isWishlisted, let local = localGame {
+                            store.delete(local)
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        } else if localGame == nil {
+                            onQuickAdd(.wishlist)
+                        }
+                    } label: {
+                        Image(systemName: isWishlisted ? "heart.fill" : "heart")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(isWishlisted ? .red : .white)
+                            .frame(width: 22, height: 22)
+                            .background(
+                                Circle()
+                                    .fill(isWishlisted ? Color.white.opacity(0.9) : Color.black.opacity(0.6))
+                            )
+                            .shadow(color: .black.opacity(0.25), radius: 2, x: 0, y: 1)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(3)
+                    .accessibilityLabel(isWishlisted ? "Ta bort från önskelista" : "Lägg till i önskelista")
+                }
+            }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(igdbGame.name)
@@ -1267,37 +1471,6 @@ private struct IGDBSearchRow: View {
                     }
                 } else {
                     // Ej tillagt i bibliotek eller önskelista:
-                    // 1. Snabbknapp: Önskelista
-                    Button {
-                        onQuickAdd(.wishlist)
-                    } label: {
-                        Image(systemName: "heart")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.red)
-                            .frame(width: 32, height: 32)
-                            .background(Color.red.opacity(0.1))
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(Color.red.opacity(0.25), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Lägg till i önskelista")
-
-                    // 2. Snabbknapp: Klarat / Spelminne
-                    Button {
-                        onQuickAdd(.completed)
-                    } label: {
-                        Image(systemName: "trophy.fill")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.yellow)
-                            .frame(width: 32, height: 32)
-                            .background(Color.yellow.opacity(0.15))
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(Color.yellow.opacity(0.35), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Lägg till som Genomspelat / Spelminne")
-
-                    // 3. Snabbknapp: Lägg till i bibliotek
                     Menu {
                         Button {
                             onQuickAdd(.backlog)
@@ -1331,6 +1504,9 @@ private struct IGDBSearchRow: View {
                             Text("Lägg till")
                                 .font(.caption2.bold())
                                 .lineLimit(1)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8, weight: .semibold))
+                                .opacity(0.8)
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -1338,10 +1514,9 @@ private struct IGDBSearchRow: View {
                         .foregroundStyle(.white)
                         .clipShape(Capsule())
                         .fixedSize(horizontal: true, vertical: false)
-                    } primaryAction: {
-                        onQuickAdd(.backlog)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Välj hur spelet ska läggas till")
                 }
             }
         }

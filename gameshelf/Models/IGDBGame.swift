@@ -106,8 +106,8 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
 
     nonisolated var isDLC: Bool {
         // IGDB game_type / category:
-        // 1: dlc_addon, 2: expansion, 5: mod, 13: pack, 14: update
-        let dlcTypes: Set<Int> = [1, 2, 5, 13, 14]
+        // 1: dlc_addon, 2: expansion, 5: mod, 12: fork, 13: pack, 14: update
+        let dlcTypes: Set<Int> = [1, 2, 5, 12, 13, 14]
         if let type = gameType, dlcTypes.contains(type) {
             return true
         }

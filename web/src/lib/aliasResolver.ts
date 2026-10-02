@@ -195,5 +195,19 @@ export function resolveGameAlias(query: string): string {
     }
   }
 
+  // 3. Vanliga stavningsvarianter
+  if (normalized === 'spiderman') return 'Spider-Man';
+  if (normalized.startsWith('spiderman ')) {
+    return `Spider-Man ${trimmed.slice('spiderman'.length).trim()}`;
+  }
+  if (normalized === 'pokemon') return 'Pokémon';
+  if (normalized.startsWith('pokemon ')) {
+    return `Pokémon ${trimmed.slice('pokemon'.length).trim()}`;
+  }
+  if (normalized.startsWith('baldurs gate')) {
+    const rem = trimmed.slice('baldurs gate'.length).trim();
+    return rem ? `Baldur's Gate ${rem}` : "Baldur's Gate";
+  }
+
   return trimmed;
 }

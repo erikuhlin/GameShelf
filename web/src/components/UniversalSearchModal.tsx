@@ -365,7 +365,7 @@ export function UniversalSearchModal({
 
   // IGDB title-sök (debounced) – nollställer offset vid ny sökning
   useEffect(() => {
-    if (!query.trim()) {
+    if (!query.trim() || query.trim().length < 2) {
       setIgdbResults([]);
       setHasMore(false);
       return;
@@ -380,7 +380,7 @@ export function UniversalSearchModal({
         const data = await res.json();
         if (data.results) {
           setIgdbResults(data.results);
-          setHasMore(data.hasMore ?? false);
+          setHasMore((data.hasMore ?? false) && data.results.length < 100);
         }
       } catch (e) {
         console.error('IGDB search error:', e);
@@ -414,7 +414,7 @@ export function UniversalSearchModal({
         const data = await res.json();
         if (data.results) {
           setFilterResults(data.results);
-          setHasMore(data.hasMore ?? false);
+          setHasMore((data.hasMore ?? false) && data.results.length < 100);
         }
       } catch (e) {
         console.error('Filter search error:', e);
@@ -426,8 +426,12 @@ export function UniversalSearchModal({
     return () => clearTimeout(timer);
   }, [query, filters, activePreset, hasAnyFilter, buildFilterUrl]);
 
-  // Ladda fler resultat (paginering)
+  // Ladda fler resultat (paginering med max 100 tak)
   const handleLoadMore = useCallback(async () => {
+    if (offset + 20 >= 100) {
+      setHasMore(false);
+      return;
+    }
     const newOffset = offset + 20;
     setIsLoadingMore(true);
     try {
@@ -440,7 +444,7 @@ export function UniversalSearchModal({
         } else {
           setFilterResults((prev) => [...prev, ...data.results]);
         }
-        setHasMore(data.hasMore ?? false);
+        setHasMore((data.hasMore ?? false) && newOffset + 20 < 100);
         setOffset(newOffset);
       }
     } catch (e) {
@@ -869,7 +873,6 @@ export function UniversalSearchModal({
                 onToggleDrop={() => setShowAddDropdown(showAddDropdown === result.id ? null : result.id)}
                 onSetChoice={setAddChoice} onSetYear={setAddCompletedYear}
                 onConfirmAdd={() => handleAddGame(result, addChoice, addCompletedYear)}
-                onQuickAddCompleted={() => handleAddGame(result, 'completed', null)}
               />
             );
           })}
@@ -997,7 +1000,6 @@ export function UniversalSearchModal({
                         onToggleDrop={() => setShowAddDropdown(showAddDropdown === result.id ? null : result.id)}
                         onSetChoice={setAddChoice} onSetYear={setAddCompletedYear}
                         onConfirmAdd={() => handleAddGame(asResult, addChoice, addCompletedYear)}
-                        onQuickAddCompleted={() => handleAddGame(asResult, 'completed', null)}
                       />
                     );
                   })}
@@ -1141,6 +1143,23 @@ export function UniversalSearchModal({
             </div>
           </div>
 
+          {/* ── FILTER-VARNING VID FRITEXT ── */}
+          {query.trim().length >= 2 && (activeFilterCount > 0 || Boolean(activePreset)) && (
+            <div className="flex items-center justify-between px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 text-xs">
+              <span className="text-amber-400 font-medium flex items-center gap-1.5">
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                Söker med {activeFilterCount > 0 ? `${activeFilterCount} aktiva filter` : 'aktivt förval'}
+              </span>
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="text-amber-300 hover:text-white font-semibold underline underline-offset-2 transition cursor-pointer"
+              >
+                Rensa filter för att söka på allt
+              </button>
+            </div>
+          )}
+
           {/* ── FLIKAR (vid fritext) ── */}
           {query.trim() && (
             <div className="flex items-center gap-1 px-4 py-2 border-b border-zinc-800/60 overflow-x-auto scrollbar-none shrink-0">
@@ -1223,7 +1242,6 @@ interface GameResultCardProps {
   onSetChoice: (c: AddChoice) => void;
   onSetYear: (y: number | null) => void;
   onConfirmAdd: () => void;
-  onQuickAddCompleted?: () => void;
 }
 
 const ADD_CHOICES: { id: AddChoice; label: string; icon: string }[] = [
@@ -1238,7 +1256,7 @@ const CY = new Date().getFullYear();
 function GameResultCard({
   result, inLibrary, isInWishlist, isAdding, showDrop,
   addChoice, addCompletedYear,
-  onSelectGame, onToggleDrop, onSetChoice, onSetYear, onConfirmAdd, onQuickAddCompleted,
+  onSelectGame, onToggleDrop, onSetChoice, onSetYear, onConfirmAdd,
 }: GameResultCardProps) {
   return (
     <div className={`rounded-2xl border transition-all overflow-hidden ${
@@ -1281,19 +1299,7 @@ function GameResultCard({
             </span>
           </div>
         ) : (
-          <div className="flex items-center gap-1.5 shrink-0">
-            {onQuickAddCompleted && (
-              <button
-                type="button"
-                onClick={onQuickAddCompleted}
-                title="Lägg till som redan genomspelat (Spelminne)"
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition cursor-pointer"
-              >
-                <span>🏆</span>
-                <span className="hidden sm:inline">Klarat</span>
-              </button>
-            )}
-
+          <div className="flex items-center shrink-0">
             <button
               type="button"
               onClick={onToggleDrop}

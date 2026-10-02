@@ -201,6 +201,22 @@ enum GameAliasResolver: Sendable {
             }
         }
 
+        // 3. Vanliga stavningsvarianter
+        if normalized == "spiderman" { return "Spider-Man" }
+        if normalized.hasPrefix("spiderman ") {
+            let remainder = trimmed.dropFirst("spiderman".count).trimmingCharacters(in: .whitespaces)
+            return "Spider-Man \(remainder)"
+        }
+        if normalized == "pokemon" { return "Pokémon" }
+        if normalized.hasPrefix("pokemon ") {
+            let remainder = trimmed.dropFirst("pokemon".count).trimmingCharacters(in: .whitespaces)
+            return "Pokémon \(remainder)"
+        }
+        if normalized.hasPrefix("baldurs gate") {
+            let remainder = trimmed.dropFirst("baldurs gate".count).trimmingCharacters(in: .whitespaces)
+            return remainder.isEmpty ? "Baldur's Gate" : "Baldur's Gate \(remainder)"
+        }
+
         return trimmed
     }
 

@@ -210,10 +210,18 @@ export async function GET(request: NextRequest) {
       const threeMonthsAgo = Math.floor(Date.now() / 1000) - 90 * 86400;
       whereConditions.push(`first_release_date >= ${threeMonthsAgo}`);
     } else if (preset === 'masterpieces') {
-      whereConditions.push(`total_rating >= 88 & total_rating_count >= 20`);
+      whereConditions.push(`total_rating >= 88 & total_rating_count >= 75`);
     } else if (preset === 'retro_2000s') {
       whereConditions.push(`first_release_date >= 946684800 & first_release_date <= 1167609600 & total_rating >= 75`);
     }
+
+    // 8. Betygssortering kräver trovärdig röstmängd (undvik obskyra fan-mods)
+    if (sortParam === 'rating') {
+      whereConditions.push('total_rating_count >= 75');
+    }
+
+    // 9. Kvalitetsspärr: Exkludera mods, forks och DLC
+    whereConditions.push('category = (0, 4, 8, 9, 10)');
 
     let igdbQuery = '';
     const fields =

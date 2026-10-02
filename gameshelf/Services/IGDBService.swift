@@ -612,11 +612,14 @@ struct TrendingGameResult: Sendable {
 
         // 5. Betyg / Popularitetskrav vid sortering på betyg för relevans (undvik obskyra moddar/retro med få röster)
         if sortOption == .rating {
-            conditions.append("total_rating != null & total_rating_count >= 20")
+            conditions.append("total_rating != null & total_rating_count >= 75")
         }
         if minRating > 0 {
             conditions.append("total_rating >= \(minRating)")
         }
+
+        // 6. Exkludera mods, forks och DLC från officiella spelkataloger
+        conditions.append("category = (0, 4, 8, 9, 10)")
 
         let whereClause = conditions.isEmpty ? "" : "where \(conditions.joined(separator: " & "));"
 

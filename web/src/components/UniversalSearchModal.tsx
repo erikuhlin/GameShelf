@@ -485,6 +485,11 @@ export function UniversalSearchModal({
   }, [query]);
 
   const convertResultToGame = (r: any): Game => {
+    const inLib = games.find(
+      (g) => (r.id && g.igdb_id === r.id) || (r.title && g.title.toLowerCase() === r.title.toLowerCase())
+    );
+    if (inLib) return inLib;
+
     return {
       id: crypto.randomUUID(),
       title: r.title || r.name,
@@ -499,8 +504,8 @@ export function UniversalSearchModal({
       igdb_rating: r.igdb_rating || null,
       igdb_id: r.id,
       estimated_hours: null,
-      is_owned: true,
-      is_backlog: true,
+      is_owned: false,
+      is_backlog: false,
       play_types: inferPlayTypes({ title: r.title || r.name, genres: r.genres || [] }),
       notes: '',
       todos: [],
@@ -870,7 +875,13 @@ export function UniversalSearchModal({
                 inLibrary={inLibrary} isInWishlist={isInWishlist} inLibGame={inLib}
                 isAdding={addingGameId === result.id} showDrop={showAddDropdown === result.id}
                 addChoice={addChoice} addCompletedYear={addCompletedYear}
-                onSelectGame={() => { if (inLib) { onSelectGame(inLib); onClose(); } }}
+                onSelectGame={() => {
+                  if (inLib) {
+                    onSelectGame(inLib);
+                  } else {
+                    onSelectGame(convertResultToGame(result));
+                  }
+                }}
                 onToggleDrop={() => setShowAddDropdown(showAddDropdown === result.id ? null : result.id)}
                 onSetChoice={setAddChoice} onSetYear={setAddCompletedYear}
                 onConfirmAdd={() => handleAddGame(result, addChoice, addCompletedYear)}
@@ -906,7 +917,7 @@ export function UniversalSearchModal({
               </div>
               <div className="space-y-1.5">
                 {libraryResults.map((game) => (
-                  <div key={game.id} onClick={() => { saveSearchTerm(query); onSelectGame(game); onClose(); }}
+                  <div key={game.id} onClick={() => { saveSearchTerm(query); onSelectGame(game); }}
                     className="flex items-center gap-3 p-3 rounded-2xl bg-zinc-900/40 border border-zinc-800/50 hover:border-zinc-700 hover:bg-zinc-900 cursor-pointer group transition"
                   >
                     <div className="w-9 h-12 rounded-lg overflow-hidden bg-zinc-950 shrink-0 border border-zinc-800/60">
@@ -995,8 +1006,12 @@ export function UniversalSearchModal({
                         isAdding={addingGameId === result.id} showDrop={showAddDropdown === result.id}
                         addChoice={addChoice} addCompletedYear={addCompletedYear}
                         onSelectGame={() => {
-                          if (inLib) { saveSearchTerm(query); onSelectGame(inLib); onClose(); }
-                          else { saveSearchTerm(query); onSelectGame(convertResultToGame(asResult)); onClose(); }
+                          saveSearchTerm(query);
+                          if (inLib) {
+                            onSelectGame(inLib);
+                          } else {
+                            onSelectGame(convertResultToGame(asResult));
+                          }
                         }}
                         onToggleDrop={() => setShowAddDropdown(showAddDropdown === result.id ? null : result.id)}
                         onSetChoice={setAddChoice} onSetYear={setAddCompletedYear}

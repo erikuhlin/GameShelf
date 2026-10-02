@@ -147,7 +147,7 @@ struct AddGameView: View {
             .navigationDestination(for: Int.self) { gameID in
                 GameDetailView(igdbID: gameID)
             }
-            .searchable(text: $searchText, prompt: "Sök och lägg till spel...")
+            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Sök och lägg till spel...")
             .onSubmit(of: .search) {
                 let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !trimmed.isEmpty {

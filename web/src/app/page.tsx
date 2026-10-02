@@ -1901,6 +1901,7 @@ export default function HomePage() {
             })
         )}
         onToggleTargetGoal={handleToggleTargetGoal}
+        backLabel={isSearchModalOpen ? 'Tillbaka till sökning' : undefined}
       />
 
       <CollectionsModal

@@ -43,6 +43,7 @@ import {
   Map as MapIcon,
   MessageSquare,
   ArrowRight,
+  ArrowLeft,
   CheckCircle2,
   ChevronDown,
   Flame,
@@ -65,6 +66,7 @@ interface GameDetailModalProps {
   onToggleTargetGoal?: (gameId: string) => void;
   libraryGames?: Game[];
   onAddGame?: (game: Game) => void;
+  backLabel?: string;
 }
 
 interface RemoteDetails {
@@ -120,7 +122,19 @@ export function GameDetailModal({
   onToggleTargetGoal,
   libraryGames,
   onAddGame,
+  backLabel,
 }: GameDetailModalProps) {
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen || !game) return null;
 
   const matchingGame = libraryGames?.find(
@@ -619,11 +633,16 @@ export function GameDetailModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/85 backdrop-blur-md overflow-y-auto">
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       {/* Lightbox för skärmdumpar */}
       {activeLightboxImg && (
         <div
-          className="fixed inset-0 z-60 bg-black/95 flex items-center justify-center p-4 cursor-zoom-out"
+          className="fixed inset-0 z-[90] bg-black/95 flex items-center justify-center p-4 cursor-zoom-out"
           onClick={() => setActiveLightboxImg(null)}
         >
           <img
@@ -636,7 +655,7 @@ export function GameDetailModal({
 
       {/* Flytta till Biblioteket Snabbväljare Modal */}
       {showMovePicker && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
             <div>
               <h3 className="text-base font-bold text-white">Flytta till Biblioteket</h3>
@@ -700,7 +719,7 @@ export function GameDetailModal({
 
       {/* Samlingshanterare Modal */}
       {showCollectionPicker && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <div className="flex items-center gap-2">
@@ -815,14 +834,27 @@ export function GameDetailModal({
       <div className="relative bg-zinc-950 border border-zinc-800/90 rounded-2xl md:rounded-3xl max-w-4xl w-full max-h-[92vh] overflow-y-auto shadow-2xl flex flex-col">
         {/* Top bar */}
         <div className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 py-3.5 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80">
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-zinc-800/80 text-zinc-400 hover:text-white transition cursor-pointer"
-            title="Stäng"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {backLabel ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white transition cursor-pointer text-xs font-semibold border border-zinc-800/80 group"
+              title={backLabel}
+            >
+              <ArrowLeft className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
+              <span className="hidden sm:inline">{backLabel}</span>
+              <span className="sm:hidden">Tillbaka</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-full hover:bg-zinc-800/80 text-zinc-400 hover:text-white transition cursor-pointer"
+              title="Stäng"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
 
           <div className="flex items-center gap-2">
             {isOwned && onToggleTargetGoal && (
@@ -848,6 +880,17 @@ export function GameDetailModal({
             >
               <Share2 className="w-4 h-4" />
             </button>
+
+            {backLabel && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 rounded-full hover:bg-zinc-800/80 text-zinc-400 hover:text-white transition cursor-pointer ml-1"
+                title="Stäng"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </div>
 

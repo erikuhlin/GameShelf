@@ -221,7 +221,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 9. Kvalitetsspärr: Exkludera mods, forks och DLC
-    whereConditions.push('category = (0, 4, 8, 9, 10)');
+    whereConditions.push('game_type != (1, 5, 12, 14)');
 
     let igdbQuery = '';
     const fields =

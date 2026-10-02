@@ -365,7 +365,8 @@ export function UniversalSearchModal({
 
   // IGDB title-sök (debounced) – nollställer offset vid ny sökning
   useEffect(() => {
-    if (!query.trim() || query.trim().length < 2) {
+    const trimmed = query.trim();
+    if (!trimmed) {
       setIgdbResults([]);
       setHasMore(false);
       return;
@@ -1144,7 +1145,7 @@ export function UniversalSearchModal({
           </div>
 
           {/* ── FILTER-VARNING VID FRITEXT ── */}
-          {query.trim().length >= 2 && (activeFilterCount > 0 || Boolean(activePreset)) && (
+          {query.trim().length >= 1 && (activeFilterCount > 0 || Boolean(activePreset)) && (
             <div className="flex items-center justify-between px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 text-xs">
               <span className="text-amber-400 font-medium flex items-center gap-1.5">
                 <SlidersHorizontal className="w-3.5 h-3.5" />

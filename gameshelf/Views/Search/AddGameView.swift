@@ -150,7 +150,7 @@ struct AddGameView: View {
             .searchable(text: $searchText, prompt: "Sök och lägg till spel...")
             .onSubmit(of: .search) {
                 let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.count >= 2 {
+                if !trimmed.isEmpty {
                     saveSearchTerm(trimmed)
                 }
                 performSearch()
@@ -164,13 +164,6 @@ struct AddGameView: View {
                     errorMessage = nil
                     currentOffset = 0
                     hasMoreResults = false
-                    return
-                }
-
-                // Kräver minst 2 tecken för att trigga automatisk IGDB-sökning om inga filter är aktiva
-                if trimmed.count < 2 && !filterConfig.isActive {
-                    searchResults = []
-                    isLoading = false
                     return
                 }
 
@@ -227,7 +220,7 @@ struct AddGameView: View {
     @ViewBuilder
     private var filterWarningBanner: some View {
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.count >= 2 && filterConfig.isActive {
+        if !trimmed.isEmpty && filterConfig.isActive {
             HStack(spacing: 8) {
                 Image(systemName: "line.3.horizontal.decrease.circle.fill")
                     .font(.caption)

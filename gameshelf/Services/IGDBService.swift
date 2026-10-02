@@ -619,7 +619,7 @@ struct TrendingGameResult: Sendable {
         }
 
         // 6. Exkludera mods, forks och DLC från officiella spelkataloger
-        conditions.append("category = (0, 4, 8, 9, 10)")
+        conditions.append("game_type != (1, 5, 12, 14)")
 
         let whereClause = conditions.isEmpty ? "" : "where \(conditions.joined(separator: " & "));"
 

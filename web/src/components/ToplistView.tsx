@@ -198,7 +198,7 @@ export function ToplistView({ onSelectGame, onAddGame, libraryGames = [] }: Topl
 
           <div className="flex items-center gap-3">
             <span className="text-xs text-zinc-400">
-              Formel: <code className="bg-zinc-800 px-1.5 py-0.5 rounded text-amber-400">WR = (v/(v+75))*R + (75/(v+75))*C</code>
+              Formel: <code className="bg-zinc-800 px-1.5 py-0.5 rounded text-amber-400">WR = (v/(v+100))*R + (100/(v+100))*C</code>
             </span>
           </div>
         </div>

@@ -120,7 +120,7 @@ struct ToplistView: View {
                             }
                             Text("Topp 100 Spel genom tiderna")
                                 .font(.title3.bold())
-                            Text("Bayesiansk medelvärdesberäkning (m=75). Spel med tusentals röster premieras framför obskyra titlar med extremt snitt.")
+                            Text("Bayesiansk medelvärdesberäkning (m=100). Spel med tusentals röster premieras framför obskyra titlar med extremt snitt.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

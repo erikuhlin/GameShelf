@@ -11,9 +11,9 @@
  * - C = Global average rating across the dataset (typically ~71.5)
  */
 
-export const DEFAULT_M_THRESHOLD = 75;
+export const DEFAULT_M_THRESHOLD = 100;
 export const LOW_VOTES_WARNING_THRESHOLD = 50;
-export const DEFAULT_GLOBAL_C = 71.5;
+export const DEFAULT_GLOBAL_C = 79.0;
 
 export interface RawGameRatingData {
   igdb_id: number;
@@ -60,20 +60,13 @@ export function calculateWeightedRating(
  */
 export function computeRatingsAndRanks(
   games: RawGameRatingData[],
-  mThreshold: number = DEFAULT_M_THRESHOLD
+  mThreshold: number = DEFAULT_M_THRESHOLD,
+  customGlobalC?: number
 ): ComputedGameRating[] {
   if (games.length === 0) return [];
 
-  // 1. Calculate global mean C
-  let totalRatingSum = 0;
-  let ratedCount = 0;
-  for (const g of games) {
-    if (g.total_rating > 0) {
-      totalRatingSum += g.total_rating;
-      ratedCount++;
-    }
-  }
-  const globalC = ratedCount > 0 ? totalRatingSum / ratedCount : DEFAULT_GLOBAL_C;
+  // Use configured benchmark C (default 79.0 as used by IGDB Top 100)
+  const globalC = customGlobalC !== undefined ? customGlobalC : DEFAULT_GLOBAL_C;
 
   // 2. Compute weighted score for each game
   const computedList: Array<ComputedGameRating> = games.map((game) => {

@@ -35,7 +35,7 @@ loadEnvLocal();
 const args = process.argv.slice(2);
 let maxBatches = 0;
 let minVotes = 5; // Default: at least 5 votes to filter out zero-traction noise while keeping indie gems
-let mVal = 75;
+let mVal = 100;
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--batches' && args[i + 1]) {

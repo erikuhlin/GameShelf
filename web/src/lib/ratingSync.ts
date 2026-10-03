@@ -55,9 +55,9 @@ export async function syncIGDBRatings(options: SyncOptions = {}) {
       break;
     }
 
-    const whereClause = `game_type != (1, 5, 12, 14) & total_rating_count >= ${minVoteCount} & id > ${lastId}`;
+    const whereClause = `game_type = 0 & rating_count >= ${minVoteCount} & id > ${lastId}`;
     const query = `
-      fields id, name, slug, cover.image_id, first_release_date, genres.name, platforms.name, platforms.id, total_rating, total_rating_count;
+      fields id, name, slug, cover.image_id, first_release_date, genres.name, platforms.name, platforms.id, rating, rating_count, total_rating, total_rating_count;
       where ${whereClause};
       sort id asc;
       limit ${batchSize};
@@ -92,6 +92,10 @@ export async function syncIGDBRatings(options: SyncOptions = {}) {
           ? item.platforms.map((p: any) => Number(p.id)).filter((id: number) => !isNaN(id))
           : [];
 
+        // IGDB Top 100 uses User Rating (rating, rating_count)
+        const userRating = Number(item.rating) || Number(item.total_rating) || 0;
+        const userVoteCount = Number(item.rating_count) || Number(item.total_rating_count) || 0;
+
         rawGames.push({
           igdb_id: item.id,
           title: item.name,
@@ -102,8 +106,8 @@ export async function syncIGDBRatings(options: SyncOptions = {}) {
           genres,
           platforms,
           platform_ids,
-          total_rating: Number(item.total_rating) || 0,
-          total_rating_count: Number(item.total_rating_count) || 0,
+          total_rating: userRating,
+          total_rating_count: userVoteCount,
         });
 
         lastId = item.id;

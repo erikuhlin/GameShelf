@@ -30,7 +30,16 @@ export async function syncIGDBRatings(options: SyncOptions = {}) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     'dummy_key';
 
-  const supabase = options.supabaseClient || createClient(supabaseUrl, supabaseKey);
+  if (typeof globalThis.WebSocket === 'undefined') {
+    // @ts-ignore
+    globalThis.WebSocket = class DummyWebSocket {};
+  }
+
+  const supabase =
+    options.supabaseClient ||
+    createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
 
   onProgress(`🚀 Starting IGDB rating sync (batchSize: ${batchSize}, minVoteCount: ${minVoteCount}, m: ${mThreshold})`);
 

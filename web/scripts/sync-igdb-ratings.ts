@@ -1,5 +1,12 @@
 import fs from 'fs';
 import path from 'path';
+
+// Polyfill WebSocket for Node.js < 22 (required by newer @supabase/supabase-js realtime client)
+if (typeof globalThis.WebSocket === 'undefined') {
+  // @ts-ignore
+  globalThis.WebSocket = class DummyWebSocket {};
+}
+
 import { syncIGDBRatings } from '../src/lib/ratingSync';
 
 // Load .env.local manually if running in pure node/tsx without dotenv

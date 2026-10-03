@@ -140,6 +140,12 @@ export async function syncIGDBRatings(options: SyncOptions = {}) {
   const computed = computeRatingsAndRanks(rawGames, mThreshold);
 
   // 3. Upsert to Supabase in chunks of 500
+  // When running a full sync, clear the table first so stale editions/remasters from earlier runs are removed
+  if (maxBatches === 0) {
+    onProgress('🧹 Cleaning stale ratings from game_ratings table...');
+    await supabase.from('game_ratings').delete().gt('igdb_id', 0);
+  }
+
   onProgress(`💾 Saving to Supabase game_ratings table...`);
   const upsertChunkSize = 500;
   for (let i = 0; i < computed.length; i += upsertChunkSize) {

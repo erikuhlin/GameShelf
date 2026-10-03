@@ -181,6 +181,7 @@ export function GameDetailModal({
   // Remote data state
   const [remoteDetails, setRemoteDetails] = useState<RemoteDetails | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [toplistBadge, setToplistBadge] = useState<{ title: string; genre?: string } | null>(null);
   const [liveReleaseDate, setLiveReleaseDate] = useState<number | null>(
     game.first_release_date || null
   );
@@ -219,8 +220,33 @@ export function GameDetailModal({
         setDeal(d);
         setStoreLinks(getStoreLinks(game, d));
       });
+
+      // Hämta ev. topplist-ranking från game_ratings
+      setToplistBadge(null);
+      if (game.igdb_id) {
+        supabase
+          .from('game_ratings')
+          .select('overall_rank, genre_ranks')
+          .eq('igdb_id', game.igdb_id)
+          .single()
+          .then(({ data }) => {
+            if (data) {
+              if (data.overall_rank && data.overall_rank > 0 && data.overall_rank <= 100) {
+                setToplistBadge({ title: `#${data.overall_rank} på Topp 100 Spel` });
+              } else if (data.genre_ranks && typeof data.genre_ranks === 'object') {
+                const entries = Object.entries(data.genre_ranks as Record<string, number>);
+                entries.sort((a, b) => a[1] - b[1]);
+                const best = entries[0];
+                if (best && best[1] > 0 && best[1] <= 100) {
+                  const genreLabel = best[0] === 'Role-playing (RPG)' ? 'RPG' : best[0];
+                  setToplistBadge({ title: `#${best[1]} på Topp 100 ${genreLabel}`, genre: best[0] });
+                }
+              }
+            }
+          });
+      }
     }
-  }, [game?.id, game?.title]);
+  }, [game?.id, game?.title, game?.igdb_id]);
 
   // Stäng med Escape-tangenten
   useEffect(() => {
@@ -967,6 +993,17 @@ export function GameDetailModal({
                     <span>★</span>
                     <span>{game.rating}/10</span>
                     <span className="text-zinc-500 font-normal">Ditt betyg</span>
+                  </div>
+                ) : null}
+
+                {/* Topplist-indikator */}
+                {toplistBadge ? (
+                  <div
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/35 text-xs font-bold text-amber-300 shadow-sm"
+                    title="IGDB Weighted Rating Topplista"
+                  >
+                    <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{toplistBadge.title}</span>
                   </div>
                 ) : null}
 

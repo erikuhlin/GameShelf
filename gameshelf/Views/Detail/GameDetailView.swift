@@ -64,6 +64,9 @@ struct GameDetailView: View {
     @State private var showingRemoveWishlistAlert = false
     @State private var showingCompletionCelebration = false
     @State private var selectedVideo: IGDBVideo? = nil
+    @State private var toplistBadgeTitle: String? = nil
+    @State private var toplistBadgeGenre: String? = nil
+    @State private var showingToplistSheet = false
 
     // Spelframsteg state
     @State private var isEditingHours = false
@@ -320,6 +323,15 @@ struct GameDetailView: View {
                 }
             }
         }
+        .sheet(isPresented: $showingToplistSheet) {
+            NavigationStack {
+                ToplistView(prefillGenre: toplistBadgeGenre) { selectedId in
+                    showingToplistSheet = false
+                    mode = .igdb(id: selectedId)
+                    configureInitialState()
+                }
+            }
+        }
         .confirmationDialog(
             "Flytta till Biblioteket",
             isPresented: $showingMoveToLibraryDialog,
@@ -554,6 +566,35 @@ struct GameDetailView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                             }
                         }
+                        .padding(.top, 2)
+                    }
+
+                    // Topplist-indikator
+                    if let badgeTitle = toplistBadgeTitle {
+                        Button {
+                            showingToplistSheet = true
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "trophy.fill")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.yellow)
+                                Text(badgeTitle)
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.yellow)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.yellow.opacity(0.7))
+                            }
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background(Color.yellow.opacity(0.15))
+                            .overlay(
+                                Capsule()
+                                    .stroke(Color.yellow.opacity(0.35), lineWidth: 1)
+                            )
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
                         .padding(.top, 2)
                     }
                 }
@@ -3263,6 +3304,7 @@ struct GameDetailView: View {
 
         if let id = effectiveIGDBID {
             Task { await loadRemote(id: id) }
+            Task { await loadToplistBadge(id: id) }
         } else if let g = currentGame {
             Task { await ensureRemoteForLocal(g) }
         } else if case .local(let g) = mode {
@@ -3420,10 +3462,40 @@ struct GameDetailView: View {
             Task {
                 await priceWatcher.fetchDeal(title: game.name)
             }
+            Task {
+                await loadToplistBadge(id: game.id)
+            }
         } catch {
             print("[GameDetailView] Failed loadRemote for IGDB ID \(id): \(error.localizedDescription)")
             await MainActor.run {
                 remoteState = .error("Kunde inte hämta detaljer från IGDB (\(error.localizedDescription)).")
+            }
+        }
+    }
+
+    private func loadToplistBadge(id: Int) async {
+        guard let ratingItem = await ToplistService.shared.fetchGameRating(igdbID: id) else {
+            return
+        }
+
+        var title: String? = nil
+        var genre: String? = nil
+
+        if let overall = ratingItem.overall_rank, overall > 0, overall <= 100 {
+            title = "#\(overall) på Topp 100 Spel"
+        } else if let genreRanks = ratingItem.genre_ranks, !genreRanks.isEmpty {
+            let sorted = genreRanks.sorted { $0.value < $1.value }
+            if let best = sorted.first, best.value > 0, best.value <= 100 {
+                let short = (best.key == "Role-playing (RPG)") ? "RPG" : best.key
+                title = "#\(best.value) på Topp 100 \(short)"
+                genre = best.key
+            }
+        }
+
+        if let t = title {
+            await MainActor.run {
+                self.toplistBadgeTitle = t
+                self.toplistBadgeGenre = genre
             }
         }
     }

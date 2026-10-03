@@ -1,6 +1,7 @@
 import Foundation
 
 enum DiscoverSortOption: String, CaseIterable, Identifiable, Sendable {
+    case weightedRating = "Viktat betyg"
     case rating = "Högst betyg"
     case popularity = "Mest populärt"
     case releaseDateDesc = "Nyast först"
@@ -10,6 +11,7 @@ enum DiscoverSortOption: String, CaseIterable, Identifiable, Sendable {
 
     nonisolated var igdbSortClause: String {
         switch self {
+        case .weightedRating: return "total_rating_count desc"
         case .rating: return "total_rating desc"
         case .popularity: return "total_rating_count desc"
         case .releaseDateDesc: return "first_release_date desc"
@@ -536,6 +538,37 @@ struct TrendingGameResult: Sendable {
         limit: Int = 30,
         offset: Int = 0
     ) async throws -> [IGDBGame] {
+        // Om sortering är "Viktat betyg" hämtar vi från vår lokala game_ratings-tabell
+        if sortOption == .weightedRating {
+            if let toplistItems = try? await ToplistService.shared.fetchToplist(
+                genre: genre ?? genres.first,
+                yearFrom: startYear,
+                yearTo: endYear,
+                limit: limit,
+                offset: offset
+            ), !toplistItems.isEmpty {
+                var filtered = toplistItems
+                if let q = query?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !q.isEmpty {
+                    filtered = toplistItems.filter { $0.title.lowercased().contains(q) }
+                }
+                if !filtered.isEmpty {
+                    return filtered.map { item in
+                        let imgId = item.cover_url?.components(separatedBy: "/").last?.replacingOccurrences(of: ".jpg", with: "")
+                        return IGDBGame(
+                            id: item.igdb_id,
+                            name: item.title,
+                            firstReleaseDate: item.first_release_date,
+                            cover: imgId.map { IGDBImage(id: 0, imageId: $0) },
+                            platforms: item.platforms?.map { IGDBPlatform(id: 0, name: $0) },
+                            genres: item.genres?.map { IGDBGenre(id: 0, name: $0) },
+                            totalRating: item.weighted_score,
+                            totalRatingCount: item.total_rating_count
+                        )
+                    }
+                }
+            }
+        }
+
         let token = try await IGDBAuthManager.shared.getValidToken()
         guard let url = URL(string: "https://api.igdb.com/v4/games") else {
             throw URLError(.badURL)

@@ -24,6 +24,7 @@ struct ExplorePrefs: Equatable {
 enum DiscoverTab: String, CaseIterable, Identifiable {
     case forYou = "✨ För dig"
     case trending = "🔥 Trendar"
+    case toplist = "🏆 Topplistor"
 
     var id: String { rawValue }
 }
@@ -33,6 +34,7 @@ private enum ExploreSheet: Identifiable {
     case game(Int)
     case trending
     case newsList
+    case toplist
 
     var id: String {
         switch self {
@@ -40,6 +42,7 @@ private enum ExploreSheet: Identifiable {
         case .game(let id):    return "game:\(id)"
         case .trending:        return "trending"
         case .newsList:        return "newsList"
+        case .toplist:         return "toplist"
         }
     }
 }
@@ -223,6 +226,14 @@ struct ExploreView: View {
                         initialPlatformRaw: "Alla",
                         initialKind: nil
                     )
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                case .toplist:
+                    NavigationStack {
+                        ToplistView { id in
+                            sheet = .game(id)
+                        }
+                    }
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
                 }
@@ -1431,6 +1442,11 @@ struct ExploreView: View {
                         isLoading: trending.isLoading,
                         onSelect: { sheet = .game($0) },
                         onSeeAll: { sheet = .trending }
+                    )
+                case .toplist:
+                    ToplistSection(
+                        onSelect: { sheet = .game($0) },
+                        onSeeAll: { sheet = .toplist }
                     )
                 }
             }

@@ -62,7 +62,7 @@ interface AdvancedFilters {
   yearTo: string;
   minRating: number;
   developer: string;
-  sort: 'popularity' | 'rating' | 'newest' | 'oldest';
+  sort: 'popularity' | 'rating' | 'weighted_rating' | 'newest' | 'oldest';
   hideOwned: boolean;
   playtime: 'all' | 'short' | 'medium' | 'long' | 'epic';
 }
@@ -776,7 +776,8 @@ export function UniversalSearchModal({
             className="w-full bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs rounded-xl px-2.5 py-2 focus:outline-none cursor-pointer"
           >
             <option value="popularity">Popularitet</option>
-            <option value="rating">Betyg</option>
+            <option value="weighted_rating">Viktat betyg (Topplista)</option>
+            <option value="rating">Betyg (IGDB)</option>
             <option value="newest">Nyast</option>
             <option value="oldest">Äldst</option>
           </select>

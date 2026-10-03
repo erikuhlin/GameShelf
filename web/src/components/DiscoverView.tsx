@@ -34,6 +34,7 @@ import { UserProfile } from '@/types/profile';
 import { AVATAR_PRESETS } from '@/lib/profileStore';
 import { GamingGoalModal } from './GamingGoalModal';
 import { NewsSourcesModal } from './NewsSourcesModal';
+import { ToplistView } from './ToplistView';
 
 interface DiscoverViewProps {
   games: Game[];
@@ -193,7 +194,7 @@ export function DiscoverView({
   onUpdateProfile,
   onToggleTargetGoal,
 }: DiscoverViewProps) {
-  const [activeTab, setActiveTab] = useState<'discover' | 'calendar' | 'news'>('discover');
+  const [activeTab, setActiveTab] = useState<'discover' | 'calendar' | 'toplist' | 'news'>('discover');
 
   // Spelmål modal state
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
@@ -1055,6 +1056,18 @@ export function DiscoverView({
           >
             <Sparkles className="w-4 h-4" />
             <span>För dig & Upptäck</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('toplist')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition whitespace-nowrap cursor-pointer ${
+              activeTab === 'toplist'
+                ? 'bg-brand-red text-white shadow-sm'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Trophy className="w-4 h-4" />
+            <span>Topplistor</span>
           </button>
 
           <button
@@ -2162,6 +2175,14 @@ export function DiscoverView({
               </div>
             </div>
           )}
+        </div>
+      ) : activeTab === 'toplist' ? (
+        <div className="animate-in fade-in duration-200">
+          <ToplistView
+            onSelectGame={onSelectGame}
+            onAddGame={onAddGame}
+            libraryGames={games}
+          />
         </div>
       ) : activeTab === 'calendar' ? (
         /* --- DEDIKERAD RELEASEKALENDER (Motsvarande iOS UpcomingReleasesView.swift) --- */

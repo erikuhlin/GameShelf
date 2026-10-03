@@ -129,12 +129,44 @@ CREATE POLICY "Allow full access on profiles" ON public.profiles FOR ALL TO anon
 CREATE POLICY "Allow full access on user_games" ON public.user_games FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Allow full access on pairing_sessions" ON public.pairing_sessions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
+-- 6. Game Ratings Table (Weighted Ratings & Toplists)
+CREATE TABLE IF NOT EXISTS public.game_ratings (
+    igdb_id BIGINT PRIMARY KEY,
+    title TEXT NOT NULL,
+    slug TEXT,
+    cover_url TEXT,
+    release_year INTEGER,
+    first_release_date BIGINT,
+    genres TEXT[] NOT NULL DEFAULT '{}'::TEXT[],
+    platforms TEXT[] NOT NULL DEFAULT '{}'::TEXT[],
+    platform_ids INTEGER[] NOT NULL DEFAULT '{}'::INTEGER[],
+    total_rating DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    total_rating_count INTEGER NOT NULL DEFAULT 0,
+    weighted_score DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    overall_rank INTEGER,
+    genre_ranks JSONB NOT NULL DEFAULT '{}'::JSONB,
+    fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    computed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_game_ratings_weighted ON public.game_ratings(weighted_score DESC);
+CREATE INDEX IF NOT EXISTS idx_game_ratings_overall_rank ON public.game_ratings(overall_rank ASC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_game_ratings_release_year ON public.game_ratings(release_year);
+CREATE INDEX IF NOT EXISTS idx_game_ratings_platforms ON public.game_ratings USING GIN(platforms);
+CREATE INDEX IF NOT EXISTS idx_game_ratings_platform_ids ON public.game_ratings USING GIN(platform_ids);
+CREATE INDEX IF NOT EXISTS idx_game_ratings_genres ON public.game_ratings USING GIN(genres);
+CREATE INDEX IF NOT EXISTS idx_game_ratings_title ON public.game_ratings(title);
+
+ALTER TABLE public.game_ratings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow full access on game_ratings" ON public.game_ratings FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
 -- Enable Realtime & Full Replica Identity
 ALTER TABLE public.games REPLICA IDENTITY FULL;
 ALTER TABLE public.collections REPLICA IDENTITY FULL;
 ALTER TABLE public.profiles REPLICA IDENTITY FULL;
 ALTER TABLE public.user_games REPLICA IDENTITY FULL;
 ALTER TABLE public.pairing_sessions REPLICA IDENTITY FULL;
+ALTER TABLE public.game_ratings REPLICA IDENTITY FULL;
 
 -- Add tables to realtime publication (handle if already added)
 DO $$
@@ -159,4 +191,9 @@ BEGIN
         ALTER PUBLICATION supabase_realtime ADD TABLE public.pairing_sessions;
     EXCEPTION WHEN duplicate_object THEN NULL;
     END;
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.game_ratings;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
 END $$;
+

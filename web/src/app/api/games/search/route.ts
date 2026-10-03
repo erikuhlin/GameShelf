@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryIGDB } from '@/lib/igdb-server';
 import { resolveGameAlias } from '@/lib/aliasResolver';
+import { supabase } from '@/lib/supabase';
 
 // Plattform-mappning till IGDB IDs
 const PLATFORM_ID_MAP: Record<string, string> = {
@@ -126,6 +127,68 @@ export async function GET(request: NextRequest) {
   const resolvedQ = rawQ ? resolveGameAlias(rawQ) : '';
 
   try {
+    // Om sortering på viktat betyg begärts, hämta direkt från vår lokala tabell game_ratings
+    if (sortParam === 'weighted_rating' || sortParam === 'weighted') {
+      let dbQuery = supabase
+        .from('game_ratings')
+        .select('*')
+        .order('weighted_score', { ascending: false })
+        .order('total_rating_count', { ascending: false });
+
+      if (resolvedQ) {
+        dbQuery = dbQuery.ilike('title', `%${resolvedQ}%`);
+      }
+
+      if (yearFrom) {
+        const fromY = parseInt(yearFrom, 10);
+        if (!isNaN(fromY)) dbQuery = dbQuery.gte('release_year', fromY);
+      }
+
+      if (yearTo) {
+        const toY = parseInt(yearTo, 10);
+        if (!isNaN(toY)) dbQuery = dbQuery.lte('release_year', toY);
+      }
+
+      // Filtrera på status från user_games om angett
+      const statusParam = searchParams.get('status');
+      const userIdParam = searchParams.get('user_id');
+      if (statusParam && userIdParam) {
+        const { data: userRows } = await supabase
+          .from('user_games')
+          .select('igdb_id')
+          .eq('user_id', userIdParam)
+          .eq('status', statusParam);
+        const ids = (userRows || []).map((r: any) => r.igdb_id).filter(Boolean);
+        if (ids.length === 0) {
+          return NextResponse.json({ results: [], hasMore: false });
+        }
+        dbQuery = dbQuery.in('igdb_id', ids);
+      }
+
+      dbQuery = dbQuery.range(offset, offset + limit - 1);
+
+      const { data: dbData, error: dbError } = await dbQuery;
+
+      if (!dbError && dbData && dbData.length > 0) {
+        const results = dbData.map((game: any) => ({
+          id: Number(game.igdb_id),
+          title: game.title,
+          release_year: game.release_year,
+          first_release_date: game.first_release_date || null,
+          platforms: game.platforms || [],
+          genres: game.genres || [],
+          developers: [],
+          cover_url: game.cover_url,
+          igdb_rating: Math.round((game.weighted_score / 10) * 10) / 10,
+          weighted_score: game.weighted_score,
+          overall_rank: game.overall_rank,
+          summary: '',
+        }));
+
+        return NextResponse.json({ results, hasMore: results.length === limit });
+      }
+    }
+
     const whereConditions: string[] = ['cover != null'];
 
     // 1. Multipla Plattform-villkor

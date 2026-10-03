@@ -55,7 +55,7 @@ export async function syncIGDBRatings(options: SyncOptions = {}) {
       break;
     }
 
-    const whereClause = `category = 0 & total_rating_count >= ${minVoteCount} & id > ${lastId}`;
+    const whereClause = `game_type != (1, 5, 12, 14) & total_rating_count >= ${minVoteCount} & id > ${lastId}`;
     const query = `
       fields id, name, slug, cover.image_id, first_release_date, genres.name, platforms.name, platforms.id, total_rating, total_rating_count;
       where ${whereClause};

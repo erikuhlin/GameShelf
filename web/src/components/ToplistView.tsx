@@ -348,8 +348,8 @@ export function ToplistView({ onSelectGame, onAddGame, libraryGames = [] }: Topl
                 onClick={() => onSelectGame(convertToGame(game))}
                 className="group relative flex items-center gap-3.5 sm:gap-5 p-3 sm:p-4 bg-zinc-900/90 hover:bg-zinc-800/80 border border-zinc-800/90 hover:border-zinc-700 rounded-xl transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md"
               >
-                {/* Ranking Nummer */}
-                <div className="flex-shrink-0 w-8 sm:w-10 text-center">
+                {/* Ranking Nummer (Desktop) */}
+                <div className="hidden sm:block flex-shrink-0 w-8 sm:w-10 text-center">
                   {game.rank === 1 ? (
                     <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-amber-500/20 text-amber-400 font-extrabold text-base border border-amber-500/40 shadow-sm">
                       1
@@ -369,8 +369,29 @@ export function ToplistView({ onSelectGame, onAddGame, libraryGames = [] }: Topl
                   )}
                 </div>
 
-                {/* Cover Omslag */}
-                <div className="flex-shrink-0 w-14 h-20 sm:w-16 sm:h-24 rounded-lg overflow-hidden bg-zinc-800 border border-zinc-700/60 shadow-inner">
+                {/* Cover Omslag (med rank overlay på mobil) */}
+                <div className="relative flex-shrink-0 w-14 h-20 sm:w-16 sm:h-24 rounded-lg overflow-hidden bg-zinc-800 border border-zinc-700/60 shadow-inner">
+                  {/* Mobil overlay-rank */}
+                  <div className="sm:hidden absolute top-1 left-1 z-10">
+                    {game.rank === 1 ? (
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-amber-500 text-zinc-950 font-black text-[11px] shadow-md">
+                        1
+                      </span>
+                    ) : game.rank === 2 ? (
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-slate-200 text-zinc-950 font-black text-[11px] shadow-md">
+                        2
+                      </span>
+                    ) : game.rank === 3 ? (
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-amber-700 text-white font-black text-[11px] shadow-md">
+                        3
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center justify-center px-1.5 h-4.5 rounded bg-black/80 backdrop-blur-sm text-zinc-200 font-bold text-[10px] shadow-sm border border-white/10">
+                        #{game.rank}
+                      </span>
+                    )}
+                  </div>
+
                   {game.cover_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -387,39 +408,37 @@ export function ToplistView({ onSelectGame, onAddGame, libraryGames = [] }: Topl
                 </div>
 
                 {/* Spelinfo */}
-                <div className="flex-1 min-w-0 pr-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-bold text-base sm:text-lg text-zinc-100 group-hover:text-amber-400 transition-colors truncate">
-                      {game.title}
-                    </h3>
+                <div className="flex-1 min-w-0 pr-1 sm:pr-2">
+                  <h3 className="font-bold text-sm sm:text-base text-zinc-100 group-hover:text-amber-400 transition-colors line-clamp-2 leading-snug">
+                    {game.title}
+                  </h3>
+
+                  {/* Kompakt metadata: Årtal • Genre • Plattform */}
+                  <div className="flex items-center gap-1.5 text-xs text-zinc-400 mt-1 flex-wrap">
                     {game.release_year && (
-                      <span className="text-xs font-medium text-zinc-400">
-                        ({game.release_year})
+                      <span className="font-medium text-zinc-300">{game.release_year}</span>
+                    )}
+                    {game.release_year && (game.genres.length > 0 || game.platforms.length > 0) && (
+                      <span className="text-zinc-600">•</span>
+                    )}
+                    {game.genres.length > 0 && (
+                      <span className="text-zinc-300">
+                        {game.genres[0] === 'Role-playing (RPG)' ? 'RPG' : game.genres[0]}
                       </span>
                     )}
-                  </div>
-
-                  {/* Genrer & Plattformar */}
-                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    {game.genres.slice(0, 2).map((g) => (
-                      <span
-                        key={g}
-                        className="px-2 py-0.5 rounded text-[11px] bg-zinc-800 text-zinc-300 border border-zinc-700/50"
-                      >
-                        {g}
-                      </span>
-                    ))}
                     {game.platforms.length > 0 && (
-                      <span className="text-xs text-zinc-400 truncate max-w-[200px]">
-                        {game.platforms.slice(0, 3).join(', ')}
-                        {game.platforms.length > 3 ? '…' : ''}
-                      </span>
+                      <>
+                        <span className="text-zinc-600">•</span>
+                        <span className="text-zinc-400 truncate max-w-[120px] sm:max-w-[200px]">
+                          {game.platforms.slice(0, 2).join(', ')}
+                        </span>
+                      </>
                     )}
                   </div>
 
                   {/* Varning om få röster */}
                   {game.is_low_votes && (
-                    <div className="inline-flex items-center gap-1.5 mt-2 px-2 py-0.5 rounded text-[11px] bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                    <div className="inline-flex items-center gap-1 mt-1.5 px-1.5 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/20">
                       <AlertTriangle className="w-3 h-3 flex-shrink-0" />
                       Få röster ({game.total_rating_count} st)
                     </div>
@@ -427,18 +446,20 @@ export function ToplistView({ onSelectGame, onAddGame, libraryGames = [] }: Topl
                 </div>
 
                 {/* Poäng och röster */}
-                <div className="flex flex-col items-end flex-shrink-0 pl-2">
-                  <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-lg">
-                    <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                    <span className="font-extrabold text-base text-amber-300 tracking-tight">
+                <div className="flex flex-col items-end flex-shrink-0 pl-1.5 sm:pl-2">
+                  <div className="flex items-center gap-1 sm:gap-1.5 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg">
+                    <Star className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-amber-400 text-amber-400" />
+                    <span className="font-extrabold text-sm sm:text-base text-amber-300 tracking-tight">
                       {formattedScore}
                     </span>
                   </div>
 
-                  <span className="text-[11px] text-zinc-400 mt-1">
-                    {game.total_rating_count.toLocaleString('sv-SE')} röster
+                  <span className="text-[10px] sm:text-[11px] text-zinc-400 mt-1 whitespace-nowrap">
+                    {game.total_rating_count >= 1000
+                      ? `${(game.total_rating_count / 1000).toFixed(1)}k röster`
+                      : `${game.total_rating_count} röster`}
                   </span>
-                  <span className="text-[10px] text-zinc-400" title={`Råbetyg från IGDB: ${rawScore}/10`}>
+                  <span className="hidden sm:inline text-[10px] text-zinc-500" title={`Råbetyg från IGDB: ${rawScore}/10`}>
                     (rå: {rawScore})
                   </span>
                 </div>

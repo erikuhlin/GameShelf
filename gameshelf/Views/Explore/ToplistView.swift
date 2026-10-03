@@ -260,35 +260,7 @@ struct ToplistView: View {
     @ViewBuilder
     private func toplistRow(item: ToplistGameItem, rank: Int) -> some View {
         HStack(spacing: 12) {
-            // Rank Badge
-            ZStack {
-                if rank == 1 {
-                    Circle()
-                        .fill(Color.yellow.opacity(0.2))
-                    Text("1")
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.yellow)
-                } else if rank == 2 {
-                    Circle()
-                        .fill(Color.gray.opacity(0.2))
-                    Text("2")
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.primary)
-                } else if rank == 3 {
-                    Circle()
-                        .fill(Color.brown.opacity(0.2))
-                    Text("3")
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.brown)
-                } else {
-                    Text("#\(rank)")
-                        .font(.caption.bold())
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(width: 32, height: 32)
-
-            // Omslag
+            // Omslag med rank-overlay (Letterboxd / App Store-stil)
             AsyncImage(url: item.coverURL) { phase in
                 switch phase {
                 case .success(let image):
@@ -296,7 +268,7 @@ struct ToplistView: View {
                         .resizable()
                         .scaledToFill()
                 default:
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: 8)
                         .fill(Color.secondary.opacity(0.2))
                         .overlay {
                             Image(systemName: "gamecontroller")
@@ -305,27 +277,70 @@ struct ToplistView: View {
                         }
                 }
             }
-            .frame(width: 48, height: 64)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-
-            // Info
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 4) {
-                    Text(item.title)
-                        .font(.headline)
-                        .lineLimit(1)
-                    if let year = item.release_year {
-                        Text("(\(String(year)))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+            .frame(width: 52, height: 72)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(alignment: .topLeading) {
+                // Rank-badge overlay i hörnet
+                Group {
+                    if rank == 1 {
+                        Text("1")
+                            .font(.system(size: 11, weight: .black))
+                            .foregroundStyle(.black)
+                            .frame(width: 20, height: 20)
+                            .background(Color.yellow, in: RoundedRectangle(cornerRadius: 4))
+                    } else if rank == 2 {
+                        Text("2")
+                            .font(.system(size: 11, weight: .black))
+                            .foregroundStyle(.black)
+                            .frame(width: 20, height: 20)
+                            .background(Color.white, in: RoundedRectangle(cornerRadius: 4))
+                    } else if rank == 3 {
+                        Text("3")
+                            .font(.system(size: 11, weight: .black))
+                            .foregroundStyle(.white)
+                            .frame(width: 20, height: 20)
+                            .background(Color(red: 0.8, green: 0.5, blue: 0.2), in: RoundedRectangle(cornerRadius: 4))
+                    } else {
+                        Text("#\(rank)")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
+                            .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 4))
                     }
                 }
+                .padding(3)
+                .shadow(radius: 2)
+            }
 
-                if let genres = item.genres, !genres.isEmpty {
-                    Text(genres.prefix(2).joined(separator: ", "))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+            // Info (Mitten)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                // Kompakt metadata: år • genre
+                HStack(spacing: 4) {
+                    if let year = item.release_year {
+                        Text(String(year))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    if item.release_year != nil && !(item.genres?.isEmpty ?? true) {
+                        Text("•")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    if let genre = item.genres?.first {
+                        let cleanGenre = genre == "Role-playing (RPG)" ? "RPG" : genre
+                        Text(cleanGenre)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
 
                 if item.isLowVotes {
@@ -343,9 +358,9 @@ struct ToplistView: View {
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 4)
 
-            // Betyg och röster
+            // Betyg och röster (Höger)
             VStack(alignment: .trailing, spacing: 2) {
                 HStack(spacing: 3) {
                     Image(systemName: "star.fill")
@@ -357,12 +372,15 @@ struct ToplistView: View {
                 }
 
                 if let votes = item.total_rating_count {
-                    Text("\(votes) röster")
-                        .font(.caption2)
+                    let voteText = votes >= 1000
+                        ? String(format: "%.1fk", Double(votes) / 1000.0) + " röster"
+                        : "\(votes) röster"
+                    Text(voteText)
+                        .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                 }
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 3)
     }
 }

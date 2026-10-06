@@ -109,8 +109,13 @@ const STORY_MILESTONES: Array<{ id: GameStoryProgress; label: string; line1: str
   { id: 'completed', label: 'Klar', line1: 'Klar', line2: '' },
 ];
 
-export function GameDetailModal({
-  game: propGame,
+export function GameDetailModal(props: GameDetailModalProps) {
+  if (!props.isOpen || !props.game) return null;
+  return <GameDetailModalContent {...props} game={props.game} />;
+}
+
+function GameDetailModalContent({
+  game: initialGame,
   isOpen,
   onClose,
   onUpdateGame,
@@ -125,34 +130,24 @@ export function GameDetailModal({
   onAddGame,
   backLabel,
   onSelectGame,
-}: GameDetailModalProps) {
-  const [internalGame, setInternalGame] = useState<Game | null>(null);
+}: GameDetailModalProps & { game: Game }) {
+  const [activeGame, setActiveGame] = useState<Game>(initialGame);
   const [navHistory, setNavHistory] = useState<Game[]>([]);
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
-  // Återställ internt spel och navigationshistorik när modalen stängs/öppnas utifrån
   useEffect(() => {
-    if (!isOpen) {
-      setInternalGame(null);
-      setNavHistory([]);
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    setInternalGame(null);
+    setActiveGame(initialGame);
     setNavHistory([]);
-  }, [propGame?.id]);
+  }, [initialGame.id]);
 
-  const game = internalGame || propGame;
+  const game = activeGame;
 
   // Skrolla upp till toppen när spelet byts
   useEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = 0;
     }
-  }, [game?.id]);
-
-  if (!isOpen || !game) return null;
+  }, [game.id]);
 
   const matchingGame = libraryGames?.find(
     (g) => g.id === game.id || (game.igdb_id && g.igdb_id === game.igdb_id)
@@ -629,10 +624,9 @@ export function GameDetailModal({
     };
 
     setNavHistory((prev) => [...prev, game]);
+    setActiveGame(targetGame);
     if (onSelectGame) {
       onSelectGame(targetGame);
-    } else {
-      setInternalGame(targetGame);
     }
   };
 
@@ -640,10 +634,9 @@ export function GameDetailModal({
     if (navHistory.length > 0) {
       const prev = navHistory[navHistory.length - 1];
       setNavHistory((h) => h.slice(0, -1));
+      setActiveGame(prev);
       if (onSelectGame) {
         onSelectGame(prev);
-      } else {
-        setInternalGame(prev);
       }
     } else if (backLabel) {
       onClose();

@@ -280,10 +280,30 @@ struct IGDBRelatedGame: Decodable, Identifiable, Sendable {
     let name: String?
     let cover: IGDBImage?
     let firstReleaseDate: Int?
+    let totalRating: Double?
+    let rating: Double?
+
+    init(
+        id: Int,
+        name: String? = nil,
+        cover: IGDBImage? = nil,
+        firstReleaseDate: Int? = nil,
+        totalRating: Double? = nil,
+        rating: Double? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.cover = cover
+        self.firstReleaseDate = firstReleaseDate
+        self.totalRating = totalRating
+        self.rating = rating
+    }
 
     enum CodingKeys: String, CodingKey {
         case id, name, cover
         case firstReleaseDate = "first_release_date"
+        case totalRating = "total_rating"
+        case rating
     }
 
     var coverURL: URL? { cover?.url(size: "t_cover_big") }
@@ -292,6 +312,12 @@ struct IGDBRelatedGame: Decodable, Identifiable, Sendable {
         guard let ts = firstReleaseDate else { return nil }
         let date = Date(timeIntervalSince1970: TimeInterval(ts))
         return Calendar.current.component(.year, from: date)
+    }
+
+    var displayRating: Int? {
+        if let tr = totalRating, tr > 0 { return Int(round(tr)) }
+        if let r = rating, r > 0 { return Int(round(r)) }
+        return nil
     }
 }
 

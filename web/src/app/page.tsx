@@ -1902,6 +1902,7 @@ export default function HomePage() {
         )}
         onToggleTargetGoal={handleToggleTargetGoal}
         backLabel={isSearchModalOpen ? 'Tillbaka till sökning' : undefined}
+        onSelectGame={setSelectedGame}
       />
 
       <CollectionsModal
@@ -1992,11 +1993,50 @@ export default function HomePage() {
             };
             await handleAddGameToLibraryOrWishlist(gameToAdd);
           }}
-          onSelectGame={(igdbId) => {
+          onSelectGame={(igdbId, gameItem) => {
             const local = games.find((g) => g.igdb_id === igdbId);
             if (local) {
               setSelectedGame(local);
+            } else if (gameItem) {
+              setSelectedGame({
+                id: `igdb_${gameItem.id}`,
+                title: gameItem.name,
+                cover_url: gameItem.coverUrl || null,
+                release_year: gameItem.releaseYear || null,
+                first_release_date: gameItem.firstReleaseDate || null,
+                genres: gameItem.genres || [],
+                platforms: gameItem.platforms || [],
+                developers: activeCompanyModal?.name ? [activeCompanyModal.name] : [],
+                igdb_id: gameItem.id,
+                igdb_rating: gameItem.totalRating ? Math.round((gameItem.totalRating / 10) * 10) / 10 : null,
+                status: 'notStarted',
+                is_owned: false,
+                is_backlog: false,
+                play_types: inferPlayTypes({ title: gameItem.name, genres: gameItem.genres || [] }),
+                todos: [],
+                notes: '',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              });
+            } else {
+              setSelectedGame({
+                id: `igdb_${igdbId}`,
+                title: '',
+                igdb_id: igdbId,
+                status: 'notStarted',
+                is_owned: false,
+                is_backlog: false,
+                play_types: [],
+                genres: [],
+                platforms: [],
+                developers: [],
+                todos: [],
+                notes: '',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              });
             }
+            setActiveCompanyModal(null);
           }}
         />
       )}

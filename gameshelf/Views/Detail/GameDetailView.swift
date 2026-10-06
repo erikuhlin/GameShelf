@@ -3811,6 +3811,7 @@ private struct TrailersSheetView: View {
 
 private struct SimilarGamesSheetView: View {
     let games: [IGDBRelatedGame]
+    @EnvironmentObject private var store: LibraryStore
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -3831,21 +3832,42 @@ private struct SimilarGamesSheetView: View {
                                             .lineLimit(2)
                                             .multilineTextAlignment(.leading)
 
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "star.fill")
-                                                .foregroundStyle(.red)
-                                                .font(.caption)
-                                            Text("89/100")
-                                                .font(.caption.bold())
-                                                .foregroundStyle(.primary)
+                                        HStack(spacing: 6) {
+                                            if let year = game.releaseYear, year > 0 {
+                                                Text(year > Calendar.current.component(.year, from: Date()) ? "Kommande" : "\(year)")
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
+
+                                            if let rating = game.displayRating {
+                                                if game.releaseYear != nil && (game.releaseYear ?? 0) > 0 {
+                                                    Text("•")
+                                                        .font(.caption)
+                                                        .foregroundStyle(.tertiary)
+                                                }
+
+                                                HStack(spacing: 3) {
+                                                    Image(systemName: "star.fill")
+                                                        .foregroundStyle(.red)
+                                                        .font(.caption)
+                                                    Text("\(rating)/100")
+                                                        .font(.caption.bold())
+                                                        .foregroundStyle(.primary)
+                                                }
+                                            } else if game.releaseYear == nil || (game.releaseYear ?? 0) == 0 {
+                                                Text("Ej betygsatt")
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
                                         }
                                     }
 
                                     Spacer()
 
-                                    Image(systemName: "plus.circle.fill")
+                                    let isInLibrary = store.games.contains { $0.igdbID == game.id }
+                                    Image(systemName: isInLibrary ? "checkmark.circle.fill" : "plus.circle.fill")
                                         .font(.title3)
-                                        .foregroundStyle(.red)
+                                        .foregroundStyle(isInLibrary ? .green : .red)
                                 }
                                 .padding(10)
                                 .background(Color(.secondarySystemGroupedBackground))

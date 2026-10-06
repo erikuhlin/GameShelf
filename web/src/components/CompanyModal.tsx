@@ -59,7 +59,7 @@ interface CompanyModalProps {
     developers: string[];
     platforms: string[];
   }) => void;
-  onSelectGame?: (igdbId: number) => void;
+  onSelectGame?: (igdbId: number, gameItem?: CompanyGameItem) => void;
 }
 
 export function CompanyModal({
@@ -161,7 +161,7 @@ export function CompanyModal({
     role === 'developer' ? 'Utvecklare' : role === 'publisher' ? 'Utgivare' : 'Spelstudio';
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
       <div className="relative w-full max-w-4xl max-h-[90vh] bg-[#121319] border border-zinc-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden">
         {/* Header bar */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800/80 bg-zinc-950/60 shrink-0">
@@ -382,7 +382,7 @@ export function CompanyModal({
                         >
                           {/* Omslag */}
                           <div
-                            onClick={() => onSelectGame?.(g.id)}
+                            onClick={() => onSelectGame?.(g.id, g)}
                             className="relative aspect-[3/4] bg-zinc-950 cursor-pointer overflow-hidden"
                           >
                             {g.coverUrl ? (
@@ -416,7 +416,7 @@ export function CompanyModal({
                           {/* Info & Add-knapp */}
                           <div className="p-3 flex-1 flex flex-col justify-between gap-2">
                             <div
-                              onClick={() => onSelectGame?.(g.id)}
+                              onClick={() => onSelectGame?.(g.id, g)}
                               className="cursor-pointer"
                             >
                               <h4 className="text-xs font-bold text-zinc-100 truncate group-hover:text-white">

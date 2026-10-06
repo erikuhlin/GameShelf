@@ -67,6 +67,7 @@ interface GameDetailModalProps {
   libraryGames?: Game[];
   onAddGame?: (game: Game) => void;
   backLabel?: string;
+  onSelectGame?: (game: Game) => void;
 }
 
 interface RemoteDetails {
@@ -109,7 +110,7 @@ const STORY_MILESTONES: Array<{ id: GameStoryProgress; label: string; line1: str
 ];
 
 export function GameDetailModal({
-  game,
+  game: propGame,
   isOpen,
   onClose,
   onUpdateGame,
@@ -123,7 +124,34 @@ export function GameDetailModal({
   libraryGames,
   onAddGame,
   backLabel,
+  onSelectGame,
 }: GameDetailModalProps) {
+  const [internalGame, setInternalGame] = useState<Game | null>(null);
+  const [navHistory, setNavHistory] = useState<Game[]>([]);
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+
+  // Återställ internt spel och navigationshistorik när modalen stängs/öppnas utifrån
+  useEffect(() => {
+    if (!isOpen) {
+      setInternalGame(null);
+      setNavHistory([]);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    setInternalGame(null);
+    setNavHistory([]);
+  }, [propGame?.id]);
+
+  const game = internalGame || propGame;
+
+  // Skrolla upp till toppen när spelet byts
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [game?.id]);
+
   if (!isOpen || !game) return null;
 
   const matchingGame = libraryGames?.find(
@@ -569,6 +597,59 @@ export function GameDetailModal({
     }
   };
 
+  // Navigera till liknande spel
+  const handleSelectSimilarGame = (sg: {
+    id: number;
+    title: string;
+    coverUrl?: string | null;
+    releaseYear?: number | null;
+    rating?: number | null;
+  }) => {
+    const inLib = libraryGames?.find(
+      (g) => (sg.id && g.igdb_id === sg.id) || (sg.title && g.title.toLowerCase() === sg.title.toLowerCase())
+    );
+    const targetGame: Game = inLib || {
+      id: `igdb_${sg.id}`,
+      title: sg.title,
+      cover_url: sg.coverUrl || undefined,
+      release_year: sg.releaseYear || undefined,
+      genres: [],
+      platforms: [],
+      developers: [],
+      igdb_id: sg.id,
+      igdb_rating: sg.rating ?? null,
+      status: 'notStarted',
+      is_owned: false,
+      is_backlog: false,
+      play_types: inferPlayTypes({ title: sg.title, genres: [] }),
+      todos: [],
+      notes: '',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    setNavHistory((prev) => [...prev, game]);
+    if (onSelectGame) {
+      onSelectGame(targetGame);
+    } else {
+      setInternalGame(targetGame);
+    }
+  };
+
+  const handleBack = () => {
+    if (navHistory.length > 0) {
+      const prev = navHistory[navHistory.length - 1];
+      setNavHistory((h) => h.slice(0, -1));
+      if (onSelectGame) {
+        onSelectGame(prev);
+      } else {
+        setInternalGame(prev);
+      }
+    } else if (backLabel) {
+      onClose();
+    }
+  };
+
   // Checklista / Todos
   const handleAddTodo = (e: React.FormEvent) => {
     e.preventDefault();
@@ -857,10 +938,24 @@ export function GameDetailModal({
       )}
 
       {/* Huvudmodal */}
-      <div className="relative bg-zinc-950 border border-zinc-800/90 rounded-2xl md:rounded-3xl max-w-4xl w-full max-h-[92vh] overflow-y-auto shadow-2xl flex flex-col">
+      <div
+        ref={scrollContainerRef}
+        className="relative bg-zinc-950 border border-zinc-800/90 rounded-2xl md:rounded-3xl max-w-4xl w-full max-h-[92vh] overflow-y-auto shadow-2xl flex flex-col"
+      >
         {/* Top bar */}
         <div className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 py-3.5 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80">
-          {backLabel ? (
+          {navHistory.length > 0 ? (
+            <button
+              type="button"
+              onClick={handleBack}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white transition cursor-pointer text-xs font-semibold border border-zinc-800/80 group"
+              title={`Tillbaka till ${navHistory[navHistory.length - 1].title}`}
+            >
+              <ArrowLeft className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
+              <span className="hidden sm:inline">Tillbaka till {navHistory[navHistory.length - 1].title}</span>
+              <span className="sm:hidden">Tillbaka</span>
+            </button>
+          ) : backLabel ? (
             <button
               type="button"
               onClick={onClose}
@@ -907,7 +1002,7 @@ export function GameDetailModal({
               <Share2 className="w-4 h-4" />
             </button>
 
-            {backLabel && (
+            {(backLabel || navHistory.length > 0) && (
               <button
                 type="button"
                 onClick={onClose}
@@ -2191,11 +2286,14 @@ export function GameDetailModal({
                     </div>
                     <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
                       {remoteDetails.similarGames.map((sg) => (
-                        <div
+                        <button
                           key={sg.id}
-                          className="w-24 sm:w-28 flex-shrink-0 space-y-1.5 group"
+                          type="button"
+                          onClick={() => handleSelectSimilarGame(sg)}
+                          className="w-24 sm:w-28 flex-shrink-0 space-y-1.5 group text-left cursor-pointer transition focus:outline-none"
+                          title={`Öppna ${sg.title}`}
                         >
-                          <div className="aspect-[3/4] rounded-lg overflow-hidden bg-zinc-900 border border-zinc-800 shadow-sm">
+                          <div className="aspect-[3/4] rounded-lg overflow-hidden bg-zinc-900 border border-zinc-800 shadow-sm relative group-hover:border-zinc-700 transition">
                             {sg.coverUrl ? (
                               <img
                                 src={sg.coverUrl}
@@ -2207,11 +2305,28 @@ export function GameDetailModal({
                                 <Gamepad className="w-6 h-6" />
                               </div>
                             )}
+                            {libraryGames?.some((g) => g.igdb_id === sg.id) && (
+                              <div
+                                className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow"
+                                title="I ditt bibliotek"
+                              >
+                                <Check className="w-2.5 h-2.5 stroke-[3]" />
+                              </div>
+                            )}
                           </div>
                           <div className="text-xs font-medium text-zinc-300 line-clamp-1 leading-snug group-hover:text-brand-red transition">
                             {sg.title}
                           </div>
-                        </div>
+                          <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+                            {sg.releaseYear ? <span>{sg.releaseYear}</span> : null}
+                            {sg.releaseYear && sg.rating ? <span>•</span> : null}
+                            {sg.rating ? (
+                              <span className="flex items-center gap-0.5 text-amber-400 font-semibold">
+                                ★ {sg.rating}
+                              </span>
+                            ) : null}
+                          </div>
+                        </button>
                       ))}
                     </div>
                   </div>

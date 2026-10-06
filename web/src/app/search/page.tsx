@@ -364,6 +364,7 @@ export default function SearchPage() {
           }
           setPreviewGame(null);
         }}
+        onSelectGame={setPreviewGame}
       />
     </div>
   );

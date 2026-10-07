@@ -14,6 +14,7 @@
 export const DEFAULT_M_THRESHOLD = 100;
 export const LOW_VOTES_WARNING_THRESHOLD = 50;
 export const DEFAULT_GLOBAL_C = 79.0;
+export const MIN_TOPLIST_VOTES = 150;
 
 export interface RawGameRatingData {
   igdb_id: number;
@@ -93,19 +94,26 @@ export function computeRatingsAndRanks(
     return b.total_rating_count - a.total_rating_count;
   });
 
-  // 4. Assign overall rank
+  // 4. Assign overall rank (only games with >= MIN_TOPLIST_VOTES qualify for official rankings)
+  let rankCounter = 1;
   for (let i = 0; i < computedList.length; i++) {
-    computedList[i].overall_rank = i + 1;
+    if (computedList[i].total_rating_count >= MIN_TOPLIST_VOTES) {
+      computedList[i].overall_rank = rankCounter++;
+    } else {
+      computedList[i].overall_rank = null as any;
+    }
   }
 
   // 5. Assign genre-specific ranks (for top 100 in each genre)
   const genreCounters: Record<string, number> = {};
   for (const game of computedList) {
-    for (const genre of game.genres) {
-      const currentRank = (genreCounters[genre] || 0) + 1;
-      genreCounters[genre] = currentRank;
-      if (currentRank <= 100) {
-        game.genre_ranks[genre] = currentRank;
+    if (game.total_rating_count >= MIN_TOPLIST_VOTES) {
+      for (const genre of game.genres) {
+        const currentRank = (genreCounters[genre] || 0) + 1;
+        genreCounters[genre] = currentRank;
+        if (currentRank <= 100) {
+          game.genre_ranks[genre] = currentRank;
+        }
       }
     }
   }

@@ -15,7 +15,8 @@ export async function GET(request: NextRequest) {
   try {
     let query = supabase
       .from('game_ratings')
-      .select('*', { count: 'exact' });
+      .select('*', { count: 'exact' })
+      .gte('total_rating_count', 150);
 
     // 1. Filtrera på plattform
     if (platform && platform.toLowerCase() !== 'alla') {

@@ -67,6 +67,7 @@ public actor ToplistService {
         var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "select", value: "*"),
             URLQueryItem(name: "order", value: "weighted_score.desc,total_rating_count.desc"),
+            URLQueryItem(name: "total_rating_count", value: "gte.150"),
             URLQueryItem(name: "limit", value: "\(limit)"),
             URLQueryItem(name: "offset", value: "\(offset)"),
         ]

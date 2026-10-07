@@ -34,7 +34,7 @@ loadEnvLocal();
 // Parse CLI arguments: e.g. --batches 5, --min-votes 10, --m 75
 const args = process.argv.slice(2);
 let maxBatches = 0;
-let minVotes = 5; // Default: at least 5 votes to filter out zero-traction noise while keeping indie gems
+let minVotes = 30; // Default: at least 30 votes to filter out zero-traction noise while keeping indie gems
 let mVal = 100;
 
 for (let i = 0; i < args.length; i++) {

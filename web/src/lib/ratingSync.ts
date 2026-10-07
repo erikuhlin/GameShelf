@@ -19,7 +19,7 @@ export async function syncIGDBRatings(options: SyncOptions = {}) {
   const {
     batchSize = 500,
     maxBatches = 0, // 0 = unlimited / until exhaust
-    minVoteCount = 1,
+    minVoteCount = 30,
     mThreshold = DEFAULT_M_THRESHOLD,
     onProgress = console.log,
   } = options;
@@ -55,7 +55,7 @@ export async function syncIGDBRatings(options: SyncOptions = {}) {
       break;
     }
 
-    const whereClause = `game_type = 0 & rating_count >= ${minVoteCount} & id > ${lastId}`;
+    const whereClause = `game_type = 0 & version_parent = null & parent_game = null & rating_count >= ${minVoteCount} & id > ${lastId}`;
     const query = `
       fields id, name, slug, cover.image_id, first_release_date, genres.name, platforms.name, platforms.id, rating, rating_count, total_rating, total_rating_count;
       where ${whereClause};

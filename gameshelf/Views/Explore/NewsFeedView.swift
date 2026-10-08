@@ -307,8 +307,19 @@ struct NewsFeedView: View {
                 SafariViewSheet(url: url)
                     .ignoresSafeArea()
             case .game(let id):
-                GameDetailView(igdbID: id)
-                    .ignoresSafeArea(edges: .bottom)
+                NavigationStack {
+                    GameDetailView(igdbID: id)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button("Stäng") {
+                                    sheet = nil
+                                }
+                            }
+                        }
+                }
+                .environmentObject(store)
+                .environmentObject(profile)
+                .ignoresSafeArea(edges: .bottom)
             case .sources:
                 NewsSourcesSheet(news: news)
                     .presentationDetents([.medium, .large])

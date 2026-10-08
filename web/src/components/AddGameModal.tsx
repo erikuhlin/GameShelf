@@ -19,6 +19,7 @@ const INITIAL_OPTIONS = [
   { id: 'playing', label: 'Spelar nu', status: 'playing' as PlayStatus, isBacklog: false, isOwned: true },
   { id: 'notStarted', label: 'Inte påbörjat', status: 'notStarted' as PlayStatus, isBacklog: false, isOwned: true },
   { id: 'completed', label: 'Genomspelat', status: 'completed' as PlayStatus, isBacklog: false, isOwned: true },
+  { id: 'abandoned', label: 'Avslutat', status: 'abandoned' as PlayStatus, isBacklog: false, isOwned: true },
   { id: 'wishlist', label: 'Önskelista', status: 'notStarted' as PlayStatus, isBacklog: false, isOwned: false },
 ] as const;
 

@@ -206,14 +206,25 @@ struct ExploreView: View {
                     SafariSheet(url: url)
                         .ignoresSafeArea()
                 case .game(let igdbID):
-                    GameDetailView(igdbID: igdbID)
-                        .ignoresSafeArea(edges: .bottom)
+                    NavigationStack {
+                        GameDetailView(igdbID: igdbID)
+                            .toolbar {
+                                ToolbarItem(placement: .topBarLeading) {
+                                    Button("Stäng") {
+                                        sheet = nil
+                                    }
+                                }
+                            }
+                    }
+                    .environmentObject(store)
+                    .environmentObject(profile)
+                    .ignoresSafeArea(edges: .bottom)
                 case .trending:
                     TrendingListView(items: trending.items, onRefresh: {
                         await trending.fetch(platformFamilies: prefs.platforms, news: news.items, forceReload: true)
-                    }) { id in
-                        sheet = .game(id)
-                    }
+                    })
+                    .environmentObject(store)
+                    .environmentObject(profile)
                     .presentationDetents([.large])
                 case .newsList:
                     NewsListView(
@@ -230,9 +241,9 @@ struct ExploreView: View {
                     .presentationDragIndicator(.visible)
                 case .toplist:
                     NavigationStack {
-                        ToplistView { id in
-                            sheet = .game(id)
-                        }
+                        ToplistView()
+                            .environmentObject(store)
+                            .environmentObject(profile)
                     }
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)

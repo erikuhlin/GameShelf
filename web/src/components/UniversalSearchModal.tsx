@@ -32,7 +32,7 @@ import {
   Heart,
 } from 'lucide-react';
 
-export type AddChoice = 'backlog' | 'playing' | 'completed' | 'wishlist';
+export type AddChoice = 'backlog' | 'playing' | 'completed' | 'abandoned' | 'wishlist';
 
 interface UniversalSearchModalProps {
   isOpen: boolean;
@@ -533,6 +533,10 @@ export function UniversalSearchModal({
       gameObj.completed_year = completedYear;
       gameObj.completed_date = completedYear === new Date().getFullYear() ? new Date().toISOString() : null;
       gameObj.story_progress = 'completed';
+    } else if (choice === 'abandoned') {
+      gameObj.status = 'abandoned';
+      gameObj.is_owned = true;
+      gameObj.is_backlog = false;
     } else if (choice === 'wishlist') {
       gameObj.status = 'notStarted';
       gameObj.is_owned = false;
@@ -1265,6 +1269,7 @@ const ADD_CHOICES: { id: AddChoice; label: string; icon: string }[] = [
   { id: 'backlog', label: 'Backlog', icon: '📋' },
   { id: 'playing', label: 'Spelar', icon: '▶️' },
   { id: 'completed', label: 'Klarat', icon: '🏆' },
+  { id: 'abandoned', label: 'Avslutat', icon: '⏹️' },
   { id: 'wishlist', label: 'Önskelista', icon: '🎁' },
 ];
 

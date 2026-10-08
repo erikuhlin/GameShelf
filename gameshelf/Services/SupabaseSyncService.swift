@@ -7,6 +7,69 @@
 
 import Foundation
 
+// MARK: - Supabase Date Parser & Formatter
+enum SupabaseDateParser: Sendable {
+    private static let isoWithFractional: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let isoStandard: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    private static let fallbackDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        return formatter
+    }()
+
+    private static let lock = NSLock()
+
+    static func parse(_ string: String?) -> Date? {
+        guard let raw = string?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+            return nil
+        }
+
+        // 1. Snabb standard: ISO8601 med bråkdelar av sekunder (PostgreSQL timestamptz & JS toISOString)
+        if let date = isoWithFractional.date(from: raw) {
+            return date
+        }
+
+        // 2. ISO8601 utan bråkdelar av sekunder (t.ex. 2026-10-08T08:39:06Z)
+        if let date = isoStandard.date(from: raw) {
+            return date
+        }
+
+        // 3. Fallback: Datumformat för PostgreSQL strängformat och datumstämpel
+        lock.lock()
+        defer { lock.unlock() }
+
+        let formats = [
+            "yyyy-MM-dd HH:mm:ssXXXXX",
+            "yyyy-MM-dd HH:mm:ss.SSSSSSXXXXX",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd"
+        ]
+        for fmt in formats {
+            fallbackDateFormatter.dateFormat = fmt
+            if let date = fallbackDateFormatter.date(from: raw) {
+                return date
+            }
+        }
+
+        return nil
+    }
+
+    static func string(from date: Date) -> String {
+        isoStandard.string(from: date)
+    }
+}
+
 // MARK: - Supabase Sync Actor Service
 actor SupabaseSyncService {
     static let shared = SupabaseSyncService()
@@ -83,8 +146,9 @@ actor SupabaseSyncService {
             self.estimated_hours = game.estimatedHours
             self.is_owned = game.isOwned
             self.todos = game.todos
+            self.created_at = SupabaseDateParser.string(from: game.dateAdded)
             self.completed_year = game.completedYear
-            self.completed_date = game.completedDate.map { ISO8601DateFormatter().string(from: $0) }
+            self.completed_date = game.completedDate.map { SupabaseDateParser.string(from: $0) }
 
             // Pack metadata (completedYear, completedDate) into notes
             var metaDict: [String: Any] = [:]
@@ -93,7 +157,7 @@ actor SupabaseSyncService {
             } else if game.status == .completed {
                 metaDict["completed_year"] = NSNull()
             }
-            if let cd = game.completedDate { metaDict["completed_date"] = ISO8601DateFormatter().string(from: cd) }
+            if let cd = game.completedDate { metaDict["completed_date"] = SupabaseDateParser.string(from: cd) }
 
             let cleanNotes = game.notes.replacingOccurrences(of: #"<!--GS_META:[\s\S]*?-->\n?"#, with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -124,8 +188,8 @@ actor SupabaseSyncService {
                 playStatus = .completed
             case "inte aktiv längre", "arkiverad", "archived", "arkiv":
                 playStatus = .completed
-            case "abandoned", "avbruten", "avbrutet", "droppat", "dropped":
-                playStatus = .paused
+            case "abandoned", "avslutat", "avbruten", "avbrutet", "droppat", "dropped":
+                playStatus = .abandoned
             case "slutat spela":
                 playStatus = .completed
             case "wishlist", "önskelista":
@@ -143,8 +207,8 @@ actor SupabaseSyncService {
             let intRating: Int? = rating.map { Int(round($0)) }
 
             let parsedDate: Date
-            if let createdStr = created_at {
-                parsedDate = ISO8601DateFormatter().date(from: createdStr) ?? Date()
+            if let createdStr = created_at, let date = SupabaseDateParser.parse(createdStr) {
+                parsedDate = date
             } else {
                 parsedDate = Date()
             }
@@ -168,7 +232,7 @@ actor SupabaseSyncService {
                             parsedCompletedYear = nil
                         }
                         if let cdStr = dict["completed_date"] as? String {
-                            parsedCompletedDate = ISO8601DateFormatter().date(from: cdStr)
+                            parsedCompletedDate = SupabaseDateParser.parse(cdStr)
                         }
                     }
                     cleanUserNotes = regex.stringByReplacingMatches(in: rawNotes, range: NSRange(location: 0, length: nsStr.length), withTemplate: "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -176,7 +240,7 @@ actor SupabaseSyncService {
             }
 
             if parsedCompletedDate == nil, let compStr = completed_date {
-                parsedCompletedDate = ISO8601DateFormatter().date(from: compStr)
+                parsedCompletedDate = SupabaseDateParser.parse(compStr)
             }
 
 
@@ -505,7 +569,7 @@ actor SupabaseSyncService {
             username: username,
             full_name: fullNameJSON,
             avatar_url: avatarUrl,
-            updated_at: ISO8601DateFormatter().string(from: Date())
+            updated_at: SupabaseDateParser.string(from: Date())
         )
 
         let body = try JSONEncoder().encode(record)

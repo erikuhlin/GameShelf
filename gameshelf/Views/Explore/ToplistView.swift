@@ -10,6 +10,7 @@ import SwiftUI
 struct ToplistView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var store: LibraryStore
+    @EnvironmentObject var profile: ProfileStore
 
     @State private var items: [ToplistGameItem] = []
     @State private var isLoading = true
@@ -131,11 +132,18 @@ struct ToplistView: View {
                     Section {
                         ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                             let rank = index + 1
-                            toplistRow(item: item, rank: rank)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    onSelectGame?(item.id)
+                            if let onSelectGame {
+                                Button {
+                                    onSelectGame(item.id)
+                                } label: {
+                                    toplistRow(item: item, rank: rank)
                                 }
+                                .buttonStyle(.plain)
+                            } else {
+                                NavigationLink(destination: GameDetailView(igdbID: item.id).environmentObject(store).environmentObject(profile)) {
+                                    toplistRow(item: item, rank: rank)
+                                }
+                            }
                         }
                     }
                 }
@@ -145,6 +153,11 @@ struct ToplistView: View {
         .navigationTitle("Topplistor")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Stäng") {
+                    dismiss()
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     // Plattform

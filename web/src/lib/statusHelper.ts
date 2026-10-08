@@ -52,11 +52,12 @@ export function normalizePlayStatus(raw?: string | null): {
       return { status: 'completed', is_backlog: false };
 
     case 'abandoned':
+    case 'avslutat':
     case 'avbruten':
     case 'avbrutet':
     case 'droppat':
     case 'dropped':
-      return { status: 'paused', is_backlog: false };
+      return { status: 'abandoned', is_backlog: false };
 
     case 'wishlist':
     case 'önskelista':
@@ -292,6 +293,8 @@ export function getStatusDisplayTitle(
         return 'Pausat';
       case 'completed':
         return 'Arkiverad';
+      case 'abandoned':
+        return 'Avslutat';
     }
   } else {
     switch (status) {
@@ -303,6 +306,8 @@ export function getStatusDisplayTitle(
         return 'Pausat';
       case 'completed':
         return 'Genomspelat';
+      case 'abandoned':
+        return 'Avslutat';
     }
   }
 }
@@ -344,6 +349,13 @@ export function getStatusColor(status: PlayStatus): {
         border: 'border-teal-500/40',
         text: 'text-teal-300',
         indicator: 'bg-teal-500',
+      };
+    case 'abandoned':
+      return {
+        bg: 'bg-purple-950/70',
+        border: 'border-purple-500/40',
+        text: 'text-purple-300',
+        indicator: 'bg-purple-500',
       };
   }
 }

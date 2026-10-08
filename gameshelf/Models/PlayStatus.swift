@@ -106,6 +106,7 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
     case playing = "playing"
     case paused = "paused"
     case completed = "completed"
+    case abandoned = "abandoned"
 
     var id: String { rawValue }
 
@@ -127,6 +128,7 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
             case .playing: return "Aktiv"
             case .paused: return "Pausat"
             case .completed: return "Arkiverad"
+            case .abandoned: return "Avslutat"
             }
         } else {
             switch self {
@@ -134,6 +136,7 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
             case .playing: return "Spelar nu"
             case .paused: return "Pausat"
             case .completed: return "Genomspelat"
+            case .abandoned: return "Avslutat"
             }
         }
     }
@@ -151,6 +154,7 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
             case .playing: return "circle.fill"
             case .paused: return "pause.fill"
             case .completed: return "archivebox.fill"
+            case .abandoned: return "xmark.circle.fill"
             }
         } else {
             switch self {
@@ -158,6 +162,7 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
             case .playing: return "play.fill"
             case .paused: return "pause.fill"
             case .completed: return "checkmark.seal.fill"
+            case .abandoned: return "xmark.circle.fill"
             }
         }
     }
@@ -174,6 +179,7 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
         case .playing: return .green
         case .paused: return .orange
         case .completed: return .teal
+        case .abandoned: return .purple
         }
     }
 
@@ -193,8 +199,8 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
             self = .completed
         case "inte aktiv längre", "arkiverad", "archived", "arkiv":
             self = .completed
-        case "abandoned", "avbruten", "avbrutet", "droppat", "dropped":
-            self = .paused
+        case "abandoned", "avslutat", "avbruten", "avbrutet", "droppat", "dropped":
+            self = .abandoned
         case "slutat spela":
             self = .completed
         case "backlog":

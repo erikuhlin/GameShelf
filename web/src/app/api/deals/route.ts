@@ -25,32 +25,79 @@ const STORE_NAMES: Record<string, string> = {
   '25': 'Epic Games Store',
 };
 
-function normalizeForComparison(title: string): string {
+const ROMAN_NUMERAL_MAP: Record<string, string> = {
+  I: '1', II: '2', III: '3', IV: '4', V: '5',
+  VI: '6', VII: '7', VIII: '8', IX: '9', X: '10',
+  XI: '11', XII: '12', XIII: '13', XIV: '14', XV: '15',
+  XVI: '16', XVII: '17', XVIII: '18', XIX: '19', XX: '20',
+  XXI: '21', XXII: '22', XXIII: '23', XXIV: '24', XXV: '25',
+  XXVI: '26', XXVII: '27', XXVIII: '28', XXIX: '29', XXX: '30'
+};
+
+const RECOGNIZED_EDITION_WORDS = new Set([
+  'edition', 'definitive', 'remastered', 'remake', 'enhanced', 'deluxe',
+  'special', 'gold', 'goty', 'game', 'year', 'complete', 'anniversary',
+  'bundle', 'directors', 'cut', 'vr', 'standard', 'collector', 'collectors',
+  'premium', 'ultimate'
+]);
+
+function tokenizeForMatching(title: string): string[] {
   return title
     .toLowerCase()
-    .replace(/[:\-–'"™®]/g, '')
+    .replace(/[:\-–'"™®()]/g, ' ')
     .trim()
-    .replace(/\s+/g, ' ');
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(token => {
+      const upper = token.toUpperCase();
+      return ROMAN_NUMERAL_MAP[upper] || token;
+    });
+}
+
+function isSequenceNumber(token: string): boolean {
+  const num = parseInt(token, 10);
+  if (isNaN(num)) return false;
+  // Årtal (1970–2040) betraktas inte som sekvensnummer
+  return num < 1970 || num > 2040;
 }
 
 function isTitleMatch(gameTitle: string, dealTitle: string): boolean {
-  const clean1 = normalizeForComparison(gameTitle);
-  const clean2 = normalizeForComparison(dealTitle);
-  if (clean1 === clean2) return true;
+  const t1 = tokenizeForMatching(gameTitle);
+  const t2 = tokenizeForMatching(dealTitle);
 
-  if (clean2.startsWith(clean1)) {
-    const lower = dealTitle.toLowerCase();
-    if (
-      lower.includes('soundtrack') ||
-      lower.includes('season pass') ||
-      lower.includes('dlc') ||
-      lower.includes('content') ||
-      lower.includes('artbook')
-    ) {
-      return false;
-    }
-    return true;
+  if (t1.length === 0 || t2.length === 0) return false;
+  if (t1.join(' ') === t2.join(' ')) return true;
+
+  const lowerDeal = dealTitle.toLowerCase();
+  const badWords = ['soundtrack', 'season pass', 'dlc', 'content', 'artbook', 'ost'];
+  if (badWords.some(bw => lowerDeal.includes(bw))) return false;
+
+  // Identifiera sekvensnummer (filtrera bort årtal som 2005, 2015 etc.)
+  const numbers1 = t1.filter(isSequenceNumber);
+  const numbers2 = t2.filter(isSequenceNumber);
+
+  // Om sekvensnumren skiljer sig (t.ex. GTA VI vs GTA Vice City eller Fallout 3 vs Fallout 4)
+  if (numbers1.length !== numbers2.length || !numbers1.every((n, i) => n === numbers2[i])) {
+    return false;
   }
+
+  // Om dealTitle börjar med hela gameTitle
+  if (t2.length >= t1.length) {
+    const prefixMatches = t1.every((tok, idx) => tok === t2[idx]);
+    if (prefixMatches) return true;
+  }
+
+  // Om gameTitle är längre än dealTitle, men resten bara är utgåveord
+  if (t1.length > t2.length) {
+    const prefixMatches = t2.every((tok, idx) => tok === t1[idx]);
+    if (prefixMatches) {
+      const remainder = t1.slice(t2.length);
+      if (remainder.every(tok => RECOGNIZED_EDITION_WORDS.has(tok))) {
+        return true;
+      }
+    }
+  }
+
   return false;
 }
 

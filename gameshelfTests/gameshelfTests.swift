@@ -35,7 +35,9 @@ struct gameshelfTests {
         #expect(try decoder.decode(PlayStatus.self, from: Data("\"Droppat\"".utf8)) == .abandoned)
         #expect(try decoder.decode(PlayStatus.self, from: Data("\"Avbruten\"".utf8)) == .abandoned)
         #expect(try decoder.decode(PlayStatus.self, from: Data("\"Avbrutet\"".utf8)) == .abandoned)
-        #expect(try decoder.decode(PlayStatus.self, from: Data("\"Slutat spela\"".utf8)) == .abandoned)
+        #expect(try decoder.decode(PlayStatus.self, from: Data("\"abandoned\"".utf8)) == .abandoned)
+        #expect(try decoder.decode(PlayStatus.self, from: Data("\"Avslutat\"".utf8)) == .abandoned)
+        #expect(try decoder.decode(PlayStatus.self, from: Data("\"Slutat spela\"".utf8)) == .completed)
         #expect(try decoder.decode(PlayStatus.self, from: Data("\"Önskelista\"".utf8)) == .notStarted)
         #expect(try decoder.decode(PlayStatus.self, from: Data("\"wishlist\"".utf8)) == .notStarted)
     }
@@ -84,19 +86,21 @@ struct gameshelfTests {
         #expect(PlayStatus.playing.title(for: single) == "Spelar nu")
         #expect(PlayStatus.paused.title(for: single) == "Pausat")
         #expect(PlayStatus.completed.title(for: single) == "Genomspelat")
-        #expect(PlayStatus.abandoned.title(for: single) == "Avbrutet")
+        #expect(PlayStatus.abandoned.title(for: single) == "Avslutat")
 
         #expect(PlayStatus.notStarted.title(for: multi) == "Inte spelat")
         #expect(PlayStatus.playing.title(for: multi) == "Aktiv")
-        #expect(PlayStatus.paused.title(for: multi) == "Tar paus")
-        #expect(PlayStatus.completed.title(for: multi) == "Inte aktiv längre")
-        #expect(PlayStatus.abandoned.title(for: multi) == "Slutat spela")
+        #expect(PlayStatus.paused.title(for: multi) == "Pausat")
+        #expect(PlayStatus.completed.title(for: multi) == "Arkiverad")
+        #expect(PlayStatus.abandoned.title(for: multi) == "Avslutat")
 
         #expect(PlayStatus.playing.title(for: ongoing) == "Aktiv")
-        #expect(PlayStatus.completed.title(for: ongoing) == "Inte aktiv längre")
+        #expect(PlayStatus.completed.title(for: ongoing) == "Arkiverad")
+        #expect(PlayStatus.abandoned.title(for: ongoing) == "Avslutat")
 
         #expect(PlayStatus.playing.icon(for: single) == "play.fill")
         #expect(PlayStatus.playing.icon(for: multi) == "circle.fill")
+        #expect(PlayStatus.abandoned.icon(for: single) == "xmark.circle.fill")
     }
 
     @Test func playTypeInference() {
@@ -228,4 +232,58 @@ struct gameshelfTests {
         #expect(games.first?.name == "Baldur's Gate 3")
         #expect(games.first?.ageRatings?.count == 2)
     }
+
+    @Test func supabaseDateParserParsesVariousFormats() {
+        // Postgres timestamptz (6 mikrosekundsiffror och tidszon)
+        let pgDate = SupabaseDateParser.parse("2025-08-25T14:30:00.123456+00:00")
+        #expect(pgDate != nil)
+        if let d = pgDate {
+            let cal = Calendar(identifier: .gregorian)
+            var utcCal = cal
+            utcCal.timeZone = TimeZone(secondsFromGMT: 0)!
+            #expect(utcCal.component(.year, from: d) == 2025)
+            #expect(utcCal.component(.month, from: d) == 8)
+            #expect(utcCal.component(.day, from: d) == 25)
+            #expect(utcCal.component(.hour, from: d) == 14)
+            #expect(utcCal.component(.minute, from: d) == 30)
+        }
+
+        // JavaScript toISOString (3 millisekunder och Z)
+        let jsDate = SupabaseDateParser.parse("2026-01-10T09:15:20.123Z")
+        #expect(jsDate != nil)
+
+        // ISO8601 utan millisekunder
+        let stdDate = SupabaseDateParser.parse("2026-01-10T09:15:20Z")
+        #expect(stdDate != nil)
+
+        // Tom eller ogiltig sträng
+        #expect(SupabaseDateParser.parse("") == nil)
+        #expect(SupabaseDateParser.parse(nil) == nil)
+        #expect(SupabaseDateParser.parse("inte ett datum") == nil)
+    }
+
+    @Test func priceWatcherTitleMatchPreventsFalsePositives() {
+        // Skapa testbara fall för titlar
+        let p = PriceWatcherService.shared
+
+        // GTA 6 / GTA VI får INTE matcha GTA Vice City
+        #expect(!p.testIsTitleMatch(gameTitle: "Grand Theft Auto VI", dealTitle: "Grand Theft Auto: Vice City  The Definitive Edition"))
+        #expect(!p.testIsTitleMatch(gameTitle: "Grand Theft Auto 6", dealTitle: "Grand Theft Auto: Vice City  The Definitive Edition"))
+        #expect(!p.testIsTitleMatch(gameTitle: "Grand Theft Auto", dealTitle: "Grand Theft Auto V"))
+        #expect(!p.testIsTitleMatch(gameTitle: "Grand Theft Auto", dealTitle: "Grand Theft Auto IV"))
+        #expect(!p.testIsTitleMatch(gameTitle: "Grand Theft Auto V", dealTitle: "Grand Theft Auto: Vice City"))
+        #expect(!p.testIsTitleMatch(gameTitle: "Fallout 3", dealTitle: "Fallout 4"))
+        #expect(!p.testIsTitleMatch(gameTitle: "Halo", dealTitle: "Halo 3"))
+        #expect(!p.testIsTitleMatch(gameTitle: "Final Fantasy VII", dealTitle: "Final Fantasy VIII"))
+
+        // Korrekta matchningar SKALL matcha
+        #expect(p.testIsTitleMatch(gameTitle: "Grand Theft Auto V", dealTitle: "Grand Theft Auto V Enhanced"))
+        #expect(p.testIsTitleMatch(gameTitle: "Grand Theft Auto 5", dealTitle: "Grand Theft Auto V Enhanced"))
+        #expect(p.testIsTitleMatch(gameTitle: "Grand Theft Auto: Vice City", dealTitle: "Grand Theft Auto: Vice City  The Definitive Edition"))
+        #expect(p.testIsTitleMatch(gameTitle: "Grand Theft Auto: San Andreas", dealTitle: "Grand Theft Auto: San Andreas  The Definitive Edition"))
+        #expect(p.testIsTitleMatch(gameTitle: "The Witcher 3", dealTitle: "The Witcher 3: Wild Hunt  Remastered"))
+        #expect(p.testIsTitleMatch(gameTitle: "Fallout 4", dealTitle: "Fallout 4 Game of the Year Edition"))
+        #expect(p.testIsTitleMatch(gameTitle: "Resident Evil 4", dealTitle: "Resident Evil 4 (2005)"))
+    }
 }
+

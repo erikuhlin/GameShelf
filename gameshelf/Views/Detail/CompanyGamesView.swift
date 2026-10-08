@@ -13,6 +13,7 @@ struct CompanyGamesView: View {
     let companyID: Int?
 
     @EnvironmentObject var store: LibraryStore
+    @EnvironmentObject var profile: ProfileStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var games: [IGDBGame] = []
@@ -181,7 +182,7 @@ struct CompanyGamesView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(gamesInUserLibrary) { userGame in
-                        NavigationLink(destination: GameDetailView(game: userGame)) {
+                        NavigationLink(destination: GameDetailView(game: userGame).environmentObject(store).environmentObject(profile)) {
                             VStack(alignment: .leading, spacing: 6) {
                                 ZStack(alignment: .topTrailing) {
                                     CoverView(title: userGame.title, url: userGame.coverURL, corner: 10, height: 135)
@@ -230,6 +231,9 @@ struct CompanyGamesView: View {
                 .padding(4).background(Color.black.opacity(0.7), in: Circle())
         case .paused:
             Image(systemName: "pause.fill").font(.system(size: 7, weight: .bold)).foregroundStyle(Color.orange)
+                .padding(4).background(Color.black.opacity(0.7), in: Circle())
+        case .abandoned:
+            Image(systemName: "xmark").font(.system(size: 7, weight: .black)).foregroundStyle(Color.purple)
                 .padding(4).background(Color.black.opacity(0.7), in: Circle())
         case .notStarted:
             EmptyView()
@@ -328,7 +332,7 @@ struct CompanyGamesView: View {
             } else {
                 LazyVGrid(columns: gridColumns, spacing: 16) {
                     ForEach(games) { game in
-                        NavigationLink(destination: GameDetailView(igdbID: game.id)) {
+                        NavigationLink(destination: GameDetailView(igdbID: game.id).environmentObject(store).environmentObject(profile)) {
                             gameCard(game)
                         }
                         .buttonStyle(.plain)

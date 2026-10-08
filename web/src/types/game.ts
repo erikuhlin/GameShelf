@@ -2,7 +2,8 @@ export type PlayStatus =
   | 'notStarted'
   | 'playing'
   | 'paused'
-  | 'completed';
+  | 'completed'
+  | 'abandoned';
 
 export type LegacyPlayStatus =
   | 'Spelar nu'
@@ -21,6 +22,7 @@ export const PLAY_STATUSES: PlayStatus[] = [
   'notStarted',
   'paused',
   'completed',
+  'abandoned',
 ];
 
 export interface GameTodoItem {

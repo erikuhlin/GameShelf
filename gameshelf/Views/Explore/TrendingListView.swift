@@ -10,9 +10,12 @@ import SwiftUI
 
 struct TrendingListView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var store: LibraryStore
+    @EnvironmentObject var profile: ProfileStore
+
     let items: [TrendingItem]
     var onRefresh: (() async -> Void)? = nil
-    var onSelect: (Int) -> Void
+    var onSelect: ((Int) -> Void)? = nil
 
     var body: some View {
         NavigationStack {
@@ -31,48 +34,16 @@ struct TrendingListView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List(items) { g in
-                        Button { onSelect(g.id) } label: {
-                            HStack(spacing: 12) {
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 8).fill(.quaternary)
-                                    if let url = g.image {
-                                        AsyncImage(url: url) { phase in
-                                            switch phase {
-                                            case .success(let img): img.resizable().scaledToFill()
-                                            default: Color.clear
-                                            }
-                                        }
-                                    } else {
-                                        Image(systemName: "gamecontroller").imageScale(.large)
-                                    }
-                                }
-                                .frame(width: 64, height: 64)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(g.title).font(.headline).lineLimit(2)
-                                    HStack(spacing: 6) {
-                                        if let badge = g.badgeText {
-                                            Text(badge)
-                                                .font(.caption2.bold())
-                                                .padding(.horizontal, 6)
-                                                .padding(.vertical, 2)
-                                                .background(Color.red.opacity(0.12))
-                                                .foregroundStyle(.red)
-                                                .clipShape(Capsule())
-                                        }
-                                        Text(g.platformText).lineLimit(1)
-                                        if g.rating > 0 {
-                                            Text("· \(String(format: "%.1f", g.rating))/10")
-                                                .foregroundStyle(.secondary)
-                                        }
-                                    }
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                }
+                        if let onSelect = onSelect {
+                            Button { onSelect(g.id) } label: {
+                                trendingRow(g)
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            NavigationLink(destination: GameDetailView(igdbID: g.id).environmentObject(store).environmentObject(profile)) {
+                                trendingRow(g)
                             }
                         }
-                        .buttonStyle(.plain)
                     }
                     .listStyle(.insetGrouped)
                 }
@@ -80,11 +51,10 @@ struct TrendingListView: View {
             .navigationTitle("Trendar just nu")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Klar") {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Stäng") {
                         dismiss()
                     }
-                    .font(.body.weight(.semibold))
                 }
             }
             .refreshable {
@@ -94,4 +64,47 @@ struct TrendingListView: View {
             }
         }
     }
+
+    private func trendingRow(_ g: TrendingItem) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8).fill(.quaternary)
+                if let url = g.image {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let img): img.resizable().scaledToFill()
+                        default: Color.clear
+                        }
+                    }
+                } else {
+                    Image(systemName: "gamecontroller").imageScale(.large)
+                }
+            }
+            .frame(width: 64, height: 64)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(g.title).font(.headline).lineLimit(2)
+                HStack(spacing: 6) {
+                    if let badge = g.badgeText {
+                        Text(badge)
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.red.opacity(0.12))
+                            .foregroundStyle(.red)
+                            .clipShape(Capsule())
+                    }
+                    Text(g.platformText).lineLimit(1)
+                    if g.rating > 0 {
+                        Text("· \(String(format: "%.1f", g.rating))/10")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            }
+        }
+    }
 }
+

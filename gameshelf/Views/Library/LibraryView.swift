@@ -34,6 +34,7 @@ enum PlayStatusFilter: String, CaseIterable, Identifiable {
     case notStarted = "Inte påbörjat"
     case paused = "Pausat"
     case completed = "Genomspelat"
+    case abandoned = "Avslutat"
 
     var id: String { rawValue }
 
@@ -44,6 +45,7 @@ enum PlayStatusFilter: String, CaseIterable, Identifiable {
         case .notStarted: return .notStarted
         case .paused: return .paused
         case .completed: return .completed
+        case .abandoned: return .abandoned
         }
     }
 }
@@ -1449,6 +1451,8 @@ struct LibraryView: View {
             return base.filter { $0.status == .paused }.count
         case .completed:
             return base.filter { $0.status == .completed }.count
+        case .abandoned:
+            return base.filter { $0.status == .abandoned }.count
         }
     }
 
@@ -1459,6 +1463,7 @@ struct LibraryView: View {
         case .notStarted: return "circle"
         case .paused: return "pause.fill"
         case .completed: return "checkmark"
+        case .abandoned: return "xmark.circle"
         }
     }
 
@@ -1467,6 +1472,7 @@ struct LibraryView: View {
         case .playing: return .green
         case .completed: return .teal
         case .paused: return .orange
+        case .abandoned: return .purple
         case .notStarted: return Color(.systemGray)
         default: return .secondary
         }

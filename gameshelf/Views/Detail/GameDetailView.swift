@@ -286,6 +286,8 @@ struct GameDetailView: View {
         .sheet(isPresented: $showingSimilarGamesSheet) {
             if let similar = remote?.similarGames {
                 SimilarGamesSheetView(games: similar)
+                    .environmentObject(store)
+                    .environmentObject(profile)
             }
         }
         .sheet(isPresented: $showingLibraryStatusSheet) {
@@ -325,12 +327,12 @@ struct GameDetailView: View {
         }
         .sheet(isPresented: $showingToplistSheet) {
             NavigationStack {
-                ToplistView(prefillGenre: toplistBadgeGenre) { selectedId in
-                    showingToplistSheet = false
-                    mode = .igdb(id: selectedId)
-                    configureInitialState()
-                }
+                ToplistView(prefillGenre: toplistBadgeGenre)
+                    .environmentObject(store)
+                    .environmentObject(profile)
             }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         .confirmationDialog(
             "Flytta till Biblioteket",
@@ -1213,7 +1215,12 @@ struct GameDetailView: View {
     private func formattedDateAdded(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "sv_SE")
-        formatter.dateFormat = "d MMM"
+        let calendar = Calendar.current
+        if calendar.component(.year, from: date) == calendar.component(.year, from: Date()) {
+            formatter.dateFormat = "d MMM"
+        } else {
+            formatter.dateFormat = "d MMM yyyy"
+        }
         return formatter.string(from: date)
     }
 
@@ -2145,7 +2152,7 @@ struct GameDetailView: View {
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 12) {
                                     ForEach(franchiseGames) { game in
-                                        NavigationLink(destination: GameDetailView(igdbID: game.id)) {
+                                        NavigationLink(destination: GameDetailView(igdbID: game.id).environmentObject(store).environmentObject(profile)) {
                                             VStack(alignment: .leading, spacing: 6) {
                                                 CoverView(title: game.name ?? "", url: game.coverURL, corner: 10, height: 128)
                                                     .frame(width: 96, height: 128)
@@ -2194,7 +2201,7 @@ struct GameDetailView: View {
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 12) {
                                     ForEach(dlcs) { item in
-                                        NavigationLink(destination: GameDetailView(igdbID: item.id)) {
+                                        NavigationLink(destination: GameDetailView(igdbID: item.id).environmentObject(store).environmentObject(profile)) {
                                             VStack(alignment: .leading, spacing: 6) {
                                                 CoverView(title: item.name ?? "DLC", url: item.coverURL, corner: 10, height: 62)
                                                     .frame(width: 110, height: 62)
@@ -2257,7 +2264,7 @@ struct GameDetailView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
                                 ForEach(similar) { game in
-                                    NavigationLink(destination: GameDetailView(igdbID: game.id)) {
+                                    NavigationLink(destination: GameDetailView(igdbID: game.id).environmentObject(store).environmentObject(profile)) {
                                         VStack(alignment: .leading, spacing: 6) {
                                             CoverView(title: game.name ?? "", url: game.coverURL, corner: 10, height: 128)
                                                 .frame(width: 96, height: 128)
@@ -2964,7 +2971,7 @@ struct GameDetailView: View {
                 // Utvecklare
                 if let dev = developerName, !dev.isEmpty {
                     factRow(label: "Utvecklare") {
-                        NavigationLink(destination: CompanyGamesView(companyName: dev, role: .developer)) {
+                        NavigationLink(destination: CompanyGamesView(companyName: dev, role: .developer).environmentObject(store).environmentObject(profile)) {
                             HStack(spacing: 4) {
                                 Text(dev)
                                     .font(.subheadline.weight(.semibold))
@@ -2983,7 +2990,7 @@ struct GameDetailView: View {
                 // Utgivare
                 if let pub = publisherName, !pub.isEmpty {
                     factRow(label: "Utgivare") {
-                        NavigationLink(destination: CompanyGamesView(companyName: pub, role: .publisher)) {
+                        NavigationLink(destination: CompanyGamesView(companyName: pub, role: .publisher).environmentObject(store).environmentObject(profile)) {
                             HStack(spacing: 4) {
                                 Text(pub)
                                     .font(.subheadline.weight(.semibold))
@@ -3114,7 +3121,7 @@ struct GameDetailView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(games) { item in
-                        NavigationLink(destination: GameDetailView(igdbID: item.id)) {
+                        NavigationLink(destination: GameDetailView(igdbID: item.id).environmentObject(store).environmentObject(profile)) {
                             VStack(alignment: .leading, spacing: 6) {
                                 CoverView(title: item.name ?? "DLC", url: item.coverURL, corner: 12, height: 135)
                                     .frame(width: 95, height: 135)
@@ -3812,6 +3819,7 @@ private struct TrailersSheetView: View {
 private struct SimilarGamesSheetView: View {
     let games: [IGDBRelatedGame]
     @EnvironmentObject private var store: LibraryStore
+    @EnvironmentObject private var profile: ProfileStore
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -3820,7 +3828,7 @@ private struct SimilarGamesSheetView: View {
                 ScrollView {
                     VStack(spacing: 12) {
                         ForEach(games) { game in
-                            NavigationLink(destination: GameDetailView(igdbID: game.id)) {
+                            NavigationLink(destination: GameDetailView(igdbID: game.id).environmentObject(store).environmentObject(profile)) {
                                 HStack(spacing: 14) {
                                     CoverView(title: game.name ?? "Spel", url: game.coverURL, corner: 8, height: 100)
                                         .frame(width: 70)
@@ -4040,6 +4048,34 @@ private struct LibraryStatusSheetView: View {
                             RoundedRectangle(cornerRadius: 12)
                                 .stroke(Color.yellow.opacity(0.35), lineWidth: 1)
                         )
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        onSelectStatus(.abandoned, false)
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.headline)
+                                .foregroundStyle(.purple)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Avslutat / Spelat förr")
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.primary)
+                                Text("Sparas i samlingen utan att räknas som genomspelat")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 11)
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
                     .buttonStyle(.plain)
                 }

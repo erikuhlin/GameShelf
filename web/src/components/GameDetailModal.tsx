@@ -1325,6 +1325,7 @@ function GameDetailModalContent({
                     <option value="completed">
                       {isMultiplayer ? '📦 Arkiverad' : '🏆 Genomspelat'}
                     </option>
+                    <option value="abandoned">❌ Avslutat</option>
                   </select>
                 </div>
 

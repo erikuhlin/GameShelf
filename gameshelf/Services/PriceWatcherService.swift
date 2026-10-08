@@ -78,7 +78,7 @@ final class PriceWatcherService: ObservableObject {
     @Published private(set) var deals: [String: GameDealInfo] = [:]
     @Published private(set) var isLoading: Bool = false
 
-    private let cacheKey = "gameshelf_cached_deals_v3"
+    private let cacheKey = "gameshelf_cached_deals_v4"
     private let cacheTTL: TimeInterval = 4 * 3600 // 4 timmar
     private var inFlightQueries = Set<String>()
 
@@ -364,38 +364,106 @@ final class PriceWatcherService: ObservableObject {
         }
     }
 
+    private nonisolated static let romanNumeralMap: [String: String] = [
+        "I": "1", "II": "2", "III": "3", "IV": "4", "V": "5",
+        "VI": "6", "VII": "7", "VIII": "8", "IX": "9", "X": "10",
+        "XI": "11", "XII": "12", "XIII": "13", "XIV": "14", "XV": "15",
+        "XVI": "16", "XVII": "17", "XVIII": "18", "XIX": "19", "XX": "20",
+        "XXI": "21", "XXII": "22", "XXIII": "23", "XXIV": "24", "XXV": "25",
+        "XXVI": "26", "XXVII": "27", "XXVIII": "28", "XXIX": "29", "XXX": "30"
+    ]
+
+    private nonisolated static let recognizedEditionWords: Set<String> = [
+        "edition", "definitive", "remastered", "remake", "enhanced", "deluxe",
+        "special", "gold", "goty", "game", "year", "complete", "anniversary",
+        "bundle", "directors", "cut", "vr", "standard", "collector", "collectors",
+        "premium", "ultimate"
+    ]
+
     private nonisolated func isTitleMatch(gameTitle: String, dealTitle: String) -> Bool {
-        let clean1 = normalizeForComparison(gameTitle)
-        let clean2 = normalizeForComparison(dealTitle)
-        if clean1 == clean2 { return true }
-        // Tillåt endast om det är grundspelet eller dess officiella utgåva, ej soundtrack eller dlc
-        if clean2.hasPrefix(clean1) {
-            let lower = dealTitle.lowercased()
-            if lower.contains("soundtrack") || lower.contains("season pass") || lower.contains("dlc") || lower.contains("content") || lower.contains("artbook") {
-                return false
-            }
-            return true
+        let t1 = tokenizeForMatching(gameTitle)
+        let t2 = tokenizeForMatching(dealTitle)
+
+        guard !t1.isEmpty && !t2.isEmpty else { return false }
+        if t1 == t2 { return true }
+
+        let lowerDeal = dealTitle.lowercased()
+        let badWords = ["soundtrack", "season pass", "dlc", "content", "artbook", "ost"]
+        if badWords.contains(where: { lowerDeal.contains($0) }) {
+            return false
         }
+
+        // Identifiera sekvensnummer (filtrera bort årtal som 2005, 2015 etc.)
+        let numbers1 = t1.filter { isSequenceNumber($0) }
+        let numbers2 = t2.filter { isSequenceNumber($0) }
+
+        // Om numren skiljer sig (t.ex. GTA VI vs GTA Vice City, eller GTA 5 vs GTA 4, Fallout 3 vs Fallout 4)
+        if numbers1 != numbers2 {
+            return false
+        }
+
+        // Om dealTitle börjar med hela gameTitle (på tokennivå)
+        if t2.count >= t1.count {
+            let prefixMatches = zip(t1, t2).allSatisfy { $0 == $1 }
+            if prefixMatches {
+                return true
+            }
+        }
+
+        // Om gameTitle är längre än dealTitle, men resten bara är utgåveord (t.ex. Game of the Year Edition)
+        if t1.count > t2.count {
+            let prefixMatches = zip(t2, t1).allSatisfy { $0 == $1 }
+            if prefixMatches {
+                let remainder = t1.dropFirst(t2.count)
+                if remainder.allSatisfy({ Self.recognizedEditionWords.contains($0) }) {
+                    return true
+                }
+            }
+        }
+
         return false
     }
 
-    private nonisolated func normalizeForComparison(_ title: String) -> String {
+    private nonisolated func tokenizeForMatching(_ title: String) -> [String] {
         title.lowercased()
-            .replacingOccurrences(of: ":", with: "")
-            .replacingOccurrences(of: "-", with: "")
-            .replacingOccurrences(of: "–", with: "")
+            .replacingOccurrences(of: ":", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "–", with: " ")
             .replacingOccurrences(of: "'", with: "")
             .replacingOccurrences(of: "\"", with: "")
             .replacingOccurrences(of: "™", with: "")
             .replacingOccurrences(of: "®", with: "")
+            .replacingOccurrences(of: "(", with: " ")
+            .replacingOccurrences(of: ")", with: " ")
             .components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }
-            .joined(separator: " ")
+            .map { token in
+                let upper = token.uppercased()
+                if let mappedNum = Self.romanNumeralMap[upper] {
+                    return mappedNum
+                }
+                return token
+            }
+    }
+
+    private nonisolated func isSequenceNumber(_ token: String) -> Bool {
+        guard let num = Int(token) else { return false }
+        // Årtal (1970–2040) betraktas inte som sekvensnummer
+        if num >= 1970 && num <= 2040 {
+            return false
+        }
+        return true
     }
 
     private nonisolated func normalizeTitle(_ title: String) -> String {
         title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
+
+    #if DEBUG
+    nonisolated func testIsTitleMatch(gameTitle: String, dealTitle: String) -> Bool {
+        isTitleMatch(gameTitle: gameTitle, dealTitle: dealTitle)
+    }
+    #endif
 
     // MARK: - Lokal Caching
     private func loadCachedDeals() {

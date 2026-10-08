@@ -145,6 +145,19 @@ struct LibraryView: View {
     @State private var filterOnlyOnSale = false
     @ObservedObject private var priceWatcher = PriceWatcherService.shared
 
+    /// Avgör om årsvy ska vara aktiv:
+    /// Endast aktiv för 'Alla' och 'Genomspelat' när användaren har slagit på årsvy.
+    /// För 'Spelar nu', 'Backlog/Inte påbörjat', 'Pausat' och 'Avslutat' visas alltid rent rutnät för maximalt fokus.
+    private var effectiveGroupByYear: Bool {
+        if selectedTab == .wishlist {
+            return groupByYear
+        }
+        guard selectedStatusFilter == .all || selectedStatusFilter == .completed else {
+            return false
+        }
+        return groupByYear
+    }
+
     // Adaptiva kolumner för Poster Grid (3 på iPhone, 5–8 på iPad)
     private var posterGridColumns: [GridItem] {
         if horizontalSizeClass == .regular {
@@ -502,6 +515,10 @@ struct LibraryView: View {
                                             Circle()
                                                 .strokeBorder(isSelected ? Color.white : Color.secondary, lineWidth: 1.2)
                                                 .frame(width: 6, height: 6)
+                                        } else if filter == .abandoned {
+                                            Image(systemName: "xmark")
+                                                .font(.system(size: 7, weight: .bold))
+                                                .foregroundStyle(isSelected ? Color.white : Color.purple)
                                         }
                                         Text(filter == .all ? "Alla" : filter.rawValue)
                                             .font(.caption2.weight(isSelected ? .bold : .medium))
@@ -717,7 +734,7 @@ struct LibraryView: View {
 
     @ViewBuilder
     private var collapseAllYearsButton: some View {
-        if groupByYear {
+        if effectiveGroupByYear {
             Button {
                 toggleCollapseAllYears()
             } label: {
@@ -883,30 +900,32 @@ struct LibraryView: View {
                     // 2b. Dedikerad Speltid (Main Story / HLTB)
                     playtimeFilterMenu
 
-                    // 3. Årsvy vs Rutnät
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            groupByYear.toggle()
+                    // 3. Årsvy vs Rutnät (Visas för 'Alla' och 'Genomspelat', eller i Önskelistan)
+                    if selectedTab == .wishlist || selectedStatusFilter == .all || selectedStatusFilter == .completed {
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                groupByYear.toggle()
+                            }
+                        } label: {
+                            HStack(spacing: 3) {
+                                Image(systemName: groupByYear ? "calendar" : "square.grid.3x3.fill")
+                                    .font(.system(size: 9.5, weight: .bold))
+                                Text(groupByYear ? "Årsvy" : "Rutnät")
+                                    .font(.caption.weight(.bold))
+                                    .lineLimit(1)
+                                    .fixedSize()
+                            }
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 5.5)
+                            .background(groupByYear ? Color.red.opacity(0.12) : Color(.secondarySystemGroupedBackground), in: Capsule())
+                            .foregroundStyle(groupByYear ? Color.red : Color.primary)
+                            .overlay(Capsule().stroke(groupByYear ? Color.red.opacity(0.25) : Color.white.opacity(0.12), lineWidth: 0.8))
                         }
-                    } label: {
-                        HStack(spacing: 3) {
-                            Image(systemName: groupByYear ? "calendar" : "square.grid.3x3.fill")
-                                .font(.system(size: 9.5, weight: .bold))
-                            Text(groupByYear ? "Årsvy" : "Rutnät")
-                                .font(.caption.weight(.bold))
-                                .lineLimit(1)
-                                .fixedSize()
-                        }
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 5.5)
-                        .background(groupByYear ? Color.red.opacity(0.12) : Color(.secondarySystemGroupedBackground), in: Capsule())
-                        .foregroundStyle(groupByYear ? Color.red : Color.primary)
-                        .overlay(Capsule().stroke(groupByYear ? Color.red.opacity(0.25) : Color.white.opacity(0.12), lineWidth: 0.8))
-                    }
-                    .buttonStyle(.plain)
+                        .buttonStyle(.plain)
 
-                    // 4. Fäll ihop/ut alla år i Årsvy
-                    collapseAllYearsButton
+                        // 4. Fäll ihop/ut alla år i Årsvy
+                        collapseAllYearsButton
+                    }
 
                     // 5. Sortering
                     sortMenu
@@ -981,7 +1000,7 @@ struct LibraryView: View {
                 }
 
                 if !ownedGames.isEmpty {
-                    if groupByYear {
+                    if effectiveGroupByYear {
                         // Årsvy med tidslinjesektioner
                         LazyVStack(alignment: .leading, spacing: 20) {
                             ForEach(groupedOwnedGames) { group in
@@ -1114,7 +1133,7 @@ struct LibraryView: View {
             }
 
             if !wishlistGames.isEmpty {
-                if groupByYear {
+                if effectiveGroupByYear {
                     // Årsvy med tidslinjesektioner för önskelistan
                     LazyVStack(alignment: .leading, spacing: 20) {
                         ForEach(groupedWishlistGames) { group in

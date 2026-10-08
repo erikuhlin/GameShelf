@@ -164,6 +164,12 @@ struct ForYouFingerprint: Sendable {
     let ownedTitles: Set<String>
 }
 
+struct CuratedRecommendation: Identifiable, Sendable {
+    var id: Int { game.id }
+    let game: IGDBGame
+    let matchedReason: String
+}
+
 // MARK: - ForYouEngine
 
 @MainActor
@@ -176,6 +182,12 @@ final class ForYouEngine: ObservableObject {
     @Published var compassResults: [IGDBGame] = []
     @Published var isLoadingCompass = false
     @Published var fingerprint: ForYouFingerprint? = nil
+
+    // Cache för För dig (Startsida / LiveDiscoverySection) med 24h giltighetstid
+    @Published var homeCuratedRecommendations: [CuratedRecommendation] = []
+    @Published var isLoadingHomeRecommendations = false
+    private var lastHomeFetched: Date? = nil
+    private var lastHomeGameCount: Int = 0
 
     // Interaktiva valbara alternativ för första sidan
     @Published var selectedReferenceGame1: Game? = nil
@@ -599,6 +611,119 @@ final class ForYouEngine: ObservableObject {
             return items
         }
         return []
+    }
+
+    // MARK: - 4b. Startsida: Kurerade rekommendationer för 'För dig' med 24h cache
+    func loadHomeCuratedRecommendations(
+        games: [Game],
+        profile: ProfileStore,
+        forceReload: Bool = false
+    ) async {
+        let oneDay: TimeInterval = 86400 // 24 timmar
+        let libraryCount = games.count
+
+        // Om vi redan har rekommendationer och det gått under 24 timmar samt biblioteksstorleken inte ändrats kraftigt
+        if !forceReload,
+           !homeCuratedRecommendations.isEmpty,
+           let last = lastHomeFetched,
+           Date().timeIntervalSince(last) < oneDay,
+           abs(libraryCount - lastHomeGameCount) < 2 {
+            return
+        }
+
+        isLoadingHomeRecommendations = true
+        let libraryTitles = Set(games.map { $0.title.lowercased() })
+        let libraryIDs = Set(games.compactMap { $0.igdbID })
+
+        // 1. Primär signal: Användarens Favoritspel från profilen
+        let favoriteGames: [Game] = profile.favoriteGameIDs.compactMap { favID in
+            let lower = favID.lowercased()
+            return games.first(where: {
+                $0.id.uuidString.lowercased() == lower ||
+                ($0.igdbID != nil && String($0.igdbID!) == favID)
+            })
+        }
+
+        // 2. Aktiva spel som spelas just nu
+        let activeGames = games.filter { $0.status == .playing }
+
+        // 3. Högt betygsatta spel (>= 7)
+        let rated = games.filter { ($0.rating ?? 0) >= 7 }.sorted { ($0.rating ?? 0) > ($1.rating ?? 0) }
+
+        var referenceItems: [(game: Game, badgePrefix: String)] = []
+        for fav in favoriteGames.prefix(3) {
+            referenceItems.append((fav, "Favorit"))
+        }
+        for act in activeGames.prefix(2) {
+            if !referenceItems.contains(where: { $0.game.id == act.id }) {
+                referenceItems.append((act, "Passar"))
+            }
+        }
+        for r in rated.prefix(2) {
+            if !referenceItems.contains(where: { $0.game.id == r.id }) {
+                referenceItems.append((r, "Toppval"))
+            }
+        }
+        if referenceItems.isEmpty {
+            for g in games.prefix(2) {
+                referenceItems.append((g, "Liknar"))
+            }
+        }
+
+        var allCurated: [CuratedRecommendation] = []
+        var seenIDs = Set<Int>()
+
+        // Kurerar rekommendationer för varje referensspel
+        for ref in referenceItems {
+            let refGame = ref.game
+            var refResults: [IGDBGame] = []
+            if let igdbID = refGame.igdbID {
+                refResults = (try? await IGDBService.shared.fetchSimilarGames(forGameID: igdbID, limit: 8)) ?? []
+            }
+            if refResults.isEmpty {
+                let genres = refGame.genres.filter { !$0.isEmpty }
+                if !genres.isEmpty {
+                    refResults = (try? await IGDBService.shared.fetchRecommendations(forGenres: genres, limit: 8)) ?? []
+                }
+            }
+
+            // Filtrera bort biblioteksspel och redan tillagda
+            refResults.removeAll { game in
+                libraryIDs.contains(game.id) || libraryTitles.contains(game.name.lowercased()) || seenIDs.contains(game.id)
+            }
+
+            let shortTitle = refGame.title.components(separatedBy: ":").first?.trimmingCharacters(in: .whitespaces) ?? refGame.title
+            let badgeText = "\(ref.badgePrefix): \(shortTitle)"
+
+            for g in refResults {
+                seenIDs.insert(g.id)
+                allCurated.append(CuratedRecommendation(game: g, matchedReason: badgeText))
+            }
+        }
+
+        // Fallback om för få hittades - prioritera profilens favoritgenrer först!
+        if allCurated.count < 6 {
+            let profileGenres = Array(profile.favoriteGenres)
+            var counts: [String: Int] = [:]
+            for game in games {
+                for g in game.genres where !g.isEmpty {
+                    counts[g, default: 0] += 1
+                }
+            }
+            let userTopGenres = counts.sorted { $0.value > $1.value }.map(\.key)
+            let fallbackGenres = !profileGenres.isEmpty ? profileGenres : (userTopGenres.isEmpty ? ["Action", "Role-playing (RPG)", "Adventure"] : userTopGenres)
+            if let fallback = try? await IGDBService.shared.fetchRecommendations(forGenres: fallbackGenres, limit: 10) {
+                for g in fallback where !libraryIDs.contains(g.id) && !seenIDs.contains(g.id) {
+                    seenIDs.insert(g.id)
+                    allCurated.append(CuratedRecommendation(game: g, matchedReason: "Toppval i din smak"))
+                }
+            }
+        }
+
+        self.homeCuratedRecommendations = Array(allCurated.prefix(16))
+        self.lastHomeFetched = Date()
+        self.lastHomeGameCount = libraryCount
+        self.isLoadingHomeRecommendations = false
     }
 
     // MARK: - 5. Flik 2: Spelminnen & Nostalgi Radar

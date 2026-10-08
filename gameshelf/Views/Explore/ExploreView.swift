@@ -190,7 +190,8 @@ struct ExploreView: View {
                 news.reload(platforms: prefs.platforms, minAge: prefs.minAge, libraryGames: store.games)
                 async let trFetch: Void = trending.fetch(platformFamilies: prefs.platforms, news: news.items, forceReload: true)
                 async let upFetch: Void = loadUpcomingHighlight()
-                _ = await (trFetch, upFetch)
+                async let fyFetch: Void = ForYouEngine.shared.loadHomeCuratedRecommendations(games: store.games, profile: profile, forceReload: true)
+                _ = await (trFetch, upFetch, fyFetch)
             }
             .onChange(of: profile.platforms) { _, _ in
                 news.reload(platforms: prefs.platforms, minAge: prefs.minAge, libraryGames: store.games)

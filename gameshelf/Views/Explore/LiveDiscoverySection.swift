@@ -20,16 +20,11 @@ enum DiscoveryDisplayMode {
     case genreOnly
 }
 
-struct CuratedRecommendation: Identifiable {
-    var id: Int { game.id }
-    let game: IGDBGame
-    let matchedReason: String
-}
-
 struct LiveDiscoverySection: View {
     @EnvironmentObject var store: LibraryStore
     @EnvironmentObject var profile: ProfileStore
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @ObservedObject private var forYouEngine = ForYouEngine.shared
 
     private var genreGridColumns: [GridItem] {
         if horizontalSizeClass == .regular {
@@ -42,7 +37,13 @@ struct LiveDiscoverySection: View {
     var refreshTrigger: UUID = UUID()
     var mode: DiscoveryDisplayMode = .all
 
-    @State private var curatedRecommendations: [CuratedRecommendation] = []
+    private var curatedRecommendations: [CuratedRecommendation] {
+        forYouEngine.homeCuratedRecommendations
+    }
+    private var isLoadingRecommended: Bool {
+        forYouEngine.isLoadingHomeRecommendations
+    }
+
     @State private var popularGames: [IGDBGame] = []
     @State private var upcomingGames: [IGDBGame] = []
 
@@ -52,7 +53,6 @@ struct LiveDiscoverySection: View {
     @State private var genreSort: String = "popularity" // "popularity", "rating", "newest"
     @State private var genreLimit: Int = 12
 
-    @State private var isLoadingRecommended = false
     @State private var isLoadingPopular = false
     @State private var isLoadingUpcoming = false
     @State private var isLoadingGenre = false
@@ -120,7 +120,9 @@ struct LiveDiscoverySection: View {
         }
         .task(id: refreshTrigger) {
             await loadAllDiscovery()
-            loadGenreGames(selectedGenre, limit: 12)
+            if mode == .all || mode == .genreOnly {
+                loadGenreGames(selectedGenre, limit: 12)
+            }
         }
     }
 
@@ -444,10 +446,6 @@ struct LiveDiscoverySection: View {
                 }
             }
         }
-        .task(id: refreshTrigger) {
-            await loadAllDiscovery()
-            loadGenreGames(selectedGenre, limit: 12)
-        }
     }
 
     private var genreSortTitle: String {
@@ -634,104 +632,28 @@ struct LiveDiscoverySection: View {
         }
     }
 
-    private func loadAllDiscovery() async {
+    private func loadAllDiscovery(force: Bool = false) async {
+        if mode == .forYouOnly {
+            await loadRecommendations(force: force)
+            return
+        }
         await withTaskGroup(of: Void.self) { group in
-            group.addTask { await loadRecommendations() }
-            group.addTask { await loadPopular() }
-            group.addTask { await loadUpcoming() }
+            group.addTask { await loadRecommendations(force: force) }
+            group.addTask { await loadPopular(force: force) }
+            group.addTask { await loadUpcoming(force: force) }
         }
     }
 
-    private func loadRecommendations() async {
-        isLoadingRecommended = true
-        let libraryTitles = Set(store.games.map { $0.title.lowercased() })
-        let libraryIDs = Set(store.games.compactMap { $0.igdbID })
-
-        // 1. Primär signal: Användarens Favoritspel från profilen
-        let favoriteGames: [Game] = profile.favoriteGameIDs.compactMap { favID in
-            let lower = favID.lowercased()
-            return store.games.first(where: {
-                $0.id.uuidString.lowercased() == lower ||
-                ($0.igdbID != nil && String($0.igdbID!) == favID)
-            })
-        }
-
-        // 2. Aktiva spel som spelas just nu
-        let activeGames = store.games.filter { $0.status == .playing }
-
-        // 3. Högt betygsatta spel (>= 7)
-        let rated = store.games.filter { ($0.rating ?? 0) >= 7 }.sorted { ($0.rating ?? 0) > ($1.rating ?? 0) }
-
-        var referenceItems: [(game: Game, badgePrefix: String)] = []
-        for fav in favoriteGames.prefix(3) {
-            referenceItems.append((fav, "Favorit"))
-        }
-        for act in activeGames.prefix(2) {
-            if !referenceItems.contains(where: { $0.game.id == act.id }) {
-                referenceItems.append((act, "Passar"))
-            }
-        }
-        for r in rated.prefix(2) {
-            if !referenceItems.contains(where: { $0.game.id == r.id }) {
-                referenceItems.append((r, "Toppval"))
-            }
-        }
-        if referenceItems.isEmpty {
-            for g in store.games.prefix(2) {
-                referenceItems.append((g, "Liknar"))
-            }
-        }
-
-        var allCurated: [CuratedRecommendation] = []
-        var seenIDs = Set<Int>()
-
-        // Kurerar rekommendationer för varje referensspel
-        for ref in referenceItems {
-            let refGame = ref.game
-            var refResults: [IGDBGame] = []
-            if let igdbID = refGame.igdbID {
-                refResults = (try? await IGDBService.shared.fetchSimilarGames(forGameID: igdbID, limit: 8)) ?? []
-            }
-            if refResults.isEmpty {
-                let genres = refGame.genres.filter { !$0.isEmpty }
-                if !genres.isEmpty {
-                    refResults = (try? await IGDBService.shared.fetchRecommendations(forGenres: genres, limit: 8)) ?? []
-                }
-            }
-
-            // Filtrera bort biblioteksspel och redan tillagda
-            refResults.removeAll { game in
-                libraryIDs.contains(game.id) || libraryTitles.contains(game.name.lowercased()) || seenIDs.contains(game.id)
-            }
-
-            let shortTitle = refGame.title.components(separatedBy: ":").first?.trimmingCharacters(in: .whitespaces) ?? refGame.title
-            let badgeText = "\(ref.badgePrefix): \(shortTitle)"
-
-            for g in refResults {
-                seenIDs.insert(g.id)
-                allCurated.append(CuratedRecommendation(game: g, matchedReason: badgeText))
-            }
-        }
-
-        // Fallback om för få hittades - prioritera profilens favoritgenrer först!
-        if allCurated.count < 6 {
-            let profileGenres = Array(profile.favoriteGenres)
-            let fallbackGenres = !profileGenres.isEmpty ? profileGenres : (userTopGenres.isEmpty ? ["Action", "Role-playing (RPG)", "Adventure"] : userTopGenres)
-            if let fallback = try? await IGDBService.shared.fetchRecommendations(forGenres: fallbackGenres, limit: 10) {
-                for g in fallback where !libraryIDs.contains(g.id) && !seenIDs.contains(g.id) {
-                    seenIDs.insert(g.id)
-                    allCurated.append(CuratedRecommendation(game: g, matchedReason: "Toppval i din smak"))
-                }
-            }
-        }
-
-        await MainActor.run {
-            self.curatedRecommendations = Array(allCurated.prefix(16))
-            self.isLoadingRecommended = false
-        }
+    private func loadRecommendations(force: Bool = false) async {
+        await forYouEngine.loadHomeCuratedRecommendations(
+            games: store.games,
+            profile: profile,
+            forceReload: force
+        )
     }
 
-    private func loadPopular() async {
+    private func loadPopular(force: Bool = false) async {
+        if !force && !popularGames.isEmpty { return }
         isLoadingPopular = true
         do {
             let results = try await IGDBService.shared.fetchTrendingGames(platformIDs: [])
@@ -744,7 +666,8 @@ struct LiveDiscoverySection: View {
         }
     }
 
-    private func loadUpcoming() async {
+    private func loadUpcoming(force: Bool = false) async {
+        if !force && !upcomingGames.isEmpty { return }
         isLoadingUpcoming = true
         do {
             let results = try await IGDBService.shared.fetchUpcomingGames(limit: 12)

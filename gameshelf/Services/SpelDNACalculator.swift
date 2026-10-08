@@ -121,7 +121,7 @@ enum SpelDNACalculator {
         let prefersChallenge = playFor.contains("Utmaning") || playFor.contains("Adrenalin & Puls")
         let prefersLore = playFor.contains("Djup Lore & Världsbygge") || playFor.contains("Story")
         let prefersCoop = playFor.contains("Samarbete & Gemenskap (Co-op)") || playFor.contains("Samarbete")
-        let prefersCompletionism = playFor.contains("100% Completionism (Trophies)")
+        let prefersCompletionism = playFor.contains("100% Completionism (Trophies)") || playFor.contains("100% Completionism") || playFor.contains("Trophy Hunter")
 
         // 2. Regeluppslag mot Huvudarketyp
         var primaryArchetype: SpelDNAProfile
@@ -153,8 +153,8 @@ enum SpelDNACalculator {
                 supportingStats: [stat1, stat2]
             )
         }
-        // 3. Completionist Prime (extremt hög completion rate)
-        else if (completionRate >= 0.75 && totalOwned >= 7) || (prefersCompletionism && completionRate >= 0.65) {
+        // 3. Completionist Prime (kräver nu uttalad trofé/100%-preferens, inte bara att man spelat klart vanliga spel)
+        else if prefersCompletionism && completionRate >= 0.60 && totalOwned >= 6 {
             let stat1 = "\(min(99, Int(completionRate * 100)))% genomfört"
             let stat2 = "Troféjägare"
             primaryArchetype = SpelDNAProfile(

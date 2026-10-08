@@ -27,6 +27,7 @@ struct ProfileView: View {
     @State private var showingAccountSyncSheet = false
     @State private var showingAvatarPicker = false
     @State private var showingWrappedSheet = false
+    @State private var showingPreferencesSheet = false
     @State private var wrappedSelectedYear: Int? = nil
     @State private var isEditingIdentity = false
     @State private var tempUsername = ""
@@ -212,6 +213,15 @@ struct ProfileView: View {
             .sheet(isPresented: $isEditingIdentity) {
                 editIdentitySheet
             }
+            .sheet(isPresented: $showingPreferencesSheet) {
+                ProfilePreferencesSheet(
+                    availablePlatforms: availablePlatforms,
+                    genreOptions: genreOptions,
+                    playForOptions: playForOptions,
+                    playstyleOptions: playstyleOptions
+                )
+                .environmentObject(profile)
+            }
         }
     }
 
@@ -219,29 +229,25 @@ struct ProfileView: View {
     private var profileScrollView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                // 1. Identitet
-                identitySection
+                // 1. Gamer Card (Avatar, Namn, Bio, Spel-DNA badge & Redigera)
+                gamerCardSection
 
-                // 🏆 Mina Game of the Year (Hall of Fame)
-                gotyHallOfFameSection
-
-                // 2. Spel-DNA Hero-sektion (10 arketyper)
+                // 2. Spel-DNA Hero-sektion med insiktsrutor
                 SpelDNACard(profile: computedSpelDNA) {
-                    // CTA till bibliotek
                     dismiss()
                 }
 
-                // 3. Min setup
-                setupSection
-
-                // 4. Mina spelpreferenser
-                preferencesSection
-
-                // 5. Mina favoritspel
+                // 3. Mina favoritspel (Hylla)
                 FavoriteGamesSection()
+
+                // 4. GOTY Hall of Fame
+                gotyHallOfFameSection
+
+                // 5. Min Setup & Spelpreferenser (Kompakt sammanfattning med Redigera-knapp)
+                preferencesSummarySection
             }
             .padding(.horizontal, 20)
-            .padding(.top, 10)
+            .padding(.top, 12)
             .padding(.bottom, 75)
         }
         .refreshable {
@@ -253,100 +259,163 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - 1. Identitet
-    private var identitySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 14) {
-                // Avatar (klickbar för att välja avatar eller foto)
+    // MARK: - 1. Gamer Card (Personlig presentation i toppen)
+    private var gamerCardSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
+                // Avatar (klickbar för att byta foto/avatar)
                 Button {
                     showingAvatarPicker = true
                 } label: {
                     ZStack(alignment: .bottomTrailing) {
-                        UserAvatarView(size: 58)
-                            .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
+                        UserAvatarView(size: 64)
+                            .shadow(color: .black.opacity(0.35), radius: 5, y: 2)
 
                         Image(systemName: "camera.fill")
                             .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(.white)
-                            .padding(4)
+                            .padding(4.5)
                             .background(Color.red, in: Circle())
                             .offset(x: 2, y: 2)
                     }
                 }
                 .buttonStyle(.plain)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(profile.username.isEmpty ? "Spelare" : profile.username)
-                            .font(.system(size: 20, weight: .bold))
+                            .font(.system(size: 22, weight: .bold))
                             .foregroundStyle(.primary)
 
-                        Button {
-                            tempUsername = profile.username
-                            tempAgeString = "\(profile.age)"
-                            tempGamerBio = profile.gamerBio
-                            isEditingIdentity = true
-                        } label: {
-                            Image(systemName: "pencil.circle.fill")
-                                .font(.system(size: 15))
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
+                        Text("\(profile.age) år")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.secondary)
                     }
-
-                    Text("\(profile.age) år")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.secondary)
 
                     if !profile.gamerBio.isEmpty {
                         Text("\"\(profile.gamerBio)\"")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 12.5, weight: .medium))
                             .italic()
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
-                            .padding(.top, 1)
                     }
 
-                    // Snabbknappar för Byt profil och Koppla enheter
-                    HStack(spacing: 8) {
-                        Button {
-                            showingProfileSwitcher = true
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "person.2.fill")
-                                    .font(.system(size: 10))
-                                Text("Byt profil")
-                                    .font(.caption2.bold())
-                            }
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 5)
-                            .background(Color(.tertiarySystemGroupedBackground))
-                            .clipShape(Capsule())
+                    // Spel-DNA märke (om beräknat)
+                    if let dna = computedSpelDNA {
+                        HStack(spacing: 5) {
+                            Text(dna.icon)
+                                .font(.system(size: 11))
+                            Text(dna.title)
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(dna.accentColor)
                         }
-                        .buttonStyle(.plain)
-
-                        Button {
-                            showingAccountSyncSheet = true
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "icloud.and.arrow.up")
-                                    .font(.system(size: 10))
-                                Text("Konto & Synk")
-                                    .font(.caption2.bold())
-                            }
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 5)
-                            .background(Color.ds.brandRed.opacity(0.15))
-                            .foregroundStyle(Color.ds.brandRed)
-                            .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(dna.accentColor.opacity(0.12), in: Capsule())
+                        .overlay(Capsule().stroke(dna.accentColor.opacity(0.35), lineWidth: 0.8))
+                        .padding(.top, 2)
                     }
-                    .padding(.top, 3)
                 }
 
                 Spacer()
             }
+
+            // Snabbåtgärder under profilen (Redigera profil, Byt profil, Konto)
+            HStack(spacing: 8) {
+                Button {
+                    tempUsername = profile.username
+                    tempAgeString = "\(profile.age)"
+                    tempGamerBio = profile.gamerBio
+                    isEditingIdentity = true
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 11, weight: .bold))
+                        Text("Redigera profil")
+                            .font(.system(size: 11.5, weight: .bold))
+                    }
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 6)
+                    .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+                    .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.8))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    showingProfileSwitcher = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "person.2.fill")
+                            .font(.system(size: 10))
+                        Text("Byt profil")
+                            .font(.system(size: 11.5, weight: .semibold))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+                    .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.8))
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Button {
+                    showingAccountSyncSheet = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "icloud.and.arrow.up")
+                            .font(.system(size: 10))
+                        Text("Synk")
+                            .font(.system(size: 11.5, weight: .bold))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.ds.brandRed.opacity(0.15))
+                    .foregroundStyle(Color.ds.brandRed)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Humör-indikator ("Just nu sugen på")
+            Menu {
+                ForEach(playingMoodOptions, id: \.self) { mood in
+                    Button {
+                        withAnimation {
+                            profile.playingMood = mood
+                        }
+                    } label: {
+                        HStack {
+                            Text(mood)
+                            if profile.playingMood == mood {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.red)
+                    Text("Just nu sugen på:")
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Text(profile.playingMood.isEmpty ? "Välj humör..." : profile.playingMood)
+                        .font(.system(size: 11.5, weight: .bold))
+                        .foregroundStyle(.primary)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+                .overlay(
+                    Capsule().stroke(Color.white.opacity(0.08), lineWidth: 0.8)
+                )
+            }
+            .buttonStyle(.plain)
 
             // 🏆 GOTY & Spelåret Wrapped Banner (dyker upp i början av december varje år)
             if ProfileStore.isGotySeason {
@@ -404,49 +473,16 @@ struct ProfileView: View {
                 }
                 .buttonStyle(.plain)
             }
-
-            // Humör-indikator
-            Menu {
-                ForEach(playingMoodOptions, id: \.self) { mood in
-                    Button {
-                        withAnimation {
-                            profile.playingMood = mood
-                        }
-                    } label: {
-                        HStack {
-                            Text(mood)
-                            if profile.playingMood == mood {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.red)
-                    Text("Just nu sugen på:")
-                        .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    Text(profile.playingMood)
-                        .font(.system(size: 11.5, weight: .bold))
-                        .foregroundStyle(.primary)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color(.secondarySystemGroupedBackground), in: Capsule())
-                .overlay(
-                    Capsule().stroke(Color.white.opacity(0.08), lineWidth: 0.8)
-                )
-            }
-            .buttonStyle(.plain)
         }
-        .padding(.vertical, 4)
+        .padding(16)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.white.opacity(0.06), lineWidth: 1)
+        )
     }
+
+
 
     // MARK: - 🏆 GOTY Hall of Fame Sektion
     private var gotyHallOfFameSection: some View {
@@ -587,172 +623,123 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - 3. Min setup
-    private var setupSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Text("🎮")
-                    .font(.subheadline)
-                Text("Min setup")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
+    // MARK: - 5. Min Setup & Spelpreferenser (Kompakt sammanfattning med Redigera-knapp)
+    private var preferencesSummarySection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                HStack(spacing: 6) {
+                    Text("⚙️")
+                        .font(.subheadline)
+                    Text("Mina preferenser & setup")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                }
+
+                Spacer()
+
+                Button {
+                    showingPreferencesSheet = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.system(size: 11, weight: .bold))
+                        Text("Ändra")
+                            .font(.subheadline.bold())
+                    }
+                    .foregroundStyle(Color.red)
+                }
+                .buttonStyle(.plain)
             }
 
-            Text("Plattformar")
-                .font(.system(size: 12.5, weight: .semibold))
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 12) {
+                // Plattformar / Setup
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("AKTIVA PLATTFORMAR")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .tracking(0.5)
 
-            // Plattformschips
-            FlowLayout(spacing: 8) {
-                ForEach(availablePlatforms, id: \.self) { plat in
-                    let isSelected = profile.platforms.contains(plat)
-                    Button {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                            profile.toggle(plat)
+                    if profile.platforms.isEmpty {
+                        Text("Inga valda konsoler ännu")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        HStack(spacing: 6) {
+                            ForEach(Array(profile.platforms).sorted(), id: \.self) { plat in
+                                Text(plat)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                    .foregroundStyle(.primary)
+                            }
                         }
-                    } label: {
-                        HStack(spacing: 7) {
-                            if isSelected {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 10, weight: .black))
+                    }
+                }
+
+                Divider()
+                    .padding(.vertical, 2)
+
+                // Favoritgenrer
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("FAVORITGENRER")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .tracking(0.5)
+
+                    if profile.favoriteGenres.isEmpty {
+                        Text("Inga genrer valda ännu")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        HStack(spacing: 6) {
+                            ForEach(Array(profile.favoriteGenres).sorted(), id: \.self) { genre in
+                                Text(genre)
+                                    .font(.system(size: 11.5, weight: .bold))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 4.5)
+                                    .background(Color.red.opacity(0.12), in: Capsule())
                                     .foregroundStyle(Color.red)
                             }
-                            Text(plat)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(isSelected ? Color.primary : .secondary)
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 9)
-                        .background(
-                            isSelected ? Color.red.opacity(0.12) : Color(.secondarySystemGroupedBackground),
-                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(isSelected ? Color.red.opacity(0.45) : Color.white.opacity(0.08), lineWidth: 1.0)
-                        )
                     }
-                    .buttonStyle(.plain)
                 }
-            }
-        }
-    }
 
-    // MARK: - 4. Mina spelpreferenser
-    private var preferencesSection: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 6) {
-                Text("❤️")
-                    .font(.subheadline)
-                Text("Mina spelpreferenser")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-            }
+                // Spelstil & Spelmotiv (om några är valda)
+                if !profile.playstyle.isEmpty || !profile.playFor.isEmpty {
+                    Divider()
+                        .padding(.vertical, 2)
 
-            // Block 1: Min Spelstil
-            VStack(alignment: .leading, spacing: 9) {
-                Text("Min spelstil")
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("SPELSTIL & MOTIV")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .tracking(0.5)
 
-                FlowLayout(spacing: 8) {
-                    ForEach(playstyleOptions, id: \.self) { style in
-                        let isSelected = profile.playstyle.contains(style)
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                profile.togglePlaystyle(style)
-                            }
-                        } label: {
-                            HStack(spacing: 5) {
-                                if isSelected {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 9, weight: .black))
-                                }
+                        HStack(spacing: 6) {
+                            ForEach(Array(profile.playstyle).sorted(), id: \.self) { style in
                                 Text(style)
-                                    .font(.system(size: 12.5, weight: .bold))
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 4)
+                                    .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
+                                    .foregroundStyle(.secondary)
                             }
-                            .padding(.horizontal, 13)
-                            .padding(.vertical, 7)
-                            .background(
-                                isSelected ? Color.red.opacity(0.18) : Color(.secondarySystemGroupedBackground),
-                                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            )
-                            .foregroundStyle(isSelected ? Color.red : .secondary)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .stroke(isSelected ? Color.red.opacity(0.6) : Color.white.opacity(0.08), lineWidth: 1.0)
-                            )
+                            ForEach(Array(profile.playFor).sorted(), id: \.self) { motive in
+                                Text(motive)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 4)
+                                    .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
+                                    .foregroundStyle(.secondary)
+                            }
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
-
-            // Block 2: Favoritgenrer
-            VStack(alignment: .leading, spacing: 9) {
-                Text("Favoritgenrer")
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(.secondary)
-
-                FlowLayout(spacing: 8) {
-                    ForEach(genreOptions, id: \.self) { genre in
-                        let isSelected = profile.favoriteGenres.contains(genre)
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                profile.toggleGenre(genre)
-                            }
-                        } label: {
-                            Text(genre)
-                                .font(.system(size: 12.5, weight: .bold))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(
-                                    isSelected ? Color.red : Color(.secondarySystemGroupedBackground),
-                                    in: Capsule()
-                                )
-                                .foregroundStyle(isSelected ? Color.white : .secondary)
-                                .overlay(
-                                    Capsule()
-                                        .stroke(isSelected ? Color.red : Color.white.opacity(0.08), lineWidth: 1.0)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-
-            // Block 3: Jag spelar helst för
-            VStack(alignment: .leading, spacing: 9) {
-                Text("Jag spelar helst för")
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(.secondary)
-
-                FlowLayout(spacing: 8) {
-                    ForEach(playForOptions, id: \.self) { motive in
-                        let isSelected = profile.playFor.contains(motive)
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                profile.togglePlayFor(motive)
-                            }
-                        } label: {
-                            Text(motive)
-                                .font(.system(size: 12.5, weight: .bold))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(
-                                    isSelected ? Color.red : Color(.secondarySystemGroupedBackground),
-                                    in: Capsule()
-                                )
-                                .foregroundStyle(isSelected ? Color.white : .secondary)
-                                .overlay(
-                                    Capsule()
-                                        .stroke(isSelected ? Color.red : Color.white.opacity(0.08), lineWidth: 1.0)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
     }
 

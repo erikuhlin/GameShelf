@@ -141,7 +141,6 @@ struct LibraryView: View {
     @State private var groupByYear: Bool = true
     @State private var collapsedYears: Set<Int> = []
     @State private var isSearching = false
-    @State private var isPlayingNowCollapsed = false
     @State private var filterOnlyOnSale = false
     @ObservedObject private var priceWatcher = PriceWatcherService.shared
 
@@ -183,10 +182,7 @@ struct LibraryView: View {
         }
     }
 
-    // Aktiva spel som spelas just nu
-    private var playingNowGames: [Game] {
-        store.games.filter { $0.status == .playing }
-    }
+
 
     // Dynamiska plattformar baserade på spelen i den aktuella fliken
     private var availablePlatforms: [LibraryPlatformFilter] {
@@ -939,60 +935,10 @@ struct LibraryView: View {
         }
     }
 
-    // MARK: - Sektion: I ägo (Spelar nu + Poster Grid)
+    // MARK: - Sektion: I ägo (Poster Grid)
     @ViewBuilder
     private var ownedSection: some View {
         VStack(alignment: .leading, spacing: 18) {
-            // Slank "Spelar nu"-strip (visas om filter är "Alla" och man inte söker)
-            if selectedStatusFilter == .all && searchText.isEmpty && !playingNowGames.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 8, height: 8)
-                        Text("Spelar nu")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-                        Text("(\(playingNowGames.count))")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-
-                        Spacer()
-
-                        Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                isPlayingNowCollapsed.toggle()
-                            }
-                        } label: {
-                            Image(systemName: isPlayingNowCollapsed ? "chevron.down" : "chevron.up")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(.secondary)
-                                .padding(5)
-                                .background(Color(.secondarySystemGroupedBackground), in: Circle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.horizontal, 16)
-
-                    if !isPlayingNowCollapsed {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                ForEach(playingNowGames) { game in
-                                    NavigationLink(destination: GameDetailView(game: game)) {
-                                        PlayingNowCard(game: game)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .contextMenu {
-                                        gameContextMenu(for: game)
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                        }
-                    }
-                }
-            }
-
             // Huvudrutnät: Mina spel i ägo
             VStack(alignment: .leading, spacing: 10) {
                 if !ownedGames.isEmpty || isSearching || !searchText.isEmpty {
@@ -1588,116 +1534,7 @@ struct LibraryPosterCard: View {
     }
 }
 
-// MARK: - Slank "Spelar nu"-kort för horisontell strip
-struct PlayingNowCard: View {
-    let game: Game
 
-    private var todoProgress: (completed: Int, total: Int)? {
-        guard !game.todos.isEmpty else { return nil }
-        let done = game.todos.filter(\.isDone).count
-        return (done, game.todos.count)
-    }
-
-    private var progressPercent: Int? {
-        guard let p = todoProgress, p.total > 0 else { return nil }
-        return Int(round(Double(p.completed) / Double(p.total) * 100))
-    }
-
-    var body: some View {
-        HStack(spacing: 10) {
-            CoverView(title: game.title, url: game.coverURL, corner: 8, height: 80)
-                .frame(width: 60)
-                .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 4) {
-                    HStack(spacing: 3) {
-                        Image(systemName: game.isMultiplayerOrOngoing ? "circle.fill" : "play.fill")
-                            .font(.system(size: 7, weight: .bold))
-                        Text(game.isMultiplayerOrOngoing ? "Aktiv" : "Spelar nu")
-                            .font(.system(size: 9, weight: .bold))
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1.5)
-                    .background(Color.green.opacity(0.15))
-                    .foregroundStyle(Color.green)
-                    .clipShape(Capsule())
-
-                    if let platform = game.platforms.first {
-                        Text(platform)
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    if let rating = game.rating, rating > 0 {
-                        HStack(spacing: 2) {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 8))
-                                .foregroundStyle(.yellow)
-                            Text("\(rating)")
-                                .font(.system(size: 10, weight: .bold))
-                        }
-                        .foregroundStyle(.primary)
-                    }
-                }
-
-                Text(game.title)
-                    .font(.subheadline.bold())
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .foregroundStyle(.primary)
-
-                if game.isMultiplayerOrOngoing {
-                    // Multiplayer / Ongoing vy
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Aktiv multiplayer")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-
-                        if let lastPlayed = game.lastPlayedFormatted {
-                            Text(lastPlayed)
-                                .font(.system(size: 9))
-                                .foregroundStyle(.secondary.opacity(0.85))
-                        }
-                    }
-                } else {
-                    // Singleplayer vy: Framsteg
-                    if let progress = todoProgress {
-                        VStack(alignment: .leading, spacing: 2) {
-                            if let pct = progressPercent {
-                                Text("\(pct)% framsteg")
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundStyle(.primary)
-                            }
-
-                            ProgressView(value: Double(progress.completed), total: Double(progress.total))
-                                .tint(.green)
-                                .scaleEffect(x: 1, y: 0.7, anchor: .center)
-                        }
-                    } else {
-                        Text("I din aktiva rotation")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Spacer(minLength: 0)
-            }
-            .padding(.vertical, 2)
-        }
-        .padding(8)
-        .frame(width: 260, height: 94)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.green.opacity(0.3), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.04), radius: 2, y: 1)
-    }
-}
 
 
 // MARK: - Förbättrad Radvy (Kortformat i Lista)

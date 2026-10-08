@@ -85,11 +85,18 @@ struct AddGameView: View {
         matchingLocalGames.filter { !$0.isOwned }
     }
 
+    private var smartSuggestions: [SmartSearchSuggestion] {
+        SmartSearchEngine.generateSuggestions(games: store.games, profile: profile)
+    }
+
     private var smartPresetColumns: [GridItem] {
         if horizontalSizeClass == .regular {
-            return [GridItem(.adaptive(minimum: 200, maximum: 300), spacing: 12)]
+            return [GridItem(.adaptive(minimum: 220, maximum: 320), spacing: 12)]
         } else {
-            return [GridItem(.flexible()), GridItem(.flexible())]
+            return [
+                GridItem(.flexible(), spacing: 10),
+                GridItem(.flexible(), spacing: 10)
+            ]
         }
     }
 
@@ -107,11 +114,9 @@ struct AddGameView: View {
                 // Varning om användaren söker fritext med aktiva filter
                 filterWarningBanner
 
-                // Aktiva filter-chips under sökfältet ELLER snabbval
+                // Aktiva filter-chips under sökfältet om filter är aktivt
                 if filterConfig.isActive {
                     activeFilterChipsBar
-                } else if !isSearchingOrFiltering {
-                    quickDiscoveryChipsBar
                 }
 
                 Group {
@@ -246,90 +251,7 @@ struct AddGameView: View {
         }
     }
 
-    // MARK: - Snabbval för Utforskning
-    private var quickDiscoveryChipsBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                // Dölj ägda
-                Button {
-                    filterConfig.hideOwned = true
-                    Task { await performSearchAsync() }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "eye.slash")
-                        Text("Dölj ägda")
-                    }
-                    .font(.caption2.weight(.semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .foregroundStyle(.primary)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
-                }
 
-                // Toppbetyg 85+
-                Button {
-                    filterConfig.minRating = 85
-                    filterConfig.sortOption = .rating
-                    Task { await performSearchAsync() }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "star.fill")
-                            .foregroundStyle(.yellow)
-                        Text("Toppbetyg 85+")
-                    }
-                    .font(.caption2.weight(.semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .foregroundStyle(.primary)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
-                }
-
-                // 2000-talets Nostalgi
-                Button {
-                    filterConfig.startYear = 2000
-                    filterConfig.endYear = 2009
-                    filterConfig.sortOption = .rating
-                    Task { await performSearchAsync() }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "clock.arrow.circlepath")
-                        Text("2000-talets Nostalgi")
-                    }
-                    .font(.caption2.weight(.semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .foregroundStyle(.primary)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
-                }
-
-                // Korta spel (< 10h)
-                Button {
-                    filterConfig.playtimeFilter = .short
-                    Task { await performSearchAsync() }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "timer")
-                        Text("Korta spel (< 10h)")
-                    }
-                    .font(.caption2.weight(.semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .foregroundStyle(.primary)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
-        }
-    }
 
     // MARK: - Aktiva Filter Chips Bar
     private var activeFilterChipsBar: some View {
@@ -822,38 +744,54 @@ struct AddGameView: View {
                     }
                 }
 
-                // Smarta Sökförslag
+                // Smarta Sökförslag (Dynamiska & Personliga)
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack {
+                    HStack(spacing: 6) {
                         Image(systemName: "sparkles")
                             .foregroundStyle(.yellow)
-                        Text("Smarta sökförslag")
+                        Text(profile.username.isEmpty ? "Smarta sökförslag" : "Förslag för \(profile.username)")
                             .font(.headline)
                             .foregroundStyle(.secondary)
                     }
 
                     LazyVGrid(columns: smartPresetColumns, spacing: 10) {
-                        ForEach(SmartSearchPreset.allCases) { preset in
+                        ForEach(smartSuggestions) { suggestion in
                             Button {
-                                filterConfig = preset.config
+                                filterConfig = suggestion.config
                                 Task { await performSearchAsync() }
                             } label: {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(preset.rawValue)
-                                        .font(.subheadline.bold())
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.8)
-                                    Text(preset.description)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(2)
-                                        .multilineTextAlignment(.leading)
+                                HStack(alignment: .top, spacing: 10) {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .fill(suggestion.accentColor.opacity(0.15))
+                                            .frame(width: 38, height: 38)
+                                        Image(systemName: suggestion.iconName)
+                                            .font(.system(size: 16, weight: .bold))
+                                            .foregroundStyle(suggestion.accentColor)
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(suggestion.title)
+                                            .font(.subheadline.bold())
+                                            .foregroundStyle(.primary)
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.85)
+
+                                        Text(suggestion.subtitle)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(2)
+                                            .multilineTextAlignment(.leading)
+                                    }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(12)
+                                .padding(10)
                                 .background(Color(.secondarySystemGroupedBackground))
                                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(Color.primary.opacity(0.06), lineWidth: 0.8)
+                                )
                             }
                             .buttonStyle(.plain)
                         }

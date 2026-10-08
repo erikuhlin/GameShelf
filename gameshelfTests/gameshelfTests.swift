@@ -285,5 +285,32 @@ struct gameshelfTests {
         #expect(p.testIsTitleMatch(gameTitle: "Fallout 4", dealTitle: "Fallout 4 Game of the Year Edition"))
         #expect(p.testIsTitleMatch(gameTitle: "Resident Evil 4", dealTitle: "Resident Evil 4 (2005)"))
     }
+
+    @Test func smartSearchEngineGeneratesPersonalizedSuggestions() {
+        let profile = ProfileStore()
+        profile.favoriteGenres = ["RPG"]
+        profile.platforms = ["PlayStation 5"]
+
+        let rpgGame = Game(
+            title: "Elden Ring",
+            platforms: ["PlayStation 5"],
+            releaseYear: 2022,
+            genres: ["Role-playing (RPG)", "Action"],
+            developers: ["FromSoftware"],
+            status: .completed,
+            rating: 10,
+            coverURL: nil,
+            isOwned: true
+        )
+
+        let suggestions = SmartSearchEngine.generateSuggestions(games: [rpgGame], profile: profile)
+        #expect(!suggestions.isEmpty)
+        #expect(suggestions.contains(where: { $0.id == "trending" }))
+        #expect(suggestions.contains(where: { $0.id.contains("rpg") }))
+        #expect(suggestions.contains(where: { $0.id.contains("platform") }))
+        #expect(suggestions.contains(where: { $0.id == "masterpieces" }))
+        #expect(suggestions.contains(where: { $0.id == "short_gems" }))
+        #expect(suggestions.contains(where: { $0.id == "hidden_gems" }))
+    }
 }
 

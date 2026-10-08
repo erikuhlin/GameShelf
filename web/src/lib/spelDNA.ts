@@ -143,7 +143,10 @@ export function calculateSpelDNA(
   const prefersChallenge = playFor.includes('Utmaning') || playFor.includes('Adrenalin & Puls');
   const prefersLore = playFor.includes('Djup Lore & Världsbygge') || playFor.includes('Story');
   const prefersCoop = playFor.includes('Samarbete & Gemenskap (Co-op)') || playFor.includes('Samarbete');
-  const prefersCompletionism = playFor.includes('100% Completionism (Trophies)');
+  const prefersCompletionism =
+    playFor.includes('100% Completionism (Trophies)') ||
+    playFor.includes('100% Completionism') ||
+    playFor.includes('Trophy Hunter');
 
   const isHorrorOrRPGTop =
     topGenreName.toLowerCase().includes('skräck') ||
@@ -192,11 +195,8 @@ export function calculateSpelDNA(
       supportingStats: [stat1, stat2],
     };
   }
-  // 3. Completionist Prime
-  else if (
-    (completionRate >= 0.75 && totalOwned >= 7) ||
-    (prefersCompletionism && completionRate >= 0.65)
-  ) {
+  // 3. Completionist Prime (kräver nu uttalad trofé/100%-preferens, inte bara att man spelat klart vanliga spel)
+  else if (prefersCompletionism && completionRate >= 0.6 && totalOwned >= 6) {
     primaryProfile = {
       archetypeID: 'completionist_prime',
       title: 'Completionist Prime',

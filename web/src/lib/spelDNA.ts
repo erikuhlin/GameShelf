@@ -139,14 +139,31 @@ export function calculateSpelDNA(
 
   const storyOrHorrorShare = (rpgCount + horrorCount) / totalOwned;
   const prefersCompetition = playFor.includes('Tävling') || playFor.includes('Action');
-  const prefersCozy = playFor.includes('Avkoppling') || playFor.includes('Kreativitet');
-  const prefersChallenge = playFor.includes('Utmaning') || playFor.includes('Adrenalin & Puls');
-  const prefersLore = playFor.includes('Djup Lore & Världsbygge') || playFor.includes('Story');
-  const prefersCoop = playFor.includes('Samarbete & Gemenskap (Co-op)') || playFor.includes('Samarbete');
+  const prefersCozy =
+    playFor.includes('Avkoppling') ||
+    playFor.includes('Avkoppling & Lugn') ||
+    playFor.includes('Kreativitet') ||
+    playFor.includes('Kreativitet & Byggande');
+  const prefersChallenge =
+    playFor.includes('Utmaning') ||
+    playFor.includes('Utmaning & Bemästring') ||
+    playFor.includes('Adrenalin & Puls') ||
+    playFor.includes('Mästra svåra bossar');
+  const prefersLore =
+    playFor.includes('Djup Lore & Världsbygge') ||
+    playFor.includes('Story') ||
+    playFor.includes('Story & Karaktärer') ||
+    playFor.includes('Immersion & Stämning');
+  const prefersCoop =
+    playFor.includes('Samarbete & Gemenskap (Co-op)') ||
+    playFor.includes('Samarbete') ||
+    playFor.includes('Samarbete & Gemenskap');
   const prefersCompletionism =
     playFor.includes('100% Completionism (Trophies)') ||
     playFor.includes('100% Completionism') ||
-    playFor.includes('Trophy Hunter');
+    playFor.includes('Trophy Hunter') ||
+    playFor.includes('Completionist (100%)');
+
 
   const isHorrorOrRPGTop =
     topGenreName.toLowerCase().includes('skräck') ||

@@ -70,6 +70,16 @@ struct PlatformMatcher {
             if igdb.contains("playstation 5") || igdb == "ps5" { return true }
         }
 
+        // PlayStation 3 / PS3
+        if (user.contains("playstation 3") || user.contains("ps3")) {
+            if igdb.contains("playstation 3") || igdb == "ps3" { return true }
+        }
+
+        // PlayStation 2 / PS2
+        if (user.contains("playstation 2") || user.contains("ps2")) {
+            if igdb.contains("playstation 2") || igdb == "ps2" { return true }
+        }
+
         // PlayStation 4 / PS4
         if (user.contains("playstation 4") || user.contains("ps4")) {
             if igdb.contains("playstation 4") || igdb == "ps4" { return true }
@@ -78,6 +88,18 @@ struct PlatformMatcher {
         // Nintendo Switch
         if user.contains("switch") {
             if igdb.contains("switch") { return true }
+        }
+
+        // Nintendo 3DS / DS
+        if user.contains("3ds") {
+            if igdb.contains("3ds") { return true }
+        } else if user.contains("ds") {
+            if igdb.contains("nintendo ds") || igdb == "ds" { return true }
+        }
+
+        // Game Boy / GBA
+        if user.contains("game boy") || user.contains("gba") {
+            if igdb.contains("game boy") || igdb.contains("gba") { return true }
         }
 
         // Xbox Series X|S
@@ -90,16 +112,26 @@ struct PlatformMatcher {
             if igdb.contains("xbox one") { return true }
         }
 
-        // PC / Steam Deck / Windows
-        if user == "pc" || user.contains("steam") || user.contains("windows") {
+        // Xbox 360
+        if user.contains("xbox 360") {
+            if igdb.contains("xbox 360") { return true }
+        }
+
+        // PC / Steam Deck / Windows / Handheld PC
+        if user == "pc" || user.contains("steam") || user.contains("windows") || user.contains("handheld pc") {
             if igdb.contains("pc") || igdb.contains("windows") || igdb.contains("steam") { return true }
+        }
+
+        // VR
+        if user.contains("vr") || user.contains("quest") {
+            if igdb.contains("vr") || igdb.contains("oculus") || igdb.contains("quest") { return true }
         }
 
         // Mac / iOS
         if user.contains("mac") {
             if igdb.contains("mac") { return true }
         }
-        if user.contains("ios") || user.contains("mobile") {
+        if user.contains("ios") || user.contains("mobile") || user.contains("ipad") {
             if igdb.contains("ios") || igdb.contains("iphone") || igdb.contains("ipad") || igdb.contains("android") { return true }
         }
 
@@ -126,6 +158,14 @@ struct PlatformMatcher {
             }
         }
 
+        if user.contains("retro") {
+            if igdb.contains("nes") || igdb.contains("snes") || igdb.contains("genesis") ||
+               igdb.contains("mega drive") || igdb.contains("arcade") || igdb.contains("atari") ||
+               igdb.contains("commodore") || igdb.contains("amiga") {
+                return true
+            }
+        }
+
         return false
     }
 
@@ -134,6 +174,7 @@ struct PlatformMatcher {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = trimmed.lowercased()
 
+        if lower.contains("steam deck") { return "Steam Deck" }
         if lower.contains("windows") || lower == "pc (microsoft windows)" { return "PC" }
         if lower.contains("playstation 5") || lower == "ps5" { return "PS5" }
         if lower.contains("playstation 4") || lower == "ps4" { return "PS4" }
@@ -145,6 +186,9 @@ struct PlatformMatcher {
         if lower.contains("xbox 360") { return "Xbox 360" }
         if lower == "xbox" { return "Xbox" }
         if lower.contains("switch") { return "Switch" }
+        if lower.contains("3ds") { return "3DS" }
+        if lower.contains("game boy") || lower.contains("gba") { return "GBA" }
+        if lower.contains("vr") || lower.contains("quest") { return "VR" }
         if lower.contains("mac") || lower.contains("macos") { return "Mac" }
         if lower.contains("ios") || lower.contains("iphone") || lower.contains("ipad") { return "iOS" }
         if lower.contains("android") { return "Android" }

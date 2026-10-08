@@ -38,21 +38,31 @@ struct ProfileView: View {
     // Utökade plattformar för "Min setup"
     private let availablePlatforms = [
         "PlayStation 5",
-        "Xbox Series X",
-        "PC",
-        "Nintendo Switch",
-        "Steam Deck",
         "PlayStation 4",
+        "PlayStation 3",
+        "PlayStation 2",
+        "Xbox Series X|S",
         "Xbox One",
-        "Retro / Övrigt"
+        "Xbox 360",
+        "Nintendo Switch",
+        "Nintendo 3DS / DS",
+        "Game Boy / GBA",
+        "PC / Windows",
+        "Steam Deck / Handheld PC",
+        "Mac",
+        "Mobil / iPad",
+        "VR (Quest / PS VR2)",
+        "Retro / Emulering"
     ]
 
     // Utökade standardgenrer för "Mina spelpreferenser"
     private let genreOptions = [
         "RPG",
         "Action",
+        "Action-RPG",
         "Soulslike",
         "Skräck",
+        "Survival Horror",
         "FPS",
         "Äventyr",
         "Öppen värld",
@@ -68,24 +78,30 @@ struct ProfileView: View {
         "Racing",
         "Fighting",
         "Indie",
-        "Cozy",
+        "Cozy & Life Sim",
         "Hack & Slash",
         "Smygspel",
         "Berättelsedrivet",
+        "Immersive Sim",
+        "Deckbuilder",
+        "Cyberpunk / Sci-Fi",
         "MMO"
     ]
 
     // Utökade spelmotiv
     private let playForOptions = [
-        "Story",
+        "Story & Karaktärer",
         "Utforskning",
-        "Action",
-        "Tävling",
-        "Avkoppling",
-        "Utmaning",
-        "Kreativitet",
+        "Action & Tempo",
+        "Tävling & Ranking",
+        "Avkoppling & Lugn",
+        "Utmaning & Bemästring",
+        "Kreativitet & Byggande",
         "Samarbete & Gemenskap",
         "Djup Lore & Världsbygge",
+        "Immersion & Stämning",
+        "Mästra svåra bossar",
+        "Filmatisk upplevelse",
         "Nostalgi & Retro",
         "100% Completionism",
         "Snabba sessioner",
@@ -96,20 +112,27 @@ struct ProfileView: View {
     // Min Spelstil
     private let playstyleOptions = [
         "Singleplayer",
+        "Story-fokuserad",
         "Co-op / Samarbete",
         "PvP / Multiplayer",
-        "Trophy Hunter",
-        "Casual / Avslappnad"
+        "Trophy / Achievement Hunter",
+        "Completionist (100%)",
+        "Hardcore / Utmanare",
+        "Casual & Cozy",
+        "Utforskare & Samlare",
+        "Taktiker & Strateg",
+        "Speedrunner"
     ]
 
     // Aktuellt spelhumör
     private let playingMoodOptions = [
-        "Utforska nya världar",
-        "Mysigt & Avkopplande",
-        "Brutal bossutmaning",
-        "Djup story & lore",
-        "Snabba matcher & action",
-        "Klurig taktik & hjärngympa"
+        "🧭 Utforska nya världar",
+        "☕ Mysigt & Avkopplande",
+        "⚔️ Brutal bossutmaning",
+        "📖 Djup story & lore",
+        "⚡ Snabba matcher & action",
+        "🧠 Klurig taktik & hjärngympa",
+        "👾 Nostalgisk tidsresa"
     ]
 
     // Dynamiskt beräknat Spel-DNA
@@ -218,7 +241,8 @@ struct ProfileView: View {
                     availablePlatforms: availablePlatforms,
                     genreOptions: genreOptions,
                     playForOptions: playForOptions,
-                    playstyleOptions: playstyleOptions
+                    playstyleOptions: playstyleOptions,
+                    playingMoodOptions: playingMoodOptions
                 )
                 .environmentObject(profile)
             }
@@ -623,14 +647,27 @@ struct ProfileView: View {
         }
     }
 
+    private func platformIcon(for name: String) -> String {
+        let lower = name.lowercased()
+        if lower.contains("pc") || lower.contains("windows") { return "desktopcomputer" }
+        if lower.contains("mac") { return "laptopcomputer" }
+        if lower.contains("steam deck") || lower.contains("handheld") { return "gamecontroller" }
+        if lower.contains("switch") || lower.contains("3ds") || lower.contains("ds") || lower.contains("game boy") { return "arcade.stick.console" }
+        if lower.contains("mobil") || lower.contains("ipad") || lower.contains("ios") { return "iphone.gen3" }
+        if lower.contains("vr") || lower.contains("quest") { return "visionpro" }
+        if lower.contains("playstation") || lower.contains("ps") || lower.contains("xbox") { return "gamecontroller.fill" }
+        if lower.contains("retro") { return "arcade.stick" }
+        return "gamecontroller"
+    }
+
     // MARK: - 5. Min Setup & Spelpreferenser (Kompakt sammanfattning med Redigera-knapp)
     private var preferencesSummarySection: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 HStack(spacing: 6) {
-                    Text("⚙️")
+                    Text("🎮")
                         .font(.subheadline)
-                    Text("Mina preferenser & setup")
+                    Text("Min setup & preferenser")
                         .font(.headline)
                         .foregroundStyle(.primary)
                 }
@@ -640,98 +677,166 @@ struct ProfileView: View {
                 Button {
                     showingPreferencesSheet = true
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 5) {
                         Image(systemName: "slider.horizontal.3")
                             .font(.system(size: 11, weight: .bold))
                         Text("Ändra")
                             .font(.subheadline.bold())
                     }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.red.opacity(0.12), in: Capsule())
                     .foregroundStyle(Color.red)
                 }
                 .buttonStyle(.plain)
             }
 
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 14) {
+                // Aktuellt Spelhumör / Vibe (om satt)
+                if !profile.playingMood.isEmpty {
+                    HStack(spacing: 8) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Color.teal)
+                        Text("Aktuell vibe:")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.secondary)
+                        Text(profile.playingMood)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.teal.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.teal.opacity(0.25), lineWidth: 1))
+                }
+
                 // Plattformar / Setup
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("AKTIVA PLATTFORMAR")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.secondary)
-                        .tracking(0.5)
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "gamecontroller")
+                            .font(.system(size: 10, weight: .bold))
+                        Text("AKTIVA PLATTFORMAR")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundStyle(.secondary)
+                    .tracking(0.5)
 
                     if profile.platforms.isEmpty {
                         Text("Inga valda konsoler ännu")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
-                        HStack(spacing: 6) {
+                        FlowLayout(spacing: 7) {
                             ForEach(Array(profile.platforms).sorted(), id: \.self) { plat in
-                                Text(plat)
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                                    .foregroundStyle(.primary)
+                                HStack(spacing: 5) {
+                                    Image(systemName: platformIcon(for: plat))
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(Color.blue)
+                                    Text(plat)
+                                        .font(.system(size: 11.5, weight: .semibold))
+                                        .foregroundStyle(.primary)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5.5)
+                                .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                             }
                         }
                     }
                 }
 
                 Divider()
-                    .padding(.vertical, 2)
+                    .padding(.vertical, 1)
 
                 // Favoritgenrer
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("FAVORITGENRER")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.secondary)
-                        .tracking(0.5)
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 9, weight: .bold))
+                        Text("FAVORITGENRER")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundStyle(.secondary)
+                    .tracking(0.5)
 
                     if profile.favoriteGenres.isEmpty {
                         Text("Inga genrer valda ännu")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
-                        HStack(spacing: 6) {
+                        FlowLayout(spacing: 7) {
                             ForEach(Array(profile.favoriteGenres).sorted(), id: \.self) { genre in
                                 Text(genre)
                                     .font(.system(size: 11.5, weight: .bold))
                                     .padding(.horizontal, 10)
-                                    .padding(.vertical, 4.5)
+                                    .padding(.vertical, 5)
                                     .background(Color.red.opacity(0.12), in: Capsule())
                                     .foregroundStyle(Color.red)
+                                    .overlay(Capsule().stroke(Color.red.opacity(0.3), lineWidth: 0.8))
                             }
                         }
                     }
                 }
 
-                // Spelstil & Spelmotiv (om några är valda)
-                if !profile.playstyle.isEmpty || !profile.playFor.isEmpty {
+                // Spelstil (om valda)
+                if !profile.playstyle.isEmpty {
                     Divider()
-                        .padding(.vertical, 2)
+                        .padding(.vertical, 1)
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("SPELSTIL & MOTIV")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.secondary)
-                            .tracking(0.5)
+                    VStack(alignment: .leading, spacing: 7) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 9, weight: .bold))
+                            Text("SPELSTIL")
+                                .font(.system(size: 10, weight: .bold))
+                        }
+                        .foregroundStyle(.secondary)
+                        .tracking(0.5)
 
-                        HStack(spacing: 6) {
+                        FlowLayout(spacing: 7) {
                             ForEach(Array(profile.playstyle).sorted(), id: \.self) { style in
-                                Text(style)
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .padding(.horizontal, 9)
-                                    .padding(.vertical, 4)
-                                    .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
-                                    .foregroundStyle(.secondary)
+                                HStack(spacing: 4) {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 7, weight: .black))
+                                        .foregroundStyle(Color.orange)
+                                    Text(style)
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(Color.orange)
+                                }
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 4.5)
+                                .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.orange.opacity(0.3), lineWidth: 0.8))
                             }
+                        }
+                    }
+                }
+
+                // Spelmotiv (om valda)
+                if !profile.playFor.isEmpty {
+                    Divider()
+                        .padding(.vertical, 1)
+
+                    VStack(alignment: .leading, spacing: 7) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "sparkle")
+                                .font(.system(size: 9, weight: .bold))
+                            Text("MOTIVATION & DRIVKRAFTER")
+                                .font(.system(size: 10, weight: .bold))
+                        }
+                        .foregroundStyle(.secondary)
+                        .tracking(0.5)
+
+                        FlowLayout(spacing: 7) {
                             ForEach(Array(profile.playFor).sorted(), id: \.self) { motive in
                                 Text(motive)
                                     .font(.system(size: 11, weight: .semibold))
                                     .padding(.horizontal, 9)
-                                    .padding(.vertical, 4)
-                                    .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
-                                    .foregroundStyle(.secondary)
+                                    .padding(.vertical, 4.5)
+                                    .background(Color.purple.opacity(0.12), in: Capsule())
+                                    .foregroundStyle(Color.purple)
+                                    .overlay(Capsule().stroke(Color.purple.opacity(0.3), lineWidth: 0.8))
                             }
                         }
                     }

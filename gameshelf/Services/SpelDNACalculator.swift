@@ -117,11 +117,11 @@ enum SpelDNACalculator {
 
         let storyOrHorrorShare = Double(rpgCount + horrorCount) / Double(totalOwned)
         let prefersCompetition = playFor.contains("Tävling") || playFor.contains("Action")
-        let prefersCozy = playFor.contains("Avkoppling") || playFor.contains("Kreativitet")
-        let prefersChallenge = playFor.contains("Utmaning") || playFor.contains("Adrenalin & Puls")
-        let prefersLore = playFor.contains("Djup Lore & Världsbygge") || playFor.contains("Story")
-        let prefersCoop = playFor.contains("Samarbete & Gemenskap (Co-op)") || playFor.contains("Samarbete")
-        let prefersCompletionism = playFor.contains("100% Completionism (Trophies)") || playFor.contains("100% Completionism") || playFor.contains("Trophy Hunter")
+        let prefersCozy = playFor.contains("Avkoppling") || playFor.contains("Avkoppling & Lugn") || playFor.contains("Kreativitet") || playFor.contains("Kreativitet & Byggande")
+        let prefersChallenge = playFor.contains("Utmaning") || playFor.contains("Utmaning & Bemästring") || playFor.contains("Adrenalin & Puls") || playFor.contains("Mästra svåra bossar")
+        let prefersLore = playFor.contains("Djup Lore & Världsbygge") || playFor.contains("Story") || playFor.contains("Story & Karaktärer") || playFor.contains("Immersion & Stämning")
+        let prefersCoop = playFor.contains("Samarbete & Gemenskap (Co-op)") || playFor.contains("Samarbete") || playFor.contains("Samarbete & Gemenskap")
+        let prefersCompletionism = playFor.contains("100% Completionism (Trophies)") || playFor.contains("100% Completionism") || playFor.contains("Trophy Hunter") || playFor.contains("Completionist (100%)")
 
         // 2. Regeluppslag mot Huvudarketyp
         var primaryArchetype: SpelDNAProfile

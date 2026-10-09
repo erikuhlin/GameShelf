@@ -20,7 +20,11 @@ struct ForYouHubView: View {
     @EnvironmentObject var profile: ProfileStore
     @StateObject private var engine = ForYouEngine.shared
 
-    @State private var selectedTab: ForYouTab = .recommendations
+    @State private var selectedTab: ForYouTab
+
+    init(initialTab: ForYouTab = .recommendations) {
+        _selectedTab = State(initialValue: initialTab)
+    }
 
     // Spelkompassen State
     @State private var selectedMood: CompassMood = .all

@@ -18,9 +18,65 @@ struct GameDiaryView: View {
         var id: String { rawValue }
     }
 
+    enum MemoryEra: String, CaseIterable, Identifiable {
+        case all = "Alla"
+        case retro = "90-tal & Retro"
+        case y2k = "2000-talet"
+        case gen7 = "PS3/360-eran"
+        case modern = "Moderna"
+
+        var id: String { rawValue }
+
+        var icon: String {
+            switch self {
+            case .all: return "sparkles"
+            case .retro: return "arcade.stick"
+            case .y2k: return "opticaldisc"
+            case .gen7: return "gamecontroller"
+            case .modern: return "bolt.fill"
+            }
+        }
+
+        func matches(year: Int) -> Bool {
+            switch self {
+            case .all:
+                return true
+            case .retro:
+                return year > 0 && year <= 1999
+            case .y2k:
+                return year >= 2000 && year <= 2009
+            case .gen7:
+                return year >= 2010 && year <= 2018
+            case .modern:
+                return year >= 2019
+            }
+        }
+    }
+
+    enum MemorySort: String, CaseIterable, Identifiable {
+        case releaseDesc = "Nyast år"
+        case releaseAsc = "Äldst år"
+        case ratingDesc = "Högst betyg"
+        case titleAsc = "Titel (A–Ö)"
+
+        var id: String { rawValue }
+
+        var icon: String {
+            switch self {
+            case .releaseDesc: return "arrow.down"
+            case .releaseAsc: return "arrow.up"
+            case .ratingDesc: return "star.fill"
+            case .titleAsc: return "textformat"
+            }
+        }
+    }
+
     @State private var selectedMode: DiaryMode = .active
     @State private var selectedYear: Int? = Calendar.current.component(.year, from: Date())
     @State private var selectedGameForDetail: Game? = nil
+    @State private var selectedMemoryEra: MemoryEra = .all
+    @State private var selectedMemorySort: MemorySort = .releaseDesc
+    @State private var spotlightGameID: UUID? = nil
 
     private var currentYear: Int {
         Calendar.current.component(.year, from: Date())
@@ -43,6 +99,70 @@ struct GameDiaryView: View {
                 }
                 return $0.title.localizedCompare($1.title) == .orderedAscending
             }
+    }
+
+    private var filteredAndSortedMemoryGames: [Game] {
+        let filtered = memoryGames.filter { game in
+            selectedMemoryEra.matches(year: game.releaseYear)
+        }
+
+        switch selectedMemorySort {
+        case .releaseDesc:
+            return filtered.sorted {
+                if $0.releaseYear != $1.releaseYear {
+                    return $0.releaseYear > $1.releaseYear
+                }
+                return $0.title.localizedCompare($1.title) == .orderedAscending
+            }
+        case .releaseAsc:
+            return filtered.sorted {
+                if $0.releaseYear != $1.releaseYear {
+                    return $0.releaseYear < $1.releaseYear
+                }
+                return $0.title.localizedCompare($1.title) == .orderedAscending
+            }
+        case .ratingDesc:
+            return filtered.sorted {
+                let r0 = $0.rating ?? 0
+                let r1 = $1.rating ?? 0
+                if r0 != r1 { return r0 > r1 }
+                return $0.title.localizedCompare($1.title) == .orderedAscending
+            }
+        case .titleAsc:
+            return filtered.sorted {
+                $0.title.localizedCompare($1.title) == .orderedAscending
+            }
+        }
+    }
+
+    private func memoryCount(for era: MemoryEra) -> Int {
+        if era == .all { return memoryGames.count }
+        return memoryGames.filter { era.matches(year: $0.releaseYear) }.count
+    }
+
+    private var spotlightGame: Game? {
+        guard !memoryGames.isEmpty else { return nil }
+        if let id = spotlightGameID, let found = memoryGames.first(where: { $0.id == id }) {
+            return found
+        }
+        let topRated = memoryGames.filter { ($0.rating ?? 0) >= 8 }
+        return topRated.first ?? memoryGames.first
+    }
+
+    private func rollNextSpotlight() {
+        guard memoryGames.count > 1 else { return }
+        let currentID = spotlightGame?.id
+        let candidates = memoryGames.filter { $0.id != currentID }
+        if let chosen = candidates.randomElement() {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                spotlightGameID = chosen.id
+            }
+        }
+    }
+
+    private var oldestMemoryYear: Int? {
+        let validYears = memoryGames.map(\.releaseYear).filter { $0 > 1970 }
+        return validYears.min()
     }
 
     // Years available in active diary
@@ -264,19 +384,56 @@ struct GameDiaryView: View {
 
     // MARK: - Memories / Retro Content
     private var memoriesContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Info Header
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: "sparkles")
-                        .foregroundStyle(.yellow)
-                    Text("Spelminnen & Nostalgi")
-                        .font(.headline)
+        VStack(alignment: .leading, spacing: 18) {
+            // 1. Info & Mini-Stats Header
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Text("⏳")
+                            Text("Spelminnen & Nostalgi")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                        }
+
+                        Text("Spel du klarat tidigare i livet. Här samlas din personliga spelhistoria utan att påverka årets aktiva dagbok.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
                 }
 
-                Text("Spel du spelat och klarat tidigare i livet som du vill ha i samlingen utan att de påverkar årets speldagbok.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                if !memoryGames.isEmpty {
+                    Divider()
+                        .padding(.vertical, 2)
+
+                    HStack(spacing: 12) {
+                        statBadge(
+                            icon: "archivebox.fill",
+                            color: .yellow,
+                            value: "\(memoryGames.count)",
+                            label: "Minnen"
+                        )
+
+                        let avg = calculatedAvgRating(memoryGames)
+                        statBadge(
+                            icon: "star.fill",
+                            color: .yellow,
+                            value: avg > 0 ? String(format: "%.1f", avg) : "—",
+                            label: "Snittbetyg"
+                        )
+
+                        if let oldest = oldestMemoryYear {
+                            statBadge(
+                                icon: "clock.arrow.circlepath",
+                                color: .orange,
+                                value: String(oldest),
+                                label: "Äldsta spel"
+                            )
+                        }
+                    }
+                }
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -289,37 +446,155 @@ struct GameDiaryView: View {
             .padding(.horizontal, 16)
 
             if memoryGames.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "archivebox")
-                        .font(.system(size: 40))
-                        .foregroundStyle(.secondary.opacity(0.6))
-                        .padding(.top, 24)
+                // Tom vy när inga minnen finns
+                VStack(spacing: 14) {
+                    Image(systemName: "sparkles.rectangle.stack")
+                        .font(.system(size: 44))
+                        .foregroundStyle(.yellow.opacity(0.7))
+                        .padding(.top, 20)
 
-                    Text("Inga spelminnen tillagda")
+                    Text("Inga spelminnen tillagda än")
                         .font(.headline)
 
-                    Text("När du söker efter spel och trycker på '+ Genomspelat' läggs de till här som ett fint spelminne!")
+                    Text("När du söker efter spel och markerar dem som klara utan datum läggs de till här som nostalgiska spelminnen.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
+
+                    NavigationLink(destination: ForYouHubView(initialTab: .nostalgia)) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "clock.arrow.circlepath")
+                            Text("Hitta dina klassiker i Nostalgi-radarn")
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                        .background(Color.yellow, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 6)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 30)
             } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("\(memoryGames.count) sparade minnen")
-                        .font(.subheadline.bold())
+                // 2. Throwback Spotlight (Dagens nostalgi-pärla)
+                if let spotlight = spotlightGame {
+                    throwbackSpotlightCard(spotlight)
+                        .padding(.horizontal, 16)
+                }
+
+                // 3. Epok / Era-väljare
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("FILTRERA EFTER EPOK")
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(.secondary)
+                        .tracking(0.5)
                         .padding(.horizontal, 20)
 
-                    VStack(spacing: 10) {
-                        ForEach(memoryGames) { game in
-                            memoryGameRow(game)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(MemoryEra.allCases) { era in
+                                let count = memoryCount(for: era)
+                                let isSelected = selectedMemoryEra == era
+                                Button {
+                                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                        selectedMemoryEra = era
+                                    }
+                                } label: {
+                                    HStack(spacing: 5) {
+                                        Image(systemName: era.icon)
+                                            .font(.system(size: 10, weight: .bold))
+                                        Text("\(era.rawValue) (\(count))")
+                                            .font(.system(size: 12, weight: .semibold))
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 7)
+                                    .background(
+                                        isSelected ? Color.yellow.opacity(0.18) : Color(.secondarySystemGroupedBackground),
+                                        in: Capsule()
+                                    )
+                                    .foregroundStyle(isSelected ? Color.yellow : .secondary)
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(isSelected ? Color.yellow.opacity(0.6) : Color.white.opacity(0.06), lineWidth: 1)
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                }
+
+                // 4. Lista med sortering
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("\(filteredAndSortedMemoryGames.count) spel\(selectedMemoryEra == .all ? "" : " i " + selectedMemoryEra.rawValue)")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        // Sorteringsmeny
+                        Menu {
+                            ForEach(MemorySort.allCases) { sort in
+                                Button {
+                                    withAnimation { selectedMemorySort = sort }
+                                } label: {
+                                    HStack {
+                                        Text(sort.rawValue)
+                                        if selectedMemorySort == sort {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: selectedMemorySort.icon)
+                                    .font(.caption2)
+                                Text(selectedMemorySort.rawValue)
+                                    .font(.caption.bold())
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.system(size: 9))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color(.tertiarySystemFill), in: Capsule())
+                            .foregroundStyle(.yellow)
                         }
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 20)
+
+                    if filteredAndSortedMemoryGames.isEmpty {
+                        VStack(spacing: 8) {
+                            Text("Inga spelminnen i denna epok")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Button("Visa alla minnen") {
+                                withAnimation { selectedMemoryEra = .all }
+                            }
+                            .font(.caption.bold())
+                            .foregroundStyle(.yellow)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 24)
+                    } else {
+                        VStack(spacing: 10) {
+                            ForEach(filteredAndSortedMemoryGames) { game in
+                                memoryGameRow(game)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    }
                 }
+
+                // 5. Nostalgi-radar CTA Banner längst ner
+                nostalgiaRadarBanner
+                    .padding(.horizontal, 16)
+                    .padding(.top, 6)
             }
         }
     }
@@ -422,12 +697,193 @@ struct GameDiaryView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: - Throwback Spotlight & Spelminnen Komponenter
+    private func throwbackSpotlightCard(_ game: Game) -> some View {
+        Button {
+            selectedGameForDetail = game
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    HStack(spacing: 5) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 10, weight: .black))
+                        Text("THROWBACK SPOTLIGHT")
+                            .font(.system(size: 10, weight: .black))
+                            .tracking(0.8)
+                    }
+                    .foregroundStyle(.yellow)
+
+                    Spacer()
+
+                    Button {
+                        rollNextSpotlight()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("🎲")
+                                .font(.system(size: 11))
+                            Text("Slumpa")
+                                .font(.caption2.bold())
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.yellow.opacity(0.15), in: Capsule())
+                        .foregroundStyle(.yellow)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                HStack(alignment: .top, spacing: 14) {
+                    if let url = game.coverURL {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                            default:
+                                Color.gray.opacity(0.3)
+                            }
+                        }
+                        .frame(width: 72, height: 100)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(Color.yellow.opacity(0.3), lineWidth: 1)
+                        )
+                        .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+                    } else {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.yellow.opacity(0.15))
+                            .frame(width: 72, height: 100)
+                            .overlay(
+                                Image(systemName: "sparkles")
+                                    .foregroundStyle(.yellow)
+                            )
+                    }
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(game.title)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+
+                        HStack(spacing: 6) {
+                            if game.releaseYear > 0 {
+                                Text(String(game.releaseYear))
+                                    .font(.caption2.bold())
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color(.tertiarySystemFill), in: Capsule())
+                                    .foregroundStyle(.primary)
+                            }
+
+                            if let plat = game.platforms.first {
+                                HStack(spacing: 3) {
+                                    Image(systemName: platformIcon(for: plat))
+                                        .font(.system(size: 9))
+                                    Text(plat)
+                                        .font(.caption2.weight(.medium))
+                                }
+                                .foregroundStyle(.secondary)
+                            }
+
+                            if let rating = game.rating, rating > 0 {
+                                HStack(spacing: 2) {
+                                    Image(systemName: "star.fill")
+                                        .font(.system(size: 8))
+                                    Text("\(rating)")
+                                        .font(.caption2.bold())
+                                }
+                                .foregroundStyle(.yellow)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(Color.yellow.opacity(0.15), in: Capsule())
+                            }
+                        }
+
+                        if !game.genres.isEmpty {
+                            Text(game.genres.prefix(2).joined(separator: " • "))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+
+                        Text("Ett av dina sparade spelminnen genom tiderna.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .padding(.top, 2)
+                    }
+
+                    Spacer()
+                }
+            }
+            .padding(14)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.yellow.opacity(0.25), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var nostalgiaRadarBanner: some View {
+        NavigationLink(destination: ForYouHubView(initialTab: .nostalgia)) {
+            HStack(spacing: 12) {
+                Image(systemName: "clock.badge.checkmark")
+                    .font(.title2)
+                    .foregroundStyle(.yellow)
+                    .padding(10)
+                    .background(Color.yellow.opacity(0.14), in: Circle())
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Saknar du fler barndomsfavoriter? ⏳")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.primary)
+                    Text("Öppna Nostalgi-radarn för att hitta hyllade klassiker från dina favoritgenrer du kanske glömt att logga.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+            }
+            .padding(14)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.yellow.opacity(0.2), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func platformIcon(for name: String) -> String {
+        let lower = name.lowercased()
+        if lower.contains("pc") || lower.contains("windows") { return "desktopcomputer" }
+        if lower.contains("mac") { return "laptopcomputer" }
+        if lower.contains("steam deck") || lower.contains("handheld") { return "gamecontroller" }
+        if lower.contains("switch") || lower.contains("3ds") || lower.contains("ds") || lower.contains("game boy") { return "arcade.stick.console" }
+        if lower.contains("mobil") || lower.contains("ipad") || lower.contains("ios") { return "iphone.gen3" }
+        if lower.contains("vr") || lower.contains("quest") { return "visionpro" }
+        if lower.contains("playstation") || lower.contains("ps") || lower.contains("xbox") { return "gamecontroller.fill" }
+        if lower.contains("retro") { return "arcade.stick" }
+        return "gamecontroller"
+    }
+
     private func memoryGameRow(_ game: Game) -> some View {
         Button {
             selectedGameForDetail = game
         } label: {
             HStack(spacing: 12) {
-                // Mini cover
+                // Cover
                 if let url = game.coverURL {
                     AsyncImage(url: url) { phase in
                         switch phase {
@@ -439,39 +895,52 @@ struct GameDiaryView: View {
                             Color.gray.opacity(0.3)
                         }
                     }
-                    .frame(width: 44, height: 58)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .frame(width: 52, height: 70)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .shadow(color: Color.black.opacity(0.25), radius: 3, y: 2)
                 } else {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.purple.opacity(0.2))
-                        .frame(width: 44, height: 58)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.yellow.opacity(0.15))
+                        .frame(width: 52, height: 70)
                         .overlay(
                             Image(systemName: "gamecontroller.fill")
                                 .font(.caption)
-                                .foregroundStyle(.purple)
+                                .foregroundStyle(.yellow)
                         )
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(game.title)
-                        .font(.subheadline.bold())
+                        .font(.headline.weight(.semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
 
                     HStack(spacing: 6) {
                         if game.releaseYear > 0 {
-                            Text("\(String(game.releaseYear))")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            Text(String(game.releaseYear))
+                                .font(.caption2.bold())
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color(.tertiarySystemFill), in: Capsule())
+                                .foregroundStyle(.primary)
                         }
+
                         if let plat = game.platforms.first {
-                            Text("•")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            Text(plat)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            HStack(spacing: 3) {
+                                Image(systemName: platformIcon(for: plat))
+                                    .font(.system(size: 9))
+                                Text(plat)
+                                    .font(.caption2.weight(.medium))
+                            }
+                            .foregroundStyle(.secondary)
                         }
+                    }
+
+                    if !game.genres.isEmpty {
+                        Text(game.genres.prefix(2).joined(separator: " • "))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                 }
 
@@ -497,9 +966,9 @@ struct GameDiaryView: View {
             }
             .padding(12)
             .background(Color(.secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(Color.white.opacity(0.06), lineWidth: 0.8)
             )
         }

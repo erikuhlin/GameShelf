@@ -242,14 +242,6 @@ struct NewsFeedView: View {
                                     ArticleRow(item: item)
                                 }
                                 .buttonStyle(.plain)
-                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                    Button {
-                                        openIGDBFrom(title: item.title)
-                                    } label: {
-                                        Label("Hitta i IGDB", systemImage: "magnifyingglass")
-                                    }
-                                    .tint(.red)
-                                }
                                 .contextMenu {
                                     Button {
                                         openIGDBFrom(title: item.title)
@@ -293,6 +285,7 @@ struct NewsFeedView: View {
             .padding(.horizontal, 16)
             .padding(.top, 8)
         }
+        .background(Color.ds.background.ignoresSafeArea())
         .navigationTitle("Nyheter")
         .navigationBarTitleDisplayMode(.inline)
         .task {

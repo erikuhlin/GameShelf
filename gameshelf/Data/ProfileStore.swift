@@ -41,6 +41,35 @@ final class ProfileStore: ObservableObject {
     static let defaultGamerBio = ""
     static let defaultPlaystyle: Set<String> = []
 
+    public static let playingMoodOptions = [
+        "🧭 Utforska nya världar",
+        "☕ Mysigt & Avkopplande",
+        "⚔️ Brutal bossutmaning",
+        "📖 Djup story & lore",
+        "⚡ Snabba matcher & action",
+        "🧠 Klurig taktik & hjärngympa",
+        "👾 Nostalgisk tidsresa"
+    ]
+
+    public static let availablePlatforms = [
+        "PlayStation 5",
+        "PlayStation 4",
+        "PlayStation 3",
+        "PlayStation 2",
+        "Xbox Series X|S",
+        "Xbox One",
+        "Xbox 360",
+        "Nintendo Switch",
+        "Nintendo 3DS / DS",
+        "Game Boy / GBA",
+        "PC / Windows",
+        "Steam Deck / Handheld PC",
+        "Mac",
+        "Mobil / iPad",
+        "VR (Quest / PS VR2)",
+        "Retro / Emulering"
+    ]
+
     /// Avgör om GOTY & Spelåret Wrapped är aktivt (dyker upp i början av december och är aktivt t.o.m. januari)
     public static var isGotySeason: Bool {
         let month = Calendar.current.component(.month, from: Date())

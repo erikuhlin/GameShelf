@@ -31,13 +31,15 @@ struct ForYouHubView: View {
     @State private var selectedEra: CompassEra = .all
     @State private var selectedPlaytime: CompassPlaytime = .all
     @State private var selectedPlatformID: Int? = nil
+    @State private var activeQuickPreset: String? = nil
 
     // Nostalgi Quick-Add Popover State
     @State private var activeNostalgiaGame: NostalgiaGameItem? = nil
     @State private var successToastText: String? = nil
+    @State private var showingMoodPicker = false
 
     private var isCompassActive: Bool {
-        selectedMood != .all || selectedEra != .all || selectedPlaytime != .all || selectedPlatformID != nil
+        selectedMood != .all || selectedEra != .all || selectedPlaytime != .all || selectedPlatformID != nil || activeQuickPreset != nil
     }
 
     var body: some View {
@@ -196,6 +198,7 @@ struct ForYouHubView: View {
                             selectedEra = .all
                             selectedPlaytime = .all
                             selectedPlatformID = nil
+                            activeQuickPreset = nil
                         }
                         Task {
                             if selectedTab == .recommendations {
@@ -249,19 +252,40 @@ struct ForYouHubView: View {
                         )
                     }
 
-                    // Konsol / Plattform
+                    // Konsol / Plattform (med användarens konsoler först)
+                    let userPlatformIDs = Set(engine.fingerprint?.userPlatformIDs ?? [])
+                    let myPlatforms = CompassPlatformOption.allPlatforms.filter { userPlatformIDs.contains($0.id) }
+                    let otherPlatforms = CompassPlatformOption.allPlatforms.filter { !userPlatformIDs.contains($0.id) }
+
                     Menu {
                         Button("Alla konsoler") {
                             selectedPlatformID = nil
                             triggerCompass()
                         }
                         Divider()
-                        ForEach(CompassPlatformOption.allPlatforms) { p in
-                            Button {
-                                selectedPlatformID = p.id
-                                triggerCompass()
-                            } label: {
-                                Label(p.name, systemImage: p.icon)
+
+                        if !myPlatforms.isEmpty {
+                            Section("Dina konsoler") {
+                                ForEach(myPlatforms) { p in
+                                    Button {
+                                        selectedPlatformID = p.id
+                                        triggerCompass()
+                                    } label: {
+                                        Label(p.name, systemImage: p.icon)
+                                    }
+                                }
+                            }
+                            Divider()
+                        }
+
+                        Section(myPlatforms.isEmpty ? "Konsoler" : "Övriga plattformar") {
+                            ForEach(otherPlatforms) { p in
+                                Button {
+                                    selectedPlatformID = p.id
+                                    triggerCompass()
+                                } label: {
+                                    Label(p.name, systemImage: p.icon)
+                                }
                             }
                         }
                     } label: {
@@ -293,6 +317,18 @@ struct ForYouHubView: View {
                 }
                 .padding(.horizontal)
             }
+
+            // Snabbfilter-chips för upptäckt
+            if selectedTab == .recommendations {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        quickPresetChip(id: "hidden_gems", title: "Dolda pärlor", icon: "sparkles")
+                        quickPresetChip(id: "short_games", title: "Korta spel (< 10h)", icon: "hare.fill")
+                        quickPresetChip(id: "masterpieces", title: "90+ Mästerverk", icon: "rosette")
+                    }
+                    .padding(.horizontal)
+                }
+            }
         }
     }
 
@@ -317,7 +353,49 @@ struct ForYouHubView: View {
         )
     }
 
+    private func quickPresetChip(id: String, title: String, icon: String) -> some View {
+        let isActive = activeQuickPreset == id
+        return Button {
+            withAnimation {
+                if activeQuickPreset == id {
+                    activeQuickPreset = nil
+                    Task {
+                        await engine.loadPersonalizedRecommendations(games: store.games, profile: profile)
+                    }
+                } else {
+                    activeQuickPreset = id
+                    // Nollställ eventuella manuella val
+                    selectedMood = .all
+                    selectedEra = .all
+                    selectedPlaytime = .all
+                    selectedPlatformID = nil
+                    Task {
+                        await engine.applyQuickPreset(games: store.games, profile: profile, preset: id)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.caption2)
+                Text(title)
+                    .font(.caption.bold())
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(isActive ? Color.orange : Color(.secondarySystemGroupedBackground))
+            .foregroundStyle(isActive ? .white : .primary)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(isActive ? Color.clear : Color.primary.opacity(0.08), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     private func triggerCompass() {
+        activeQuickPreset = nil
         Task {
             if selectedTab == .recommendations {
                 await engine.applyCompass(
@@ -364,10 +442,86 @@ struct ForYouHubView: View {
                 }
                 .padding(.vertical, 40)
             } else {
+                vibeBanner
+
                 ForEach(engine.curatedSections) { section in
                     curatedSectionView(section)
                 }
             }
+        }
+    }
+
+    // MARK: - 3A-1. Dagens Vibe Banner
+    @ViewBuilder
+    private var vibeBanner: some View {
+        let currentMood = profile.playingMood.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !currentMood.isEmpty {
+            HStack(spacing: 12) {
+                Text(currentMood.components(separatedBy: " ").first ?? "✨")
+                    .font(.system(size: 26))
+                    .padding(8)
+                    .background(Color.teal.opacity(0.18), in: Circle())
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text("DAGENS VIBE")
+                            .font(.system(size: 9.5, weight: .bold))
+                            .foregroundStyle(.teal)
+                        Text("•")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(currentMood.components(separatedBy: " ").dropFirst().joined(separator: " "))
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.primary)
+                    }
+
+                    Text("Rekommendationerna nedan prioriterar titlar som matchar detta humör.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Menu {
+                    Text("Byt humör:")
+                    ForEach(ProfileStore.playingMoodOptions, id: \.self) { mood in
+                        Button {
+                            profile.playingMood = mood
+                            Task {
+                                await engine.loadPersonalizedRecommendations(games: store.games, profile: profile, forceReload: true)
+                            }
+                        } label: {
+                            HStack {
+                                Text(mood)
+                                if mood == currentMood {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                    Divider()
+                    Button(role: .destructive) {
+                        profile.playingMood = ""
+                        Task {
+                            await engine.loadPersonalizedRecommendations(games: store.games, profile: profile, forceReload: true)
+                        }
+                    } label: {
+                        Label("Rensa", systemImage: "xmark")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(12)
+            .background(Color.teal.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.teal.opacity(0.2), lineWidth: 1)
+            )
+            .padding(.horizontal)
         }
     }
 
@@ -493,6 +647,46 @@ struct ForYouHubView: View {
 
                 case .topRated:
                     EmptyView()
+
+                case .playingMood(let currentMood):
+                    Menu {
+                        Text("Välj Spelhumör & Vibe:")
+                        ForEach(ProfileStore.playingMoodOptions, id: \.self) { mood in
+                            Button {
+                                profile.playingMood = mood
+                                Task {
+                                    await engine.loadPersonalizedRecommendations(games: store.games, profile: profile, forceReload: true)
+                                }
+                            } label: {
+                                HStack {
+                                    Text(mood)
+                                    if mood == currentMood {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                        Divider()
+                        Button(role: .destructive) {
+                            profile.playingMood = ""
+                            Task {
+                                await engine.loadPersonalizedRecommendations(games: store.games, profile: profile, forceReload: true)
+                            }
+                        } label: {
+                            Label("Rensa humör", systemImage: "xmark")
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("Byt humör")
+                            Image(systemName: "sparkles")
+                                .font(.caption2)
+                        }
+                        .font(.caption.bold())
+                        .foregroundStyle(.teal)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(Color.teal.opacity(0.14), in: Capsule())
+                    }
                 }
             }
             .padding(.horizontal)
@@ -579,9 +773,23 @@ struct ForYouHubView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("RESULTAT FRÅN SPELKOMPASSEN")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Color.ds.brandRed)
+                    if let preset = activeQuickPreset {
+                        let presetLabel: String = {
+                            switch preset {
+                            case "hidden_gems": return "💎 DOLDA PÄRLOR"
+                            case "short_games": return "⏱️ KORTA SPEL (< 10H)"
+                            case "masterpieces": return "⭐ 90+ MÄSTERVERK"
+                            default: return "SNABBFILTER"
+                            }
+                        }()
+                        Text(presetLabel)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Color.orange)
+                    } else {
+                        Text("RESULTAT FRÅN SPELKOMPASSEN")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Color.ds.brandRed)
+                    }
                     Text("\(engine.compassResults.count) träffar matchar dina val")
                         .font(.headline)
                 }

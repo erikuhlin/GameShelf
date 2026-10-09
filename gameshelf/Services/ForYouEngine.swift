@@ -121,8 +121,10 @@ struct CompassPlatformOption: Identifiable, Hashable, Sendable {
         CompassPlatformOption(id: 49, name: "Xbox One", icon: "xbox.logo"),
         CompassPlatformOption(id: 12, name: "Xbox 360", icon: "xbox.logo"),
         CompassPlatformOption(id: 130, name: "Nintendo Switch", icon: "gamecontroller"),
+        CompassPlatformOption(id: 37, name: "Nintendo 3DS", icon: "gamecontroller"),
         CompassPlatformOption(id: 21, name: "GameCube", icon: "gamecontroller"),
-        CompassPlatformOption(id: 6, name: "PC (Windows)", icon: "desktopcomputer")
+        CompassPlatformOption(id: 6, name: "PC (Windows)", icon: "desktopcomputer"),
+        CompassPlatformOption(id: 14, name: "Mac", icon: "laptopcomputer")
     ]
 }
 
@@ -133,6 +135,7 @@ enum ForYouSectionKind: Equatable {
     case referenceGame(slot: Int, game: Game)
     case studio(name: String)
     case topRated
+    case playingMood(mood: String)
 }
 
 struct ForYouCuratedSection: Identifiable {
@@ -290,10 +293,16 @@ final class ForYouEngine: ObservableObject {
             let lower = p.lowercased()
             if lower.contains("playstation 5") || lower == "ps5" { platformIDs.append(167) }
             else if lower.contains("playstation 4") || lower == "ps4" { platformIDs.append(48) }
-            else if lower.contains("switch") { platformIDs.append(130) }
+            else if lower.contains("playstation 3") || lower == "ps3" { platformIDs.append(9) }
+            else if lower.contains("playstation 2") || lower == "ps2" { platformIDs.append(8) }
             else if lower.contains("xbox series") { platformIDs.append(169) }
             else if lower.contains("xbox one") { platformIDs.append(49) }
-            else if lower.contains("pc") || lower.contains("windows") { platformIDs.append(6) }
+            else if lower.contains("xbox 360") { platformIDs.append(12) }
+            else if lower.contains("switch") { platformIDs.append(130) }
+            else if lower.contains("3ds") { platformIDs.append(37) }
+            else if lower.contains("gamecube") { platformIDs.append(21) }
+            else if lower.contains("mac") { platformIDs.append(14) }
+            else if lower.contains("steam deck") || lower.contains("rog ally") || lower.contains("pc") || lower.contains("windows") { platformIDs.append(6) }
         }
 
         let spelDNA = SpelDNACalculator.calculate(games: games, playFor: profile.playFor)
@@ -413,6 +422,24 @@ final class ForYouEngine: ObservableObject {
                         games: filtered
                     ))
                 }
+            }
+        }
+
+        // Sektion: Dagens Vibe (om profilen har ett aktivt spelhumör)
+        if !profile.playingMood.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let mood = profile.playingMood.trimmingCharacters(in: .whitespacesAndNewlines)
+            let moodGames = await fetchMoodGames(mood: mood, fp: fp, seenIDs: &seenGameIDs)
+            if !moodGames.isEmpty {
+                let cleanTitle = mood.components(separatedBy: " ").dropFirst().joined(separator: " ")
+                sections.append(ForYouCuratedSection(
+                    id: "mood_\(mood)",
+                    title: cleanTitle.isEmpty ? mood : cleanTitle,
+                    badge: "Dagens Vibe",
+                    icon: moodIcon(for: mood),
+                    accentColor: .teal,
+                    kind: .playingMood(mood: mood),
+                    games: moodGames
+                ))
             }
         }
 
@@ -611,6 +638,81 @@ final class ForYouEngine: ObservableObject {
             return items
         }
         return []
+    }
+
+    /// Hämtar spel som matchar profilens aktuella Spelhumör & Vibe
+    private func fetchMoodGames(mood: String, fp: ForYouFingerprint, seenIDs: inout Set<Int>) async -> [IGDBGame] {
+        let genres: [String]
+        let minRating: Int
+        let startYear: Int?
+
+        let lower = mood.lowercased()
+        if lower.contains("utforska") {
+            genres = ["Adventure", "Role-playing (RPG)"]
+            minRating = 75
+            startYear = 2015
+        } else if lower.contains("mysigt") || lower.contains("avkopplande") {
+            genres = ["Puzzle", "Simulator", "Indie", "Adventure"]
+            minRating = 74
+            startYear = 2016
+        } else if lower.contains("boss") || lower.contains("brutal") {
+            genres = ["Action", "Hack and slash/Beat 'em up", "Role-playing (RPG)"]
+            minRating = 76
+            startYear = 2015
+        } else if lower.contains("story") || lower.contains("lore") {
+            genres = ["Role-playing (RPG)", "Adventure"]
+            minRating = 78
+            startYear = 2014
+        } else if lower.contains("action") || lower.contains("tempo") || lower.contains("snabb") {
+            genres = ["Action", "Shooter", "Fighting"]
+            minRating = 75
+            startYear = 2017
+        } else if lower.contains("taktik") || lower.contains("hjärngympa") {
+            genres = ["Strategy", "Tactical", "Puzzle"]
+            minRating = 75
+            startYear = 2015
+        } else if lower.contains("nostalgi") || lower.contains("retro") {
+            genres = ["Platform", "Arcade", "Adventure"]
+            minRating = 75
+            startYear = 1995
+        } else {
+            genres = Array(fp.topGenres.prefix(2))
+            minRating = 75
+            startYear = 2015
+        }
+
+        if let results = try? await IGDBService.shared.discoverGames(
+            startYear: startYear,
+            platformIDs: fp.userPlatformIDs,
+            genres: genres,
+            minRating: minRating,
+            sortOption: .popularity,
+            limit: 16
+        ) {
+            var items: [IGDBGame] = []
+            for g in results {
+                guard !fp.ownedIGDBIDs.contains(g.id),
+                      !fp.ownedTitles.contains(g.name.lowercased()),
+                      !seenIDs.contains(g.id) else { continue }
+                items.append(g)
+                seenIDs.insert(g.id)
+                if items.count >= 12 { break }
+            }
+            return items
+        }
+        return []
+    }
+
+    private func moodIcon(for mood: String) -> String {
+        let lower = mood.lowercased()
+        if lower.contains("utforska") { return "safari.fill" }
+        if lower.contains("mysigt") { return "cup.and.saucer.fill" }
+        if lower.contains("boss") { return "shield.lefthalf.filled" }
+        if lower.contains("story") { return "book.closed.fill" }
+        if lower.contains("action") || lower.contains("tempo") { return "bolt.fill" }
+        if lower.contains("taktik") { return "brain.head.profile" }
+        if lower.contains("nostalgi") { return "clock.arrow.circlepath" }
+        return "sparkles"
     }
 
     // MARK: - 4b. Startsida: Kurerade rekommendationer för 'För dig' med 24h cache
@@ -856,6 +958,66 @@ final class ForYouEngine: ObservableObject {
             self.isLoadingCompass = false
         } catch {
             print("⚠️ ForYouEngine applyCompass error: \(error)")
+            self.isLoadingCompass = false
+        }
+    }
+
+    /// Snabbfilter för upptäckt (Dolda pärlor, Korta spel, 90+ Mästerverk)
+    func applyQuickPreset(
+        games: [Game],
+        profile: ProfileStore,
+        preset: String
+    ) async {
+        isLoadingCompass = true
+        let fp = fingerprint ?? buildFingerprint(games: games, profile: profile)
+        let userPlatforms = fp.userPlatformIDs
+ 
+        do {
+            let results: [IGDBGame]
+            switch preset {
+            case "hidden_gems":
+                // Betyg 80+, men lägre count / indie / mindre kända
+                results = try await IGDBService.shared.discoverGames(
+                    startYear: 2014,
+                    platformIDs: userPlatforms,
+                    genres: ["Indie", "Adventure", "Role-playing (RPG)", "Puzzle"],
+                    minRating: 80,
+                    sortOption: .rating,
+                    limit: 30
+                )
+            case "short_games":
+                // Korta upplevelser (äventyr/plattform/pussel)
+                results = try await IGDBService.shared.discoverGames(
+                    startYear: 2016,
+                    platformIDs: userPlatforms,
+                    genres: ["Platform", "Puzzle", "Indie", "Adventure"],
+                    minRating: 78,
+                    sortOption: .popularity,
+                    limit: 30
+                )
+            case "masterpieces":
+                // 90+ på IGDB
+                results = try await IGDBService.shared.discoverGames(
+                    startYear: 2005,
+                    platformIDs: userPlatforms,
+                    genres: [],
+                    minRating: 90,
+                    sortOption: .rating,
+                    limit: 30
+                )
+            default:
+                results = []
+            }
+
+            let filtered = results.filter {
+                !fp.ownedIGDBIDs.contains($0.id) &&
+                !fp.ownedTitles.contains($0.name.lowercased())
+            }
+
+            self.compassResults = filtered
+            self.isLoadingCompass = false
+        } catch {
+            print("⚠️ ForYouEngine applyQuickPreset error: \(error)")
             self.isLoadingCompass = false
         }
     }

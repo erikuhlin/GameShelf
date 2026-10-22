@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
 export type ProgressionType = 'chapters' | 'acts' | 'main_quests' | 'bosses' | 'worlds' | 'none';
@@ -224,6 +224,76 @@ const CURATED_TEMPLATES: Record<string, Omit<GameProgressTemplate, 'source'>> = 
       { id: 'bg3-10', title: 'Akt 3: Slutstriden mot Netherbrain & Kronan', order: 11, chapterGroup: 'Akt 3' },
     ],
   },
+  'kingdom come: deliverance': {
+    gameTitle: 'Kingdom Come: Deliverance',
+    hasLinearProgression: true,
+    progressionType: 'main_quests',
+    summary: 'Smeden Henrys resa genom det medeltida Böhmen – från Skalitz överfall till belägringen av Talmberg.',
+    items: [
+      { id: 'kcd1-1', title: 'Unexpected Visitors', order: 1, chapterGroup: 'Skalitz' },
+      { id: 'kcd1-2', title: 'Run!', order: 2, chapterGroup: 'Skalitz' },
+      { id: 'kcd1-3', title: 'Homecoming', order: 3, chapterGroup: 'Skalitz' },
+      { id: 'kcd1-4', title: 'Awakening', order: 4, chapterGroup: 'Rattay' },
+      { id: 'kcd1-5', title: 'Train Hard, Fight Easy', order: 5, chapterGroup: 'Rattay' },
+      { id: 'kcd1-6', title: 'Keeping the Peace', order: 6, chapterGroup: 'Rattay' },
+      { id: 'kcd1-7', title: 'The Prey', order: 7, chapterGroup: 'Rattay' },
+      { id: 'kcd1-8', title: 'The Hunt Begins', order: 8, chapterGroup: 'Neuhof' },
+      { id: 'kcd1-9', title: 'Ginger in a Pickle', order: 9, chapterGroup: 'Neuhof' },
+      { id: 'kcd1-10', title: 'Mysterious Ways', order: 10, chapterGroup: 'Uzhitz' },
+      { id: 'kcd1-11', title: 'On the Scent', order: 11, chapterGroup: 'Ledetchko' },
+      { id: 'kcd1-12', title: 'My Friend Timmy', order: 12, chapterGroup: 'Merhojed' },
+      { id: 'kcd1-13', title: 'Nest of Vipers', order: 13, chapterGroup: 'Pribyslavitz' },
+      { id: 'kcd1-14', title: 'Baptism of Fire', order: 14, chapterGroup: 'Pribyslavitz' },
+      { id: 'kcd1-15', title: 'Questions and Answers', order: 15, chapterGroup: 'Merhojed' },
+      { id: 'kcd1-16', title: 'All that Glisters', order: 16, chapterGroup: 'Sasau' },
+      { id: 'kcd1-17', title: 'If You Can\'t Beat \'em', order: 17, chapterGroup: 'Sasau' },
+      { id: 'kcd1-18', title: 'Poverty, Chastity and Pestilence', order: 18, chapterGroup: 'Klostret' },
+      { id: 'kcd1-19', title: 'A Needle in a Haystack', order: 19, chapterGroup: 'Klostret' },
+      { id: 'kcd1-20', title: 'The Die is Cast', order: 20, chapterGroup: 'Vranik' },
+      { id: 'kcd1-21', title: 'Payback', order: 21, chapterGroup: 'Vranik' },
+      { id: 'kcd1-22', title: 'Out of the Frying Pan into the Fire', order: 22, chapterGroup: 'Talmberg' },
+      { id: 'kcd1-23', title: 'Night Raid', order: 23, chapterGroup: 'Talmberg' },
+      { id: 'kcd1-24', title: 'Siege & Cold Steel, Hot Blood', order: 24, chapterGroup: 'Talmberg' },
+      { id: 'kcd1-25', title: 'Family Values', order: 25, chapterGroup: 'Talmberg' },
+      { id: 'kcd1-26', title: 'An Honorable Word', order: 26, chapterGroup: 'Talmberg' },
+      { id: 'kcd1-27', title: 'Epilogue', order: 27, chapterGroup: 'Final' },
+    ],
+  },
+  'kingdom come deliverance': {
+    gameTitle: 'Kingdom Come: Deliverance',
+    hasLinearProgression: true,
+    progressionType: 'main_quests',
+    summary: 'Smeden Henrys resa genom det medeltida Böhmen – från Skalitz överfall till belägringen av Talmberg.',
+    items: [
+      { id: 'kcd1-1', title: 'Unexpected Visitors', order: 1, chapterGroup: 'Skalitz' },
+      { id: 'kcd1-2', title: 'Run!', order: 2, chapterGroup: 'Skalitz' },
+      { id: 'kcd1-3', title: 'Homecoming', order: 3, chapterGroup: 'Skalitz' },
+      { id: 'kcd1-4', title: 'Awakening', order: 4, chapterGroup: 'Rattay' },
+      { id: 'kcd1-5', title: 'Train Hard, Fight Easy', order: 5, chapterGroup: 'Rattay' },
+      { id: 'kcd1-6', title: 'Keeping the Peace', order: 6, chapterGroup: 'Rattay' },
+      { id: 'kcd1-7', title: 'The Prey', order: 7, chapterGroup: 'Rattay' },
+      { id: 'kcd1-8', title: 'The Hunt Begins', order: 8, chapterGroup: 'Neuhof' },
+      { id: 'kcd1-9', title: 'Ginger in a Pickle', order: 9, chapterGroup: 'Neuhof' },
+      { id: 'kcd1-10', title: 'Mysterious Ways', order: 10, chapterGroup: 'Uzhitz' },
+      { id: 'kcd1-11', title: 'On the Scent', order: 11, chapterGroup: 'Ledetchko' },
+      { id: 'kcd1-12', title: 'My Friend Timmy', order: 12, chapterGroup: 'Merhojed' },
+      { id: 'kcd1-13', title: 'Nest of Vipers', order: 13, chapterGroup: 'Pribyslavitz' },
+      { id: 'kcd1-14', title: 'Baptism of Fire', order: 14, chapterGroup: 'Pribyslavitz' },
+      { id: 'kcd1-15', title: 'Questions and Answers', order: 15, chapterGroup: 'Merhojed' },
+      { id: 'kcd1-16', title: 'All that Glisters', order: 16, chapterGroup: 'Sasau' },
+      { id: 'kcd1-17', title: 'If You Can\'t Beat \'em', order: 17, chapterGroup: 'Sasau' },
+      { id: 'kcd1-18', title: 'Poverty, Chastity and Pestilence', order: 18, chapterGroup: 'Klostret' },
+      { id: 'kcd1-19', title: 'A Needle in a Haystack', order: 19, chapterGroup: 'Klostret' },
+      { id: 'kcd1-20', title: 'The Die is Cast', order: 20, chapterGroup: 'Vranik' },
+      { id: 'kcd1-21', title: 'Payback', order: 21, chapterGroup: 'Vranik' },
+      { id: 'kcd1-22', title: 'Out of the Frying Pan into the Fire', order: 22, chapterGroup: 'Talmberg' },
+      { id: 'kcd1-23', title: 'Night Raid', order: 23, chapterGroup: 'Talmberg' },
+      { id: 'kcd1-24', title: 'Siege & Cold Steel, Hot Blood', order: 24, chapterGroup: 'Talmberg' },
+      { id: 'kcd1-25', title: 'Family Values', order: 25, chapterGroup: 'Talmberg' },
+      { id: 'kcd1-26', title: 'An Honorable Word', order: 26, chapterGroup: 'Talmberg' },
+      { id: 'kcd1-27', title: 'Epilogue', order: 27, chapterGroup: 'Final' },
+    ],
+  },
   'kingdom come: deliverance ii': {
     gameTitle: 'Kingdom Come: Deliverance II',
     hasLinearProgression: true,
@@ -302,6 +372,64 @@ const CURATED_TEMPLATES: Record<string, Omit<GameProgressTemplate, 'source'>> = 
     items: [],
   },
 };
+ 
+function normalizeTitle(t: string): string {
+  return t
+    .toLowerCase()
+    .replace(/[:\-–—\']/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function findCuratedTemplate(gameTitle: string): GameProgressTemplate | null {
+  const normQuery = normalizeTitle(gameTitle);
+  if (!normQuery) return null;
+
+  // 1. Försök exakt matchning på normaliserad titel
+  for (const [key, template] of Object.entries(CURATED_TEMPLATES)) {
+    if (normalizeTitle(key) === normQuery) {
+      return {
+        ...template,
+        granularity: 'standard',
+        source: 'curated',
+      } as GameProgressTemplate;
+    }
+  }
+
+  // Regex för att detektera uppföljare (2, ii, 3, iii, part 2 etc.)
+  const sequelSuffixRegex = /\b(ii|iii|iv|v|2|3|4|5|part\s*2|part\s*ii|part\s*3)\b/i;
+  const querySequelMatch = normQuery.match(sequelSuffixRegex);
+  const querySequel = querySequelMatch ? querySequelMatch[0].toLowerCase() : null;
+
+  // 2. Om ingen exakt match, kolla delsträng/ord-match men VAR STRIKT med uppföljare:
+  for (const [key, template] of Object.entries(CURATED_TEMPLATES)) {
+    const normKey = normalizeTitle(key);
+    const keySequelMatch = normKey.match(sequelSuffixRegex);
+    const keySequel = keySequelMatch ? keySequelMatch[0].toLowerCase() : null;
+
+    // Om templaten är en uppföljare (t.ex. KCD II), men användaren INTE sökte efter uppföljaren:
+    // matcha ALDRIG!
+    if (keySequel && !querySequel) {
+      continue;
+    }
+
+    // Om användaren uttryckligen sökte efter uppföljare (t.ex. KCD 2), men templaten är del 1:
+    // matcha ALDRIG!
+    if (querySequel && !keySequel) {
+      continue;
+    }
+
+    if (normQuery.includes(normKey) || normKey.includes(normQuery)) {
+      return {
+        ...template,
+        granularity: 'standard',
+        source: 'curated',
+      } as GameProgressTemplate;
+    }
+  }
+
+  return null;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -341,18 +469,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const lower = gameTitle.toLowerCase();
-
     // 1. Kolla kurerade mallar (om inte forceAI är aktiverat)
     if (!forceAI) {
-      for (const [key, template] of Object.entries(CURATED_TEMPLATES)) {
-        if (lower.includes(key) || key.includes(lower)) {
-          return NextResponse.json({
-            ...template,
-            granularity: 'standard',
-            source: 'curated',
-          } as GameProgressTemplate);
-        }
+      const curated = findCuratedTemplate(gameTitle);
+      if (curated) {
+        return NextResponse.json(curated);
       }
     }
 
@@ -481,7 +602,7 @@ FÖLJ DESSA STRIKTA REGLER:
       let response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(9000),
+        signal: AbortSignal.timeout(24000),
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           tools: [{ google_search: {} }],
@@ -497,7 +618,7 @@ FÖLJ DESSA STRIKTA REGLER:
         response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          signal: AbortSignal.timeout(9000),
+          signal: AbortSignal.timeout(20000),
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
@@ -778,7 +899,7 @@ STRICT EXTRACTION RULES:
       let response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(9000),
+        signal: AbortSignal.timeout(24000),
         body: JSON.stringify(bodyPayload),
       });
 
@@ -789,7 +910,7 @@ STRICT EXTRACTION RULES:
         response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          signal: AbortSignal.timeout(9000),
+          signal: AbortSignal.timeout(20000),
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: { temperature: 0.1 },

@@ -65,7 +65,8 @@ interface ActiveTodo {
 }
 
 const PRESET_GAMES = [
-  { name: 'Kingdom Come: Deliverance II', displayName: 'Kingdom Come II', type: 'main_quests', icon: Layers, tag: '32 Uppdrag (Trosky & Kuttenberg)', hltb: 50 },
+  { name: 'Kingdom Come: Deliverance', displayName: 'Kingdom Come I', type: 'main_quests', icon: Layers, tag: '27 Huvuduppdrag (Böhmen)', hltb: 41 },
+  { name: 'Kingdom Come: Deliverance II', displayName: 'Kingdom Come II', type: 'main_quests', icon: Layers, tag: '17 Uppdrag (Trosky & Kuttenberg)', hltb: 50 },
   { name: '007 First Light', displayName: '007 First Light', type: 'chapters', icon: BookOpen, tag: '10 Kapitel (18 Uppdrag)', hltb: 14 },
   { name: 'Silent Hill 2', displayName: 'Silent Hill 2 (Remake)', type: 'chapters', icon: BookOpen, tag: '14 Zoner & Skräck', hltb: 16 },
   { name: 'The Last of Us Part I', displayName: 'The Last of Us Part I', type: 'chapters', icon: BookOpen, tag: '12 Kapitel & 4 Årstider', hltb: 15 },
@@ -151,7 +152,7 @@ export default function TestProgressPage() {
       const res = await fetch('/api/games/progress-template', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(25000),
+        signal: AbortSignal.timeout(45000),
         body: JSON.stringify({
           gameTitle: title,
           guideUrl: activeUrl.trim() || undefined,

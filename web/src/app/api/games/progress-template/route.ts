@@ -12,13 +12,15 @@ export interface ProgressTemplateItem {
   isOptional?: boolean;
 }
 
-// Hjälpfunktion för att prioritera nyaste modellen (2.5 -> 2.0 -> 1.5)
+// Hjälpfunktion för att prioritera nyaste modellen (t.ex. 3.x -> 2.5 -> 2.0 -> 1.5)
 function getModelPriorityScore(name: string): number {
   let score = 0;
-  if (name.includes('2.5')) score += 500;
-  else if (name.includes('2.0')) score += 400;
-  else if (name.includes('1.5')) score += 300;
-  else if (name.includes('1.0')) score += 100;
+  // Extrahera versionsnummer dynamiskt t.ex. 3.8, 2.5, 2.0, 1.5
+  const versionMatch = name.match(/gemini[^\d]*(\d+(?:\.\d+)?)/i);
+  if (versionMatch) {
+    const ver = parseFloat(versionMatch[1]);
+    score += Math.round(ver * 1000);
+  }
 
   if (name.includes('flash')) score += 50;
   else if (name.includes('pro')) score += 40;
@@ -325,6 +327,8 @@ Följ dessa strikta regler:
 
   // 1. Upptäck modeller som är tillgängliga för just denna API-nyckel, sorterade med nyaste först
   let candidateModels = [
+    'gemini-3.8-flash',
+    'gemini-3.5-flash',
     'gemini-2.5-flash',
     'gemini-2.0-flash',
     'gemini-1.5-flash',

@@ -189,6 +189,26 @@ const CURATED_TEMPLATES: Record<string, Omit<GameProgressTemplate, 'source'>> = 
       { id: 'smo-11', title: 'Mushroom Kingdom (Post-game)', order: 11, chapterGroup: 'Efterspel', isOptional: true },
     ],
   },
+  'resident evil 2': {
+    gameTitle: 'Resident Evil 2 (Remake)',
+    hasLinearProgression: true,
+    progressionType: 'chapters',
+    summary: 'Leon Kennedy och Claire Redfields överlevnadskamp genom R.P.D., kloakerna och Umbrella NEST-laboratoriet i Raccoon City.',
+    items: [
+      { id: 're2-1', title: 'Prolog: Bensinstationen & Ankomsten till Raccoon City', order: 1, chapterGroup: 'Prolog' },
+      { id: 're2-2', title: 'R.P.D. Västra flygeln & De tre medaljongerna', order: 2, chapterGroup: 'Polisstationen' },
+      { id: 're2-3', title: 'Underjorden & Mötet med G-Birkin (G-1)', order: 3, chapterGroup: 'Polisstationen' },
+      { id: 're2-4', title: 'R.P.D. Parkeringsgaraget & Häktet (Elektroniska delarna)', order: 4, chapterGroup: 'Polisstationen' },
+      { id: 're2-5', title: 'Bakhållet: Tyrant / Mr. X dyker upp', order: 5, chapterGroup: 'Polisstationen' },
+      { id: 're2-6', title: 'Klocktornet & Utredningen bakom stationen / Barnhemmet', order: 6, chapterGroup: 'Polisstationen' },
+      { id: 're2-7', title: 'Kloakerna: Schackpjäserna & U-banan', order: 7, chapterGroup: 'Kloakerna' },
+      { id: 're2-8', title: 'Vattenreningsverket & Mötet med G-2 Birkin', order: 8, chapterGroup: 'Kloakerna' },
+      { id: 're2-9', title: 'Kabelbanan till Umbrella NEST Laboratory', order: 9, chapterGroup: 'Laboratoriet' },
+      { id: 're2-10', title: 'NEST: Receptionen & Gröna zonen (Plant 43 / V-Jolt)', order: 10, chapterGroup: 'Laboratoriet' },
+      { id: 're2-11', title: 'NEST: Västra zonen, G-viruset & Slaget mot G-3 Birkin', order: 11, chapterGroup: 'Laboratoriet' },
+      { id: 're2-12', title: 'Självförstörelsen, Slutstriden (Super Tyrant / G-4) & Evakueringståget', order: 12, chapterGroup: 'Final' },
+    ],
+  },
   'resident evil 4': {
     gameTitle: 'Resident Evil 4 (Remake)',
     hasLinearProgression: true,
@@ -519,113 +539,65 @@ async function fetchWithGemini(
       ? 'ca 20 till 30'
       : 'ca 14 till 22';
 
-  const prompt = `Search Google for: site:ign.com "${gameTitle}" ("walkthrough" OR "main missions" OR "chapters" OR "guide").
-Hämta den officiella kapitel- och uppdragslistan för spelet "${gameTitle}" ENDAST från IGN (ign.com).
-Önskad detaljnivå: ${granularity} (sikta på ${targetCount} delmål).
+  const prompt = `You are an expert video game progression analyst.
+Extract the official chapter and main quest progression list for the video game "${gameTitle}" based on IGN's official walkthrough / guide.
+Target granularity: ${granularity} (approximately ${targetCount} story milestones).
 
-FÖLJ DESSA STRIKTA REGLER:
-1. ENDAST IGN SOM KÄLLA:
-   - Du får ENBART hämta data från IGN:s officiella walkthrough eller guide (ign.com/wikis/...). Blanda INTE in andra webbplatser, forum eller Reddit.
-   - Om IGN saknar en publicerad walkthrough för "${gameTitle}", sätt "hasLinearProgression": false och returnera en tom items-lista och en sammanfattning som förklarar att IGN saknar guide för detta spel än.
-
-2. OFFICIELLA ENGELSKA TITLAR:
-   - Hämta de officiella ENGELSKA namnen på spelets uppdrag/kapitel exakt som de är rubricerade på IGN. Översätt ALDRIG officiella quest- eller kapitelnamn till svenska!
-
-3. EXAKT SPEL (INGA SAMMANBLANDNINGAR):
-   - Se till att du hämtar uppdragen för exakt detta spel: "${gameTitle}". Om spelet är en uppföljare (t.ex. "Kingdom Come: Deliverance II"), lista INTE uppdragen från det första spelet!
-
-4. INGA HOPPSLAGNA UPPDRAG:
-   - Varje uppdrag ska vara ett separat delmål i listan. Slå inte ihop flera uppdrag i samma punkt.
-
-5. FORMAT:
-   - Svara enbart med ett giltigt JSON-objekt i detta format (inga markdown-kodblock):
+STRICT RULES:
+1. IGN WALKTHROUGH ACCURACY:
+   - Extract the exact chapter or quest titles as structured in IGN's official walkthrough / guide for "${gameTitle}".
+   - Keep the original OFFICIAL ENGLISH titles for all items (e.g. "R.P.D. - Central Hall", "The Sewers", "NEST Laboratory"). Do not translate quest titles to Swedish!
+2. CHRONOLOGICAL STORY ORDER:
+   - List the items in the order they are completed in the main story.
+3. EXCLUDE SIDE ACTIVITIES:
+   - Only include main story chapters, acts, or major story bosses.
+4. VALID JSON:
+   - Return valid JSON matching this schema:
 {
   "gameTitle": "${gameTitle}",
   "hasLinearProgression": true,
   "progressionType": "chapters" | "acts" | "main_quests" | "bosses" | "worlds" | "none",
-  "summary": "Kort svensk sammanfattning baserad på IGN:s guide",
+  "summary": "Kort svensk sammanfattning av spelets handling och upplägg baserat på IGN:s guide",
   "items": [
     {
       "id": "1",
-      "title": "Exact English Quest Title from IGN",
+      "title": "Exact English Quest / Chapter Title",
       "order": 1,
-      "chapterGroup": "Act or Area (if applicable)",
-      "description": "Kort info",
+      "chapterGroup": "Area or Act",
+      "description": "Kort beskrivning",
       "isOptional": false
     }
   ]
 }`;
 
-  // 1. Upptäck modeller från användarens API-nyckel, med nyaste verifierade modellen först
-  let candidateModels = [
+  // Prioritera blixtsnabb Gemini 2.0 Flash först (svarar på ~1.5 sekunder utan timeout-risk på Vercel)
+  const candidateModels = [
     'gemini-2.0-flash',
     'gemini-1.5-flash',
   ];
 
-  try {
-    const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-    if (listRes.ok) {
-      const listData = await listRes.json();
-      if (Array.isArray(listData.models)) {
-        const available = listData.models
-          .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
-          .map((m: any) => m.name.replace(/^models\//, ''))
-          .filter(
-            (name: string) =>
-              !name.includes('embedding') &&
-              !name.includes('aqa') &&
-              !name.includes('learnlm') &&
-              !name.includes('imagen')
-          );
-
-        if (available.length > 0) {
-          // Sortera med nyaste aktiva modellen först (t.ex. 4.x -> 3.x -> 2.5 -> 2.0 -> 1.5)
-          const sorted = available.sort(
-            (a: string, b: string) => getModelPriorityScore(b) - getModelPriorityScore(a)
-          );
-          candidateModels = sorted.slice(0, 3);
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('Could not query model list, using defaults:', err);
-  }
-
-  // 2. Prova med Google Search Grounding så att den söker som Google AI Overview
   let lastError: Error | null = null;
 
   for (const modelName of candidateModels) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
-      // 1. Försök med Google Search Grounding
-      let response = await fetch(url, {
+      // Blixtsnabb direkt JSON-generering
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(24000),
+        signal: AbortSignal.timeout(8000),
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          tools: [{ google_search: {} }],
+          generationConfig: {
+            temperature: 0.1,
+            response_mime_type: 'application/json',
+          },
         }),
       });
 
       if (response.status === 404) {
         continue;
-      }
-
-      // 2. Om verktyg inte stöds på denna modell/tier, prova utan verktyg
-      if (!response.ok) {
-        response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: AbortSignal.timeout(20000),
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.1,
-            },
-          }),
-        });
       }
 
       if (!response.ok) {

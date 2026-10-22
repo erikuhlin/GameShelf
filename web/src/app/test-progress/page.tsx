@@ -74,6 +74,7 @@ const PRESET_GAMES = [
   { name: 'Elden Ring', displayName: 'Elden Ring', type: 'bosses', icon: Skull, tag: '11 Huvudbossar', hltb: 58 },
   { name: 'Super Mario Odyssey', displayName: 'Super Mario Odyssey', type: 'worlds', icon: Globe, tag: 'Riken / Världar', hltb: 13 },
   { name: 'The Witcher 3: Wild Hunt', displayName: 'The Witcher 3', type: 'main_quests', icon: Layers, tag: 'Regioner & Storyquests', hltb: 52 },
+  { name: 'Resident Evil 2', displayName: 'Resident Evil 2', type: 'chapters', icon: BookOpen, tag: 'R.P.D., Kloaker & NEST', hltb: 9 },
   { name: 'Resident Evil 4', displayName: 'Resident Evil 4', type: 'chapters', icon: BookOpen, tag: 'Byn, Slottet, Ön', hltb: 16 },
   { name: 'Baldur\'s Gate 3', displayName: 'Baldur\'s Gate 3', type: 'main_quests', icon: Layers, tag: 'Akter & Vändpunkter', hltb: 65 },
   { name: 'Rocket League', displayName: 'Rocket League', type: 'none', icon: Gamepad2, tag: 'Ej linjärt / MP', hltb: 0 },

@@ -317,16 +317,8 @@ Svara med ett giltigt JSON-objekt med exakt detta format (bara ren JSON, inga ma
   ]
 }`;
 
-  // 1. Försök hitta vilka modeller användarens API-nyckel faktiskt har tillgång till
-  let candidateModels = [
-    'gemini-2.0-flash',
-    'gemini-1.5-flash-latest',
-    'gemini-2.5-flash',
-    'gemini-1.5-flash-8b',
-    'gemini-1.5-flash',
-    'gemini-1.5-pro',
-    'gemini-pro',
-  ];
+  // 1. Välj en snabb och modern modell direkt
+  let candidateModels = ['gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash'];
 
   try {
     const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
@@ -337,10 +329,12 @@ Svara med ett giltigt JSON-objekt med exakt detta format (bara ren JSON, inga ma
           .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
           .map((m: any) => m.name.replace(/^models\//, ''));
 
-        if (available.length > 0) {
-          const flash = available.filter((name: string) => name.includes('flash'));
-          const pro = available.filter((name: string) => name.includes('pro'));
-          candidateModels = [...flash, ...pro, ...available];
+        const topFlash = available.find((name: string) => name.includes('2.0-flash')) ||
+                         available.find((name: string) => name.includes('1.5-flash')) ||
+                         available[0];
+
+        if (topFlash) {
+          candidateModels = [topFlash, 'gemini-1.5-flash-latest'];
         }
       }
     }
@@ -348,73 +342,39 @@ Svara med ett giltigt JSON-objekt med exakt detta format (bara ren JSON, inga ma
     console.warn('Could not query model list, using defaults:', err);
   }
 
-  // 2. Loopa igenom kandidaterna tills en modell lyckas
+  // 2. Kör max 2 snabba försök
   let lastError: Error | null = null;
 
-  for (const modelName of candidateModels) {
-    for (const apiVersion of ['v1beta', 'v1']) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
-        // 1. Prova först med Google Search Grounding (Live-sökning på Google för nyligen släppta spel)
-        let response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            tools: [{ google_search: {} }],
-          }),
-        });
+  for (const modelName of Array.from(new Set(candidateModels)).slice(0, 2)) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.1,
+          },
+        }),
+      });
 
-        if (response.status === 404) {
-          continue;
-        }
-
-        // Om Google Search tool inte stöds på just denna modell/version, prova standard
-        if (!response.ok) {
-          response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: {
-                response_mime_type: 'application/json',
-                temperature: 0.2,
-              },
-            }),
-          });
-        }
-
-        if (!response.ok) {
-          const errBody = await response.text();
-          // Äldre modeller som inte stödjer response_mime_type
-          if (errBody.includes('response_mime_type') || errBody.includes('generationConfig')) {
-            const fallbackRes = await fetch(url, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-              }),
-            });
-            if (fallbackRes.ok) {
-              const data = await fallbackRes.json();
-              const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-              if (text) return parseGeminiOutput(text, gameTitle, granularity);
-            }
-          }
-          lastError = new Error(`Modell ${modelName} (${response.status}): ${errBody}`);
-          continue;
-        }
-
-        const data = await response.json();
-        const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!textContent) {
-          continue;
-        }
-
-        return parseGeminiOutput(textContent, gameTitle, granularity);
-      } catch (err: any) {
-        lastError = err;
+      if (!response.ok) {
+        const errBody = await response.text();
+        lastError = new Error(`Modell ${modelName} (${response.status}): ${errBody}`);
+        continue;
       }
+
+      const data = await response.json();
+      const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!textContent) {
+        continue;
+      }
+
+      return parseGeminiOutput(textContent, gameTitle, granularity);
+    } catch (err: any) {
+      lastError = err;
     }
   }
 

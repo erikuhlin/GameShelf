@@ -355,15 +355,13 @@ Svara med ett giltigt JSON-objekt med exakt detta format (bara ren JSON, inga ma
     for (const apiVersion of ['v1beta', 'v1']) {
       try {
         const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
-        const response = await fetch(url, {
+        // 1. Prova först med Google Search Grounding (Live-sökning på Google för nyligen släppta spel)
+        let response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              response_mime_type: 'application/json',
-              temperature: 0.2,
-            },
+            tools: [{ google_search: {} }],
           }),
         });
 
@@ -371,8 +369,24 @@ Svara med ett giltigt JSON-objekt med exakt detta format (bara ren JSON, inga ma
           continue;
         }
 
+        // Om Google Search tool inte stöds på just denna modell/version, prova standard
+        if (!response.ok) {
+          response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: {
+                response_mime_type: 'application/json',
+                temperature: 0.2,
+              },
+            }),
+          });
+        }
+
         if (!response.ok) {
           const errBody = await response.text();
+          // Äldre modeller som inte stödjer response_mime_type
           if (errBody.includes('response_mime_type') || errBody.includes('generationConfig')) {
             const fallbackRes = await fetch(url, {
               method: 'POST',

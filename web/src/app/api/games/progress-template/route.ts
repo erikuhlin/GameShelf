@@ -532,6 +532,7 @@ async function fetchWithGemini(
   apiKey: string,
   granularity: Granularity
 ): Promise<GameProgressTemplate> {
+  const cleanKey = apiKey.trim();
   const targetCount =
     granularity === 'compact'
       ? 'ca 8 till 12'
@@ -570,19 +571,60 @@ STRICT RULES:
   ]
 }`;
 
-  // Prioritera blixtsnabb Gemini 2.0 Flash först (svarar på ~1.5 sekunder utan timeout-risk på Vercel)
-  const candidateModels = [
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
-  ];
+  // 1. Verifiera först API-nyckeln och hämta de modeller användaren faktiskt har tillgång till
+  let candidateModels = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+  let keyError: string | null = null;
+
+  try {
+    const listRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(cleanKey)}`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (!listRes.ok) {
+      const errText = await listRes.text();
+      let parsedMsg = errText;
+      try {
+        const json = JSON.parse(errText);
+        parsedMsg = json.error?.message || errText;
+      } catch {}
+      keyError = `Gemini API-fel (${listRes.status}): ${parsedMsg}`;
+    } else {
+      const listData = await listRes.json();
+      if (Array.isArray(listData.models)) {
+        const supported = listData.models
+          .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
+          .map((m: any) => m.name.replace(/^models\//, ''))
+          .filter((name: string) => !name.includes('embed') && !name.includes('imagen') && !name.includes('aqa'));
+
+        const ordered = [
+          ...supported.filter((m) => m === 'gemini-2.0-flash'),
+          ...supported.filter((m) => m === 'gemini-1.5-flash'),
+          ...supported.filter((m) => m.includes('2.0') && m.includes('flash')),
+          ...supported.filter((m) => m.includes('1.5') && m.includes('flash')),
+          ...supported.filter((m) => m.includes('1.5') && m.includes('pro')),
+          ...supported,
+        ];
+        const unique = Array.from(new Set(ordered));
+        if (unique.length > 0) {
+          candidateModels = unique.slice(0, 4);
+        }
+      }
+    }
+  } catch (listErr: any) {
+    console.warn('Could not query model list, falling back to defaults:', listErr);
+  }
+
+  // Om API-nyckeln är ogiltig hos Google
+  if (keyError) {
+    throw new Error(keyError);
+  }
 
   let lastError: Error | null = null;
 
   for (const modelName of candidateModels) {
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
 
-      // Blixtsnabb direkt JSON-generering
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -596,19 +638,21 @@ STRICT RULES:
         }),
       });
 
-      if (response.status === 404) {
-        continue;
-      }
-
       if (!response.ok) {
         const errBody = await response.text();
-        lastError = new Error(`Modell ${modelName} (${response.status}): ${errBody}`);
+        let errMsg = errBody;
+        try {
+          const errJson = JSON.parse(errBody);
+          errMsg = errJson.error?.message || errBody;
+        } catch {}
+        lastError = new Error(`Modell ${modelName} (${response.status}): ${errMsg}`);
         continue;
       }
 
       const data = await response.json();
       const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!textContent) {
+        lastError = new Error(`Modell ${modelName} returnerade tomt svar.`);
         continue;
       }
 
@@ -618,7 +662,7 @@ STRICT RULES:
     }
   }
 
-  throw lastError || new Error('Ingen tillgänglig Gemini-modell hittades för din API-nyckel.');
+  throw lastError || new Error('Ingen tillgänglig Gemini-modell kunde generera svar för din API-nyckel.');
 }
 
 function parseGeminiOutput(

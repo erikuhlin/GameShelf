@@ -239,7 +239,7 @@ Följ dessa regler noggrant:
 4. UNDVIK DIREKTA SPOILERS i titlarna (skriv t.ex. "Kapitel 7: Universitetet" istället för "Kapitel 7: Karaktär X dör").
 5. Skriv på svenska där det är naturligt, men behåll etablerade engelska namn på världar eller kapitel om det är standarden.
 
-Svara med ett giltigt JSON-objekt med exakt detta format:
+Svara med ett giltigt JSON-objekt med exakt detta format (inga extra kommentarer, bara ren JSON):
 {
   "gameTitle": "${gameTitle}",
   "hasLinearProgression": true,
@@ -256,33 +256,107 @@ Svara med ett giltigt JSON-objekt med exakt detta format:
   ]
 }`;
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          response_mime_type: 'application/json',
-          temperature: 0.2,
-        },
-      }),
+  // 1. Försök hitta vilka modeller användarens API-nyckel faktiskt har tillgång till
+  let candidateModels = [
+    'gemini-2.0-flash',
+    'gemini-1.5-flash-latest',
+    'gemini-2.5-flash',
+    'gemini-1.5-flash-8b',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+    'gemini-pro',
+  ];
+
+  try {
+    const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    if (listRes.ok) {
+      const listData = await listRes.json();
+      if (Array.isArray(listData.models)) {
+        const available = listData.models
+          .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
+          .map((m: any) => m.name.replace(/^models\//, ''));
+
+        if (available.length > 0) {
+          // Prioritera flash-modeller först
+          const flash = available.filter((name: string) => name.includes('flash'));
+          const pro = available.filter((name: string) => name.includes('pro'));
+          candidateModels = [...flash, ...pro, ...available];
+        }
+      }
     }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API-anrop misslyckades (${response.status}): ${errorText}`);
+  } catch (err) {
+    console.warn('Could not query model list, using defaults:', err);
   }
 
-  const data = await response.json();
-  const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!textContent) {
-    throw new Error('Inget text-svar från Gemini');
+  // 2. Loopa igenom kandidaterna tills en modell lyckas
+  let lastError: Error | null = null;
+
+  for (const modelName of candidateModels) {
+    for (const apiVersion of ['v1beta', 'v1']) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              response_mime_type: 'application/json',
+              temperature: 0.2,
+            },
+          }),
+        });
+
+        if (response.status === 404) {
+          // Denna modell finns inte under denna API-version, prova nästa
+          continue;
+        }
+
+        if (!response.ok) {
+          const errBody = await response.text();
+          // Om response_mime_type inte stöds (äldre modeller), prova utan
+          if (errBody.includes('response_mime_type') || errBody.includes('generationConfig')) {
+            const fallbackRes = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+              }),
+            });
+            if (fallbackRes.ok) {
+              const data = await fallbackRes.json();
+              const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (text) return parseGeminiOutput(text, gameTitle);
+            }
+          }
+          lastError = new Error(`Modell ${modelName} (${response.status}): ${errBody}`);
+          continue;
+        }
+
+        const data = await response.json();
+        const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!textContent) {
+          continue;
+        }
+
+        return parseGeminiOutput(textContent, gameTitle);
+      } catch (err: any) {
+        lastError = err;
+      }
+    }
   }
 
-  const parsed = JSON.parse(textContent);
+  throw lastError || new Error('Ingen tillgänglig Gemini-modell hittades för din API-nyckel.');
+}
+
+function parseGeminiOutput(rawText: string, gameTitle: string): GameProgressTemplate {
+  // Städa bort eventuella markdown codeblocks: ```json ... ```
+  let cleaned = rawText.trim();
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```[a-z]*\s*/i, '').replace(/\s*```$/i, '').trim();
+  }
+
+  const parsed = JSON.parse(cleaned);
 
   return {
     gameTitle: parsed.gameTitle || gameTitle,

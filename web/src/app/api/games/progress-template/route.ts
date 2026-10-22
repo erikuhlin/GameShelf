@@ -427,22 +427,21 @@ Följ dessa strikta regler:
         });
       }
 
-        if (!response.ok) {
-          const errBody = await response.text();
-          lastError = new Error(`Modell ${modelName} (${response.status}): ${errBody}`);
-          continue;
-        }
-
-        const data = await response.json();
-        const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!textContent) {
-          continue;
-        }
-
-        return parseGeminiOutput(textContent, gameTitle, granularity, modelName);
-      } catch (err: any) {
-        lastError = err;
+      if (!response.ok) {
+        const errBody = await response.text();
+        lastError = new Error(`Modell ${modelName} (${response.status}): ${errBody}`);
+        continue;
       }
+
+      const data = await response.json();
+      const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!textContent) {
+        continue;
+      }
+
+      return parseGeminiOutput(textContent, gameTitle, granularity, modelName);
+    } catch (err: any) {
+      lastError = err;
     }
   }
 

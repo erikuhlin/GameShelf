@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const maxDuration = 30;
+export const dynamic = 'force-dynamic';
+
 export type ProgressionType = 'chapters' | 'acts' | 'main_quests' | 'bosses' | 'worlds' | 'none';
 export type Granularity = 'compact' | 'standard' | 'detailed';
 
@@ -212,6 +215,76 @@ const CURATED_TEMPLATES: Record<string, Omit<GameProgressTemplate, 'source'>> = 
       { id: 'bg3-8', title: 'Akt 3: Nedre staden – Konfrontationen med Enver Gortash', order: 9, chapterGroup: 'Akt 3' },
       { id: 'bg3-9', title: 'Akt 3: Mordtemplet – Konfrontationen med Orin the Red', order: 10, chapterGroup: 'Akt 3' },
       { id: 'bg3-10', title: 'Akt 3: Slutstriden mot Netherbrain & Kronan', order: 11, chapterGroup: 'Akt 3' },
+    ],
+  },
+  'kingdom come: deliverance ii': {
+    gameTitle: 'Kingdom Come: Deliverance II',
+    hasLinearProgression: true,
+    progressionType: 'main_quests',
+    summary: 'Henrys fortsatta resa genom Böhmen, uppdelad i Trosky- och Kuttenberg-regionerna.',
+    items: [
+      { id: 'kcd2-1', title: 'Last Rites (Trosky)', order: 1, chapterGroup: 'Trosky' },
+      { id: 'kcd2-2', title: 'Easy Riders', order: 2, chapterGroup: 'Trosky' },
+      { id: 'kcd2-3', title: 'Fortuna', order: 3, chapterGroup: 'Trosky' },
+      { id: 'kcd2-4', title: 'Laboratores', order: 4, chapterGroup: 'Trosky' },
+      { id: 'kcd2-5', title: 'Wedding Crashers', order: 5, chapterGroup: 'Trosky' },
+      { id: 'kcd2-6', title: 'For Whom The Bell Tolls', order: 6, chapterGroup: 'Trosky' },
+      { id: 'kcd2-7', title: 'Back In The Saddle', order: 7, chapterGroup: 'Trosky' },
+      { id: 'kcd2-8', title: 'Necessary Evil', order: 8, chapterGroup: 'Trosky' },
+      { id: 'kcd2-9', title: 'The Sword and the Quill', order: 9, chapterGroup: 'Kuttenberg' },
+      { id: 'kcd2-10', title: 'Speak of the Devil', order: 10, chapterGroup: 'Kuttenberg' },
+      { id: 'kcd2-11', title: 'The Devil\'s Pack (Dry Devil)', order: 11, chapterGroup: 'Kuttenberg' },
+      { id: 'kcd2-12', title: 'Into the Underworld', order: 12, chapterGroup: 'Kuttenberg' },
+      { id: 'kcd2-13', title: 'Via Argentum', order: 13, chapterGroup: 'Kuttenberg' },
+      { id: 'kcd2-14', title: 'Taking French Leave', order: 14, chapterGroup: 'Kuttenberg' },
+      { id: 'kcd2-15', title: 'The King\'s Gambit', order: 15, chapterGroup: 'Kuttenberg' },
+      { id: 'kcd2-16', title: 'The Feast & The Italian Job (Silver Heist)', order: 16, chapterGroup: 'Kuttenberg' },
+      { id: 'kcd2-17', title: 'Judgement Day (Final Siege)', order: 17, chapterGroup: 'Final' },
+    ],
+  },
+  'kingdom come deliverance 2': {
+    gameTitle: 'Kingdom Come: Deliverance II',
+    hasLinearProgression: true,
+    progressionType: 'main_quests',
+    summary: 'Henrys fortsatta resa genom Böhmen, uppdelad i Trosky- och Kuttenberg-regionerna.',
+    items: [
+      { id: 'kcd2-1', title: 'Last Rites (Trosky)', order: 1, chapterGroup: 'Trosky' },
+      { id: 'kcd2-2', title: 'Easy Riders', order: 2, chapterGroup: 'Trosky' },
+      { id: 'kcd2-3', title: 'Fortuna', order: 3, chapterGroup: 'Trosky' },
+      { id: 'kcd2-4', title: 'Laboratores', order: 4, chapterGroup: 'Trosky' },
+      { id: 'kcd2-5', title: 'Wedding Crashers', order: 5, chapterGroup: 'Trosky' },
+      { id: 'kcd2-6', title: 'For Whom The Bell Tolls', order: 6, chapterGroup: 'Trosky' },
+      { id: 'kcd2-7', title: 'Back In The Saddle', order: 7, chapterGroup: 'Trosky' },
+      { id: 'kcd2-8', title: 'Necessary Evil', order: 8, chapterGroup: 'Trosky' },
+      { id: 'kcd2-9', title: 'The Sword and the Quill', order: 9, chapterGroup: 'Kuttenberg' },
+      { id: 'kcd2-10', title: 'Speak of the Devil', order: 10, chapterGroup: 'Kuttenberg' },
+      { id: 'kcd2-11', title: 'The Devil\'s Pack (Dry Devil)', order: 11, chapterGroup: 'Kuttenberg' },
+      { id: 'kcd2-12', title: 'Into the Underworld', order: 12, chapterGroup: 'Kuttenberg' },
+      { id: 'kcd2-13', title: 'Via Argentum', order: 13, chapterGroup: 'Kuttenberg' },
+      { id: 'kcd2-14', title: 'Taking French Leave', order: 14, chapterGroup: 'Kuttenberg' },
+      { id: 'kcd2-15', title: 'The King\'s Gambit', order: 15, chapterGroup: 'Kuttenberg' },
+      { id: 'kcd2-16', title: 'The Feast & The Italian Job (Silver Heist)', order: 16, chapterGroup: 'Kuttenberg' },
+      { id: 'kcd2-17', title: 'Judgement Day (Final Siege)', order: 17, chapterGroup: 'Final' },
+    ],
+  },
+  '007 first light': {
+    gameTitle: '007 First Light',
+    hasLinearProgression: true,
+    progressionType: 'chapters',
+    summary: 'James Bonds ursprung som agent genom 10 kapitel och 18 uppdrag.',
+    items: [
+      { id: '007-0', title: 'Prologue: Against All Odds (Iceland)', order: 1, chapterGroup: 'Prolog' },
+      { id: '007-1', title: 'In His Majesty\'s Secret Service (MI6)', order: 2, chapterGroup: 'MI6 HQ' },
+      { id: '007-2', title: 'Chapter 1: The Needle\'s Eye (Malta)', order: 3, chapterGroup: 'Träning' },
+      { id: '007-3', title: 'Chapter 2: The Heart of the Matter (MI6)', order: 4, chapterGroup: 'Briefing' },
+      { id: '007-4', title: 'Chapter 3: A New Home', order: 5, chapterGroup: 'Aktiv tjänst' },
+      { id: '007-5', title: 'Chapter 4: A Night Out (London)', order: 6, chapterGroup: 'London' },
+      { id: '007-6', title: 'Chapter 5: A Matter of Considerable Delicacy', order: 7, chapterGroup: 'Diplomati' },
+      { id: '007-7', title: 'Chapter 6: All the Time in the World (Slovakia)', order: 8, chapterGroup: 'Slovakien' },
+      { id: '007-8', title: 'Chapter 7: Out of the Ashes / The Past Never Dies', order: 9, chapterGroup: 'Mauretanien' },
+      { id: '007-9', title: 'Chapter 8: Uninvited (London)', order: 10, chapterGroup: 'London' },
+      { id: '007-10', title: 'Chapter 9: Knightfall', order: 11, chapterGroup: 'Kulmen' },
+      { id: '007-11', title: 'Chapter 10: Going Old School & For England', order: 12, chapterGroup: 'Final' },
     ],
   },
   'rocket league': {

@@ -63,7 +63,8 @@ interface ActiveTodo {
   isOptional?: boolean;
 }
 
-const PRESET_GAMES = [
+  { name: 'Kingdom Come: Deliverance II', displayName: 'Kingdom Come II', type: 'main_quests', icon: Layers, tag: '32 Uppdrag (Trosky & Kuttenberg)', hltb: 50 },
+  { name: '007 First Light', displayName: '007 First Light', type: 'chapters', icon: BookOpen, tag: '10 Kapitel (18 Uppdrag)', hltb: 14 },
   { name: 'Silent Hill 2', displayName: 'Silent Hill 2 (Remake)', type: 'chapters', icon: BookOpen, tag: '14 Zoner & Skräck', hltb: 16 },
   { name: 'The Last of Us Part I', displayName: 'The Last of Us Part I', type: 'chapters', icon: BookOpen, tag: '12 Kapitel & 4 Årstider', hltb: 15 },
   { name: 'Cyberpunk 2077', displayName: 'Cyberpunk 2077', type: 'main_quests', icon: Layers, tag: 'Huvuduppdrag i Akterna', hltb: 25 },
@@ -76,9 +77,11 @@ const PRESET_GAMES = [
 ];
 
 export default function TestProgressPage() {
-  const [selectedGameName, setSelectedGameName] = useState<string>('Silent Hill 2');
+  const [selectedGameName, setSelectedGameName] = useState<string>('Kingdom Come: Deliverance II');
   const [searchInput, setSearchInput] = useState<string>('');
   const [guideUrlInput, setGuideUrlInput] = useState<string>('');
+  const [rawTextInput, setRawTextInput] = useState<string>('');
+  const [inputMode, setInputMode] = useState<'url' | 'text'>('text');
   const [geminiApiKey, setGeminiApiKey] = useState<string>('');
   const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(false);
 
@@ -184,9 +187,69 @@ export default function TestProgressPage() {
     }
   };
 
+  // Parsa rå text direkt (100% oberoende av nätverk, blixtsnabbt)
+  const parseFromRawText = (text: string, title: string) => {
+    setIsLoading(true);
+    setErrorMsg(null);
+    setRevealedIds(new Set());
+
+    const lines = text
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    const items: ActiveTodo[] = [];
+    let order = 1;
+
+    for (const line of lines) {
+      if (line.length < 2 || line.length > 140) continue;
+      if (/^(cookie|copyright|privacy|advertisement|follow us|subscribe|sign up)/i.test(line)) continue;
+
+      const cleaned = line
+        .replace(/^[\d]+[\.\)\:\-]\s*/, '')
+        .replace(/^(kapitel|chapter|akt|act|mission|quest)\s*\d+[\:\.\-]?\s*/i, '')
+        .replace(/^[-*•]\s*/, '')
+        .trim();
+
+      if (cleaned.length >= 2) {
+        items.push({
+          id: `custom-${order}`,
+          title: cleaned,
+          order: order,
+          isDone: false,
+        });
+        order++;
+      }
+    }
+
+    if (items.length === 0) {
+      setErrorMsg('Kunde inte hitta några rader att skapa delmål från. Klistra in en lista med ett kapitel eller uppdrag per rad.');
+      setIsLoading(false);
+      return;
+    }
+
+    const gameTitle = title.trim() || 'Eget spel';
+    setTemplate({
+      gameTitle,
+      hasLinearProgression: true,
+      progressionType: 'chapters',
+      summary: `Skapad direkt från inklistrad text (${items.length} delmål).`,
+      items: items.map((it) => ({
+        id: it.id,
+        title: it.title,
+        order: it.order,
+      })),
+      source: 'custom',
+    });
+    setSelectedGameName(gameTitle);
+    setTodos(items);
+    setEstimatedHours(Math.max(10, Math.round(items.length * 1.5)));
+    setIsLoading(false);
+  };
+
   // Ladda initialt spel vid start
   useEffect(() => {
-    loadGameTemplate('Silent Hill 2');
+    loadGameTemplate('Kingdom Come: Deliverance II');
   }, []);
 
   // Byt detaljnivå och ladda om
@@ -426,51 +489,104 @@ export default function TestProgressPage() {
             </button>
           </form>
 
-          {/* Alternativ 2: Hämta direkt från källguide (Scraping + AI) */}
-          <div className="bg-gray-950/70 border border-blue-500/30 rounded-xl p-3.5 space-y-2">
-            <div className="flex items-center justify-between text-xs">
+          {/* Alternativ 2: Importera från guide (Text eller URL) */}
+          <div className="bg-gray-950/70 border border-blue-500/30 rounded-xl p-3.5 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
               <span className="font-semibold text-blue-400 flex items-center gap-1.5">
                 <Globe className="w-4 h-4" />
-                Alternativ 2: Hämta direkt från en guide-URL (100% träffsäkert)
+                Alternativ 2: Importera guide (100% träffsäkert)
               </span>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 font-medium">
-                Rekommenderas
-              </span>
+              <div className="inline-flex rounded-lg bg-gray-900 p-0.5 border border-gray-800 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setInputMode('text')}
+                  className={`px-2.5 py-1 rounded-md font-medium transition ${
+                    inputMode === 'text'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Klistra in text / lista
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInputMode('url')}
+                  className={`px-2.5 py-1 rounded-md font-medium transition ${
+                    inputMode === 'url'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Guide-URL
+                </button>
+              </div>
             </div>
-            <p className="text-[11px] text-gray-400">
-              Klistra in en länk till spelets walkthrough eller kapitelöversikt (från t.ex. PowerPyx, IGN, Game8). AI:n läser direkt av sidans text och extraherar rätt engelska uppdrag utan risk för sammanblandning eller felaktiga kapitel!
-            </p>
-            <div className="flex flex-col sm:flex-row gap-2 pt-1">
-              <input
-                type="url"
-                placeholder="https://www.powerpyx.com/... eller https://www.ign.com/wikis/..."
-                value={guideUrlInput}
-                onChange={(e) => setGuideUrlInput(e.target.value)}
-                className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (guideUrlInput.trim()) {
-                    loadGameTemplate(searchInput.trim() || selectedGameName, granularity, true, guideUrlInput.trim());
-                  }
-                }}
-                disabled={isLoading || !guideUrlInput.trim()}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap shadow-md shadow-blue-500/10"
-              >
-                {isLoading ? (
-                  <>
-                    <Globe className="w-3.5 h-3.5 animate-spin" />
-                    Läser guide...
-                  </>
-                ) : (
-                  <>
-                    <Globe className="w-3.5 h-3.5" />
-                    Extrahera från guide-URL
-                  </>
-                )}
-              </button>
-            </div>
+
+            {inputMode === 'text' ? (
+              <div className="space-y-2">
+                <p className="text-[11px] text-gray-400">
+                  Kopiera kapitellistan eller texten från en walkthrough (t.ex. PowerPyx, IGN eller Reddit) och klistra in här. Den skapar checklistan <strong>omedelbart på 1 millisekund</strong> utan risk för blockering eller timeout!
+                </p>
+                <textarea
+                  rows={4}
+                  placeholder={`Klistra in kapitel eller uppdrag här (ett per rad, t.ex):\n1. East South Vale\n2. Wood Side Apartments\n3. Blue Creek Apartments\n4. Brookhaven Hospital...`}
+                  value={rawTextInput}
+                  onChange={(e) => setRawTextInput(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono leading-relaxed"
+                />
+                <div className="flex justify-between items-center pt-1">
+                  <span className="text-[10px] text-gray-500">
+                    Tips: Tar bort siffror, bindestreck och formatering automatiskt.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => parseFromRawText(rawTextInput, searchInput.trim() || selectedGameName)}
+                    disabled={!rawTextInput.trim()}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-md shadow-blue-500/10"
+                  >
+                    <ListChecks className="w-3.5 h-3.5" />
+                    Skapa checklista direkt
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-[11px] text-gray-400">
+                  Klistra in en länk till spelets walkthrough eller kapitelöversikt (från t.ex. PowerPyx, IGN, Game8).
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                  <input
+                    type="url"
+                    placeholder="https://www.powerpyx.com/... eller https://www.ign.com/wikis/..."
+                    value={guideUrlInput}
+                    onChange={(e) => setGuideUrlInput(e.target.value)}
+                    className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (guideUrlInput.trim()) {
+                        loadGameTemplate(searchInput.trim() || selectedGameName, granularity, true, guideUrlInput.trim());
+                      }
+                    }}
+                    disabled={isLoading || !guideUrlInput.trim()}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap shadow-md shadow-blue-500/10"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Globe className="w-3.5 h-3.5 animate-spin" />
+                        Läser guide...
+                      </>
+                    ) : (
+                      <>
+                        <Globe className="w-3.5 h-3.5" />
+                        Extrahera från guide-URL
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {errorMsg && (

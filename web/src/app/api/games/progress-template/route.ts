@@ -273,45 +273,35 @@ async function fetchWithGemini(
       ? 'ca 20 till 30'
       : 'ca 14 till 22';
 
-  const prompt = `Du är en expert på TV-spel och spelguider. Analysera spelet "${gameTitle}" och skapa en logisk, ren och kronologisk lista över spelets huvudsakliga progression (Main Story / Critical Path) för en spelspårningsapp.
+  const prompt = `Search Google for: "${gameTitle} main missions list walkthrough" or "${gameTitle} chapters guide".
+Använd Google Search för att hitta den officiella och aktuella listan över huvuduppdrag / kapitel för spelet "${gameTitle}".
 Önskad detaljnivå: ${granularity} (sikta på ${targetCount} delmål).
 
 Följ dessa strikta regler:
-1. RENODLADE MULTIPLAYER- ELLER SPORT-SPEL:
-   - Om spelet är ett renodlat multiplayer-, sport-, racing- eller partyspel helt utan en linjär storykampanj (t.ex. FIFA, Rocket League, Tetris), sätt:
-     "hasLinearProgression": false, "progressionType": "none", "summary": "Detta spel saknar en linjär enspelarkampanj eller fast kapitelordning.", "items": []
-   - Om spelet DÄREMOT ÄR ett storyspel, äventyrsspel, actionspel eller RPG (oavsett om det är en klassiker eller nysläppt, inklusive 007 First Light eller nyare titlar): analysera och lista huvuduppdragen eller kapitlen kronologiskt!
+1. SÖK PÅ GOOGLE & ANVÄND OFFICIELLA ENGELSKA TITLAR:
+   - Hämta de faktiska, officiella ENGELSKA namnen på spelets huvuduppdrag / kapitel från etablerade spelguider (IGN, PowerPyx, Fandom, Game8, GameFAQs).
+   - Översätt ALDRIG officiella quest- eller kapitelnamn till svenska!
 
-2. OFFICIELLA ENGELSKA TITLAR:
-   - Använd ALLTID de officiella, exakta ENGELSKA namnen från spelets interna Quest Log / Journal / Chapter Selection (t.ex. "Escape the Nautiloid", "Rescue the Druid Halsin", eller för Kingdom Come: "Unexpected Visitors", "Run!", "Homecoming", "Awakening", "Baptism of Fire").
-   - Översätt ALDRIG officiella quest- eller kapitelnamn till svenska! Spelaren vill kunna titta i sin quest log i spelet och känna igen exakt samma namn.
+2. EXAKT SPECIFIKT SPEL:
+   - Se till att du hämtar uppdragen för exakt detta spel: "${gameTitle}". Om spelet är en uppföljare (t.ex. "Kingdom Come: Deliverance II"), lista INTE uppdragen från det första spelet!
 
-3. INGA HOPPSLAGNA UPPDRAG (ENDAST EN QUEST PER PUNKT):
-   - Slå ALDRIG ihop flera uppdrag i samma punkt (skriv t.ex. INTE "Druid Grove & Goblin Camp", utan lista de enskilda uppdragen separat: t.ex. "Save the Refugees", "Rescue the Druid Halsin", "Defeat the Goblin Leaders").
+3. INGA HOPPSLAGNA UPPDRAG:
+   - Varje uppdrag ska vara ett separat delmål i listan. Slå inte ihop flera uppdrag i samma punkt.
 
-4. FÖR RPG-SPEL (t.ex. Kingdom Come: Deliverance, Baldur's Gate 3, Cyberpunk 2077, The Witcher 3):
-   - Progressionen ska bestå av de faktiska HUVUDUPPDRAGEN (Main Quests). Sätt "progressionType": "main_quests".
-   - Sätt "chapterGroup" till den övergripande akten eller regionen (t.ex. "Prologue", "Act 1", "Act 2", "Act 3" eller "Skalitz", "Rattay", "Sasau").
-
-5. FÖR KAPITEL- OCH SURVIVAL HORROR-SPEL (t.ex. Silent Hill, Resident Evil, The Last of Us, 007 First Light):
-   - Lista de faktiska kapitlen, uppdragen eller distinkta områdena i kronologisk ordning. Sätt "chapterGroup" till regionen/byggnaden/uppdraget.
-
-6. UNDVIK SPOILERS:
-   - Skriv rena titlar. Avslöja inte plot-twists i sammanfattningen eller namnen.
-
-Svara med ett giltigt JSON-objekt med exakt detta format (bara ren JSON, inga markdown-block):
+4. FORMAT:
+   - Svara enbart med ett giltigt JSON-objekt i detta format (inga markdown-kodblock):
 {
   "gameTitle": "${gameTitle}",
   "hasLinearProgression": true,
   "progressionType": "chapters" | "acts" | "main_quests" | "bosses" | "worlds" | "none",
-  "summary": "Kort beskrivning (max 2 meningar) av hur spelet och dess uppdrag är uppbyggt",
+  "summary": "Kort beskrivning av spelets uppbyggnad",
   "items": [
     {
       "id": "1",
       "title": "Exact English Quest Title",
       "order": 1,
-      "chapterGroup": "Act 1 / Area Name",
-      "description": "Kort valfri förklaring",
+      "chapterGroup": "Act 1 / Area",
+      "description": "Kort info",
       "isOptional": false
     }
   ]
@@ -346,7 +336,7 @@ Svara med ett giltigt JSON-objekt med exakt detta format (bara ren JSON, inga ma
     console.warn('Could not query model list, using defaults:', err);
   }
 
-  // 2. Prova de tillgängliga modellerna i tur och ordning (404 svarar på 100ms)
+  // 2. Prova med Google Search Grounding så att den söker som Google AI Overview
   let lastError: Error | null = null;
 
   for (const modelName of candidateModels) {
@@ -354,19 +344,32 @@ Svara med ett giltigt JSON-objekt med exakt detta format (bara ren JSON, inga ma
       try {
         const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
         
-        const response = await fetch(url, {
+        // 1. Försök med Google Search Grounding
+        let response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.1,
-            },
+            tools: [{ google_search: {} }],
           }),
         });
 
         if (response.status === 404) {
           continue;
+        }
+
+        // 2. Om verktyg inte stöds på denna modell/tier, prova utan verktyg
+        if (!response.ok) {
+          response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: {
+                temperature: 0.1,
+              },
+            }),
+          });
         }
 
         if (!response.ok) {

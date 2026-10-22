@@ -26,12 +26,17 @@ import {
   AlertCircle,
   Copy,
   Check,
+  Sliders,
+  Flame,
 } from 'lucide-react';
+
+export type Granularity = 'compact' | 'standard' | 'detailed';
 
 interface TemplateItem {
   id: string;
   title: string;
   order: number;
+  chapterGroup?: string;
   description?: string;
   isOptional?: boolean;
 }
@@ -40,6 +45,7 @@ interface LoadedTemplate {
   gameTitle: string;
   hasLinearProgression: boolean;
   progressionType: 'chapters' | 'acts' | 'main_quests' | 'bosses' | 'worlds' | 'none';
+  granularity?: Granularity;
   summary?: string;
   items: TemplateItem[];
   source: 'curated' | 'ai' | 'custom';
@@ -50,25 +56,31 @@ interface ActiveTodo {
   title: string;
   isDone: boolean;
   order: number;
+  chapterGroup?: string;
   isOptional?: boolean;
 }
 
 const PRESET_GAMES = [
-  { name: 'The Last of Us Part I', type: 'chapters', icon: BookOpen, tag: 'Linjära kapitel', hltb: 15 },
-  { name: 'Cyberpunk 2077', type: 'acts', icon: Layers, tag: 'Akter & RPG-uppdrag', hltb: 25 },
-  { name: 'Elden Ring', type: 'bosses', icon: Skull, tag: 'Huvudbossar', hltb: 58 },
-  { name: 'Super Mario Odyssey', type: 'worlds', icon: Globe, tag: 'Världar / Riken', hltb: 13 },
-  { name: 'The Witcher 3: Wild Hunt', type: 'acts', icon: Layers, tag: 'Akter & Story', hltb: 52 },
-  { name: 'Resident Evil 4', type: 'chapters', icon: BookOpen, tag: 'Kapitel & Zoner', hltb: 16 },
-  { name: 'Baldur\'s Gate 3', type: 'acts', icon: Layers, tag: '3 Stora akter', hltb: 65 },
-  { name: 'Rocket League', type: 'none', icon: Gamepad2, tag: 'Ej linjärt / MP', hltb: 0 },
+  { name: 'Silent Hill 2', displayName: 'Silent Hill 2 (Remake)', type: 'chapters', icon: BookOpen, tag: '14 Zoner & Skräck', hltb: 16 },
+  { name: 'The Last of Us Part I', displayName: 'The Last of Us Part I', type: 'chapters', icon: BookOpen, tag: '12 Kapitel & 4 Årstider', hltb: 15 },
+  { name: 'Cyberpunk 2077', displayName: 'Cyberpunk 2077', type: 'main_quests', icon: Layers, tag: 'Huvuduppdrag i Akterna', hltb: 25 },
+  { name: 'Elden Ring', displayName: 'Elden Ring', type: 'bosses', icon: Skull, tag: '11 Huvudbossar', hltb: 58 },
+  { name: 'Super Mario Odyssey', displayName: 'Super Mario Odyssey', type: 'worlds', icon: Globe, tag: 'Riken / Världar', hltb: 13 },
+  { name: 'The Witcher 3: Wild Hunt', displayName: 'The Witcher 3', type: 'main_quests', icon: Layers, tag: 'Regioner & Storyquests', hltb: 52 },
+  { name: 'Resident Evil 4', displayName: 'Resident Evil 4', type: 'chapters', icon: BookOpen, tag: 'Byn, Slottet, Ön', hltb: 16 },
+  { name: 'Baldur\'s Gate 3', displayName: 'Baldur\'s Gate 3', type: 'main_quests', icon: Layers, tag: 'Akter & Vändpunkter', hltb: 65 },
+  { name: 'Rocket League', displayName: 'Rocket League', type: 'none', icon: Gamepad2, tag: 'Ej linjärt / MP', hltb: 0 },
 ];
 
 export default function TestProgressPage() {
-  const [selectedGameName, setSelectedGameName] = useState<string>('The Last of Us Part I');
+  const [selectedGameName, setSelectedGameName] = useState<string>('Silent Hill 2');
   const [searchInput, setSearchInput] = useState<string>('');
   const [geminiApiKey, setGeminiApiKey] = useState<string>('');
   const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(false);
+
+  // Detaljnivå och AI-tvingande
+  const [granularity, setGranularity] = useState<Granularity>('standard');
+  const [forceAI, setForceAI] = useState<boolean>(false);
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -76,7 +88,7 @@ export default function TestProgressPage() {
 
   // Användarens aktiva bocklista (motsvarar Game.todos i iOS/web)
   const [todos, setTodos] = useState<ActiveTodo[]>([]);
-  const [estimatedHours, setEstimatedHours] = useState<number>(15);
+  const [estimatedHours, setEstimatedHours] = useState<number>(16);
 
   // Inställningar för test
   const [spoilerProtection, setSpoilerProtection] = useState<boolean>(true);
@@ -96,7 +108,11 @@ export default function TestProgressPage() {
   };
 
   // Hämta mall för ett spel
-  const loadGameTemplate = async (title: string) => {
+  const loadGameTemplate = async (
+    title: string,
+    currentGranularity: Granularity = granularity,
+    shouldForceAI: boolean = forceAI
+  ) => {
     setIsLoading(true);
     setErrorMsg(null);
     setRevealedIds(new Set());
@@ -108,6 +124,8 @@ export default function TestProgressPage() {
         body: JSON.stringify({
           gameTitle: title,
           geminiApiKey: geminiApiKey.trim() || undefined,
+          granularity: currentGranularity,
+          forceAI: shouldForceAI,
         }),
       });
 
@@ -130,6 +148,7 @@ export default function TestProgressPage() {
       const initialTodos: ActiveTodo[] = (data.items || []).map((item: TemplateItem, index: number) => ({
         id: item.id || `todo-${index}`,
         title: item.title,
+        chapterGroup: item.chapterGroup,
         isDone: false,
         order: item.order || index + 1,
         isOptional: item.isOptional,
@@ -137,7 +156,9 @@ export default function TestProgressPage() {
       setTodos(initialTodos);
 
       // Sätt ungefärlig HLTB om vi känner till spelet
-      const preset = PRESET_GAMES.find((p) => p.name.toLowerCase() === title.toLowerCase());
+      const preset = PRESET_GAMES.find(
+        (p) => p.name.toLowerCase() === title.toLowerCase() || p.displayName.toLowerCase() === title.toLowerCase()
+      );
       if (preset) {
         setEstimatedHours(preset.hltb);
       } else {
@@ -152,8 +173,14 @@ export default function TestProgressPage() {
 
   // Ladda initialt spel vid start
   useEffect(() => {
-    loadGameTemplate('The Last of Us Part I');
+    loadGameTemplate('Silent Hill 2');
   }, []);
+
+  // Byt detaljnivå och ladda om
+  const handleGranularityChange = (newGranularity: Granularity) => {
+    setGranularity(newGranularity);
+    loadGameTemplate(selectedGameName, newGranularity, forceAI);
+  };
 
   // Beräkningar för framsteg
   const totalCount = todos.length;
@@ -238,6 +265,7 @@ export default function TestProgressPage() {
       todos.map((t) => ({
         id: t.id,
         title: t.title,
+        chapterGroup: t.chapterGroup,
         isDone: t.isDone,
       })),
       null,
@@ -275,18 +303,21 @@ export default function TestProgressPage() {
 
         {/* Steg 1: Välj / Sök Spel */}
         <section className="bg-gray-900/60 border border-gray-800 rounded-2xl p-5 sm:p-6 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-300 flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center text-xs font-bold">1</span>
-              Välj eller sök ett spel
+              Välj förberett exempel eller sök valfritt spel
             </h2>
-            <button
-              onClick={() => setShowApiKeyInput(!showApiKeyInput)}
-              className="text-xs text-gray-400 hover:text-white flex items-center gap-1.5 transition-colors"
-            >
-              <Key className="w-3.5 h-3.5 text-amber-400" />
-              {showApiKeyInput ? 'Dölj AI-nyckel' : 'Valfri Gemini AI-nyckel'}
-            </button>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowApiKeyInput(!showApiKeyInput)}
+                className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1.5 transition-colors font-medium"
+              >
+                <Key className="w-3.5 h-3.5" />
+                {showApiKeyInput ? 'Dölj AI-nyckel' : 'Gemini AI-nyckel'}
+              </button>
+            </div>
           </div>
 
           {/* Valfri Gemini API Key inställning */}
@@ -294,10 +325,10 @@ export default function TestProgressPage() {
             <div className="bg-gray-950/80 border border-amber-500/30 rounded-xl p-4 text-xs space-y-2">
               <div className="flex items-center gap-2 text-amber-300 font-medium">
                 <Key className="w-4 h-4" />
-                Vill du testa vilket spel som helst i världen?
+                Google Gemini API-inställning
               </div>
               <p className="text-gray-400">
-                De 8 spelen nedan är förberedda och kräver ingen nyckel. För att testa helt valfria spel (t.ex. nischade JRPG:er eller gamla klassiker) kan du klistra in en gratis Google Gemini API-nyckel här:
+                För att testa <strong>vilket spel som helst i världen</strong> eller tvinga AI att analysera om kurerade spel med olika detaljnivåer:
               </p>
               <div className="flex gap-2">
                 <input
@@ -308,20 +339,31 @@ export default function TestProgressPage() {
                   className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white w-full focus:outline-none focus:border-red-500"
                 />
               </div>
+              <div className="flex items-center gap-2 pt-1 text-gray-400">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={forceAI}
+                    onChange={(e) => setForceAI(e.target.checked)}
+                    className="rounded border-gray-700 bg-gray-900 text-red-600 focus:ring-0"
+                  />
+                  <span>Tvinga AI-generering (använd inte förberedda mallar för snabbvalsspelen)</span>
+                </label>
+              </div>
             </div>
           )}
 
           {/* Snabbvals-knappar */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {PRESET_GAMES.map((p) => {
               const Icon = p.icon;
-              const isSelected = selectedGameName.toLowerCase() === p.name.toLowerCase();
+              const isSelected = selectedGameName.toLowerCase() === p.name.toLowerCase() || selectedGameName.toLowerCase() === p.displayName.toLowerCase();
               return (
                 <button
                   key={p.name}
                   onClick={() => {
                     setSelectedGameName(p.name);
-                    loadGameTemplate(p.name);
+                    loadGameTemplate(p.name, granularity, forceAI);
                   }}
                   className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
                     isSelected
@@ -335,7 +377,7 @@ export default function TestProgressPage() {
                       {p.tag}
                     </span>
                   </div>
-                  <span className="text-xs font-semibold line-clamp-1">{p.name}</span>
+                  <span className="text-xs font-semibold line-clamp-1">{p.displayName}</span>
                 </button>
               );
             })}
@@ -347,7 +389,7 @@ export default function TestProgressPage() {
               e.preventDefault();
               if (searchInput.trim()) {
                 setSelectedGameName(searchInput.trim());
-                loadGameTemplate(searchInput.trim());
+                loadGameTemplate(searchInput.trim(), granularity, forceAI);
               }
             }}
             className="flex gap-2 pt-2"
@@ -356,7 +398,7 @@ export default function TestProgressPage() {
               <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Eller skriv in ett annat spelnamn..."
+                placeholder="Skriv in valfritt spel (t.ex. Silent Hill 2, Alan Wake 2, Halo...)"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="w-full bg-gray-950 border border-gray-800 rounded-xl pl-9 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500 transition-colors"
@@ -365,9 +407,9 @@ export default function TestProgressPage() {
             <button
               type="submit"
               disabled={isLoading || !searchInput.trim()}
-              className="px-4 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors flex items-center gap-1.5"
+              className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-1.5 shadow-md"
             >
-              {isLoading ? 'Hämtar...' : 'Analysera'}
+              {isLoading ? 'Analyserar...' : 'Analysera med AI'}
             </button>
           </form>
 
@@ -382,13 +424,13 @@ export default function TestProgressPage() {
         {/* Steg 2: Progression Metadata & Sammanfattning */}
         {template && (
           <section className="bg-gray-900/60 border border-gray-800 rounded-2xl p-5 sm:p-6 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800 pb-4">
               <div>
                 <h2 className="text-lg font-bold text-white flex items-center gap-2">
                   {template.gameTitle}
                   {template.source === 'curated' && (
                     <span className="text-[10px] bg-green-500/20 text-green-400 border border-green-500/30 px-2 py-0.5 rounded-full font-medium">
-                      Verifierad kurerad mall
+                      Verifierad mall
                     </span>
                   )}
                   {template.source === 'ai' && (
@@ -398,23 +440,47 @@ export default function TestProgressPage() {
                   )}
                 </h2>
                 {template.summary && (
-                  <p className="text-xs text-gray-400 mt-1">{template.summary}</p>
+                  <p className="text-xs text-gray-400 mt-1 max-w-xl">{template.summary}</p>
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-xs px-2.5 py-1 rounded-lg bg-gray-800 text-gray-300 font-mono">
-                  Typ:{' '}
-                  {template.progressionType === 'chapters'
-                    ? 'Kapitel'
-                    : template.progressionType === 'acts'
-                    ? 'Akter & Uppdrag'
-                    : template.progressionType === 'bosses'
-                    ? 'Huvudbossar'
-                    : template.progressionType === 'worlds'
-                    ? 'Världar / Riken'
-                    : 'Ej linjärt'}
+              {/* Detaljnivå Selector */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                <span className="text-[11px] text-gray-400 uppercase font-semibold flex items-center gap-1">
+                  <Sliders className="w-3.5 h-3.5 text-gray-400" /> Detaljnivå:
                 </span>
+                <div className="inline-flex rounded-xl bg-gray-950 p-1 border border-gray-800 text-xs">
+                  <button
+                    onClick={() => handleGranularityChange('compact')}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                      granularity === 'compact'
+                        ? 'bg-red-600 text-white'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Kompakt (Akter)
+                  </button>
+                  <button
+                    onClick={() => handleGranularityChange('standard')}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                      granularity === 'standard'
+                        ? 'bg-red-600 text-white'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Standard (12–18)
+                  </button>
+                  <button
+                    onClick={() => handleGranularityChange('detailed')}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                      granularity === 'detailed'
+                        ? 'bg-red-600 text-white'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Detaljerad (Fler quests)
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -429,7 +495,7 @@ export default function TestProgressPage() {
             ) : (
               <>
                 {/* Steg 3: Framstegs-Dashboard (Hur det ser ut i appen) */}
-                <div className="space-y-4 pt-2">
+                <div className="space-y-4 pt-1">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-300 flex items-center gap-2">
                       <span className="w-5 h-5 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center text-xs font-bold">2</span>
@@ -546,12 +612,12 @@ export default function TestProgressPage() {
                             )}
                           </button>
 
-                          {/* Titel & Status */}
+                          {/* Titel & ChapterGroup */}
                           <div className="flex-1 min-w-0">
                             {isHiddenBySpoiler ? (
                               <div className="flex items-center gap-2 text-xs text-gray-500 italic">
                                 <Shield className="w-3.5 h-3.5 text-amber-500/70" />
-                                <span>Kapitel {idx + 1} (Titel dold av spoilerskydd)</span>
+                                <span>Delmål {idx + 1} (Titel dold av spoilerskydd)</span>
                                 <button
                                   onClick={() => toggleReveal(item.id)}
                                   className="text-[11px] not-italic text-amber-400 hover:underline flex items-center gap-1 ml-1"
@@ -560,7 +626,12 @@ export default function TestProgressPage() {
                                 </button>
                               </div>
                             ) : (
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                {item.chapterGroup && (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-gray-800/90 text-gray-400 font-medium shrink-0 border border-gray-700/50">
+                                    {item.chapterGroup}
+                                  </span>
+                                )}
                                 <span
                                   className={`text-sm font-medium ${
                                     item.isDone ? 'line-through text-gray-500' : 'text-gray-200'
@@ -649,6 +720,7 @@ export default function TestProgressPage() {
                       todos.slice(0, 4).map((t) => ({
                         id: t.id,
                         title: t.title,
+                        chapterGroup: t.chapterGroup,
                         isDone: t.isDone,
                       })),
                       null,

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export type ProgressionType = 'chapters' | 'acts' | 'main_quests' | 'bosses' | 'worlds' | 'none';
+export type Granularity = 'compact' | 'standard' | 'detailed';
 
 export interface ProgressTemplateItem {
   id: string;
   title: string;
   order: number;
+  chapterGroup?: string;
   description?: string;
   isOptional?: boolean;
 }
@@ -15,6 +17,7 @@ export interface GameProgressTemplate {
   igdbId?: number;
   hasLinearProgression: boolean;
   progressionType: ProgressionType;
+  granularity?: Granularity;
   items: ProgressTemplateItem[];
   source: 'curated' | 'ai' | 'custom';
   summary?: string;
@@ -22,24 +25,46 @@ export interface GameProgressTemplate {
 
 // Förberedda kurerade mallar för ett antal kända spel
 const CURATED_TEMPLATES: Record<string, Omit<GameProgressTemplate, 'source'>> = {
+  'silent hill 2': {
+    gameTitle: 'Silent Hill 2 (Remake)',
+    hasLinearProgression: true,
+    progressionType: 'chapters',
+    summary: 'James Sunders sökande efter Mary genom den dimhöljda och mardrömslika staden Silent Hill.',
+    items: [
+      { id: 'sh2-1', title: 'Östra South Vale & Stadsporten', order: 1, chapterGroup: 'South Vale' },
+      { id: 'sh2-2', title: 'Wood Side Apartments', order: 2, chapterGroup: 'Lägenheterna' },
+      { id: 'sh2-3', title: 'Blue Creek Apartments & Pyramid Head', order: 3, chapterGroup: 'Lägenheterna' },
+      { id: 'sh2-4', title: 'Västra South Vale & Rosewater Park', order: 4, chapterGroup: 'South Vale' },
+      { id: 'sh2-5', title: 'Brookhaven Hospital (Dimman)', order: 5, chapterGroup: 'Sjukhuset' },
+      { id: 'sh2-6', title: 'Brookhaven Hospital (Otherworld)', order: 6, chapterGroup: 'Sjukhuset' },
+      { id: 'sh2-7', title: 'Silent Hill gator (Nattvandring)', order: 7, chapterGroup: 'Natt' },
+      { id: 'sh2-8', title: 'Silent Hill Historical Society', order: 8, chapterGroup: 'Historiska sällskapet' },
+      { id: 'sh2-9', title: 'Toluca Prison', order: 9, chapterGroup: 'Fängelset' },
+      { id: 'sh2-10', title: 'The Labyrinth', order: 10, chapterGroup: 'Labyrinten' },
+      { id: 'sh2-11', title: 'Toluca Lake (Båtturen)', order: 11, chapterGroup: 'Sjön' },
+      { id: 'sh2-12', title: 'Lakeview Hotel (Dimman)', order: 12, chapterGroup: 'Hotellet' },
+      { id: 'sh2-13', title: 'Lakeview Hotel (Otherworld)', order: 13, chapterGroup: 'Hotellet' },
+      { id: 'sh2-14', title: 'Slutstriden & Efterspelet', order: 14, chapterGroup: 'Final' },
+    ],
+  },
   'the last of us part i': {
     gameTitle: 'The Last of Us Part I',
     hasLinearProgression: true,
     progressionType: 'chapters',
     summary: 'Joel och Ellies resa genom USA, uppdelad i 12 kapitel och 4 årstider.',
     items: [
-      { id: 'tlou-0', title: 'Prolog (Austin, Texas)', order: 1 },
-      { id: 'tlou-1', title: 'Kapitel 1: Karantänzonen (Boston)', order: 2 },
-      { id: 'tlou-2', title: 'Kapitel 2: Utkanten', order: 3 },
-      { id: 'tlou-3', title: 'Kapitel 3: Bills stad', order: 4 },
-      { id: 'tlou-4', title: 'Kapitel 4: Pittsburgh', order: 5 },
-      { id: 'tlou-5', title: 'Kapitel 5: Förorten', order: 6 },
-      { id: 'tlou-6', title: 'Kapitel 6: Tommys damm (Jackson)', order: 7 },
-      { id: 'tlou-7', title: 'Kapitel 7: Universitetet (Eastern Colorado)', order: 8 },
-      { id: 'tlou-8', title: 'Kapitel 8: Stugbyn vid sjön (Vinter)', order: 9 },
-      { id: 'tlou-9', title: 'Kapitel 9: Bussterminalen (Salt Lake City)', order: 10 },
-      { id: 'tlou-10', title: 'Kapitel 10: Eldflugornas laboratorium', order: 11 },
-      { id: 'tlou-11', title: 'Epilog (Jackson)', order: 12 },
+      { id: 'tlou-0', title: 'Prolog (Austin, Texas)', order: 1, chapterGroup: 'Sommar' },
+      { id: 'tlou-1', title: 'Kapitel 1: Karantänzonen (Boston)', order: 2, chapterGroup: 'Sommar' },
+      { id: 'tlou-2', title: 'Kapitel 2: Utkanten', order: 3, chapterGroup: 'Sommar' },
+      { id: 'tlou-3', title: 'Kapitel 3: Bills stad', order: 4, chapterGroup: 'Sommar' },
+      { id: 'tlou-4', title: 'Kapitel 4: Pittsburgh', order: 5, chapterGroup: 'Sommar' },
+      { id: 'tlou-5', title: 'Kapitel 5: Förorten', order: 6, chapterGroup: 'Sommar' },
+      { id: 'tlou-6', title: 'Kapitel 6: Tommys damm (Jackson)', order: 7, chapterGroup: 'Höst' },
+      { id: 'tlou-7', title: 'Kapitel 7: Universitetet (Colorado)', order: 8, chapterGroup: 'Höst' },
+      { id: 'tlou-8', title: 'Kapitel 8: Stugbyn vid sjön', order: 9, chapterGroup: 'Vinter' },
+      { id: 'tlou-9', title: 'Kapitel 9: Bussterminalen (Salt Lake City)', order: 10, chapterGroup: 'Vår' },
+      { id: 'tlou-10', title: 'Kapitel 10: Eldflugornas laboratorium', order: 11, chapterGroup: 'Vår' },
+      { id: 'tlou-11', title: 'Epilog (Jackson)', order: 12, chapterGroup: 'Vår' },
     ],
   },
   'the last of us': {
@@ -48,50 +73,53 @@ const CURATED_TEMPLATES: Record<string, Omit<GameProgressTemplate, 'source'>> = 
     progressionType: 'chapters',
     summary: 'Joel och Ellies resa genom USA, uppdelad i 12 kapitel och 4 årstider.',
     items: [
-      { id: 'tlou-0', title: 'Prolog (Austin, Texas)', order: 1 },
-      { id: 'tlou-1', title: 'Kapitel 1: Karantänzonen (Boston)', order: 2 },
-      { id: 'tlou-2', title: 'Kapitel 2: Utkanten', order: 3 },
-      { id: 'tlou-3', title: 'Kapitel 3: Bills stad', order: 4 },
-      { id: 'tlou-4', title: 'Kapitel 4: Pittsburgh', order: 5 },
-      { id: 'tlou-5', title: 'Kapitel 5: Förorten', order: 6 },
-      { id: 'tlou-6', title: 'Kapitel 6: Tommys damm (Jackson)', order: 7 },
-      { id: 'tlou-7', title: 'Kapitel 7: Universitetet (Eastern Colorado)', order: 8 },
-      { id: 'tlou-8', title: 'Kapitel 8: Stugbyn vid sjön (Vinter)', order: 9 },
-      { id: 'tlou-9', title: 'Kapitel 9: Bussterminalen (Salt Lake City)', order: 10 },
-      { id: 'tlou-10', title: 'Kapitel 10: Eldflugornas laboratorium', order: 11 },
-      { id: 'tlou-11', title: 'Epilog (Jackson)', order: 12 },
+      { id: 'tlou-0', title: 'Prolog (Austin, Texas)', order: 1, chapterGroup: 'Sommar' },
+      { id: 'tlou-1', title: 'Kapitel 1: Karantänzonen (Boston)', order: 2, chapterGroup: 'Sommar' },
+      { id: 'tlou-2', title: 'Kapitel 2: Utkanten', order: 3, chapterGroup: 'Sommar' },
+      { id: 'tlou-3', title: 'Kapitel 3: Bills stad', order: 4, chapterGroup: 'Sommar' },
+      { id: 'tlou-4', title: 'Kapitel 4: Pittsburgh', order: 5, chapterGroup: 'Sommar' },
+      { id: 'tlou-5', title: 'Kapitel 5: Förorten', order: 6, chapterGroup: 'Sommar' },
+      { id: 'tlou-6', title: 'Kapitel 6: Tommys damm (Jackson)', order: 7, chapterGroup: 'Höst' },
+      { id: 'tlou-7', title: 'Kapitel 7: Universitetet (Colorado)', order: 8, chapterGroup: 'Höst' },
+      { id: 'tlou-8', title: 'Kapitel 8: Stugbyn vid sjön', order: 9, chapterGroup: 'Vinter' },
+      { id: 'tlou-9', title: 'Kapitel 9: Bussterminalen (Salt Lake City)', order: 10, chapterGroup: 'Vår' },
+      { id: 'tlou-10', title: 'Kapitel 10: Eldflugornas laboratorium', order: 11, chapterGroup: 'Vår' },
+      { id: 'tlou-11', title: 'Epilog (Jackson)', order: 12, chapterGroup: 'Vår' },
     ],
   },
   'cyberpunk 2077': {
     gameTitle: 'Cyberpunk 2077',
     hasLinearProgression: true,
-    progressionType: 'acts',
-    summary: 'V:s berättelse i Night City uppdelad i prolog, tre huvudakter och epilog.',
+    progressionType: 'main_quests',
+    summary: 'V:s resa i Night City uppdelad i de centrala huvuduppdragen genom akterna.',
     items: [
-      { id: 'cp-0', title: 'Prolog: Livsstil & Räddningsuppdraget', order: 1 },
-      { id: 'cp-1', title: 'Akt 1: Kupen på Konpeki Plaza', order: 2 },
-      { id: 'cp-2', title: 'Akt 2: Huvudspår 1 – Panam & Nomads (Ghost Town)', order: 3 },
-      { id: 'cp-3', title: 'Akt 2: Huvudspår 2 – Judy & Evelyn (Automatic Love)', order: 4 },
-      { id: 'cp-4', title: 'Akt 2: Huvudspår 3 – Takemura & Arasaka (Down on the Street)', order: 5 },
-      { id: 'cp-5', title: 'Akt 2: Samlingspunkt vid parade (Play It Safe & Search and Destroy)', order: 6 },
-      { id: 'cp-6', title: 'Akt 3: Nocturne Op55N1 (Point of No Return)', order: 7 },
-      { id: 'cp-7', title: 'Epilog: Slutuppdrag & Efterspel', order: 8 },
+      { id: 'cp-0', title: 'Prolog: Livsstil & Räddningsuppdraget', order: 1, chapterGroup: 'Prolog' },
+      { id: 'cp-1', title: 'Akt 1: Kupen på Konpeki Plaza (The Heist)', order: 2, chapterGroup: 'Akt 1' },
+      { id: 'cp-2', title: 'Akt 1: Uppvaknandet & Tom\'s Diner (Playing for Time)', order: 3, chapterGroup: 'Akt 1' },
+      { id: 'cp-3', title: 'Akt 2: Automatic Love & The Space in Between (Judy)', order: 4, chapterGroup: 'Akt 2' },
+      { id: 'cp-4', title: 'Akt 2: Ghost Town & Lightning Breaks (Panam)', order: 5, chapterGroup: 'Akt 2' },
+      { id: 'cp-5', title: 'Akt 2: Down on the Street & Gimme Danger (Takemura)', order: 6, chapterGroup: 'Akt 2' },
+      { id: 'cp-6', title: 'Akt 2: Transmission & Never Fade Away (Voodoo Boys)', order: 7, chapterGroup: 'Akt 2' },
+      { id: 'cp-7', title: 'Akt 2: Play It Safe & Search and Destroy (Paraden)', order: 8, chapterGroup: 'Akt 2' },
+      { id: 'cp-8', title: 'Akt 3: Nocturne Op55N1 (Point of No Return)', order: 9, chapterGroup: 'Akt 3' },
+      { id: 'cp-9', title: 'Epilog: Slutuppdrag & Efterspel', order: 10, chapterGroup: 'Epilog' },
     ],
   },
   'the witcher 3: wild hunt': {
     gameTitle: 'The Witcher 3: Wild Hunt',
     hasLinearProgression: true,
-    progressionType: 'acts',
-    summary: 'Geralts sökande efter Ciri, uppdelat i prolog och tre storslagna akter.',
+    progressionType: 'main_quests',
+    summary: 'Geralts sökande efter Ciri, uppdelat efter de huvudsakliga storyuppdragen i varje region.',
     items: [
-      { id: 'w3-0', title: 'Prolog: Vita pommern (White Orchard)', order: 1 },
-      { id: 'w3-1', title: 'Akt 1: Jakten i Velen (Blodige Baronen & Häxorna)', order: 2 },
-      { id: 'w3-2', title: 'Akt 1: Jakten i Novigrad (Dandelion & Triss)', order: 3 },
-      { id: 'w3-3', title: 'Akt 1: Jakten på Skellige (Yennefer & Masken)', order: 4 },
-      { id: 'w3-4', title: 'Akt 2: Uma & Kaer Morhen (Ugly Baby)', order: 5 },
-      { id: 'w3-5', title: 'Akt 2: Dimöarna & Slaget om Kaer Morhen', order: 6 },
-      { id: 'w3-6', title: 'Akt 3: Slutförberedelser i Novigrad', order: 7 },
-      { id: 'w3-7', title: 'Akt 3: Slutstriden (Tedd Deireadh)', order: 8 },
+      { id: 'w3-0', title: 'Prolog: Vita pommern (Lilac and Gooseberries)', order: 1, chapterGroup: 'Prolog' },
+      { id: 'w3-1', title: 'Akt 1 (Velen): Den blodige baronen & Häxorna i träsket', order: 2, chapterGroup: 'Akt 1' },
+      { id: 'w3-2', title: 'Akt 1 (Novigrad): Jakten på Dandelion & Triss plan', order: 3, chapterGroup: 'Akt 1' },
+      { id: 'w3-3', title: 'Akt 1 (Skellige): Uroboros mask & Kungavalet', order: 4, chapterGroup: 'Akt 1' },
+      { id: 'w3-4', title: 'Akt 2: Förbannelsen över Uma (Ugly Baby)', order: 5, chapterGroup: 'Akt 2' },
+      { id: 'w3-5', title: 'Akt 2: Dimöarna & Återföreningen (Isle of Mists)', order: 6, chapterGroup: 'Akt 2' },
+      { id: 'w3-6', title: 'Akt 2: Slaget om Kaer Morhen', order: 7, chapterGroup: 'Akt 2' },
+      { id: 'w3-7', title: 'Akt 3: Slutförberedelser & Solstenen (Sunstone)', order: 8, chapterGroup: 'Akt 3' },
+      { id: 'w3-8', title: 'Akt 3: Slutstriden mot Eredin (Tedd Deireadh)', order: 9, chapterGroup: 'Akt 3' },
     ],
   },
   'elden ring': {
@@ -100,17 +128,17 @@ const CURATED_TEMPLATES: Record<string, Omit<GameProgressTemplate, 'source'>> = 
     progressionType: 'bosses',
     summary: 'Framsteg i Lands Between mäts bäst genom de nödvändiga och huvudsakliga bossarna.',
     items: [
-      { id: 'er-1', title: 'Margit, the Fell Omen (Stormveil)', order: 1 },
-      { id: 'er-2', title: 'Godrick the Grafted (Stormveil)', order: 2 },
-      { id: 'er-3', title: 'Rennala, Queen of the Full Moon (Raya Lucaria)', order: 3 },
-      { id: 'er-4', title: 'Starscourge Radahn (Redmane Castle)', order: 4 },
-      { id: 'er-5', title: 'Rykard, Lord of Blasphemy (Volcano Manor)', order: 5, isOptional: true },
-      { id: 'er-6', title: 'Morgott, the Omen King (Leyndell)', order: 6 },
-      { id: 'er-7', title: 'Fire Giant (Mountaintops of the Giants)', order: 7 },
-      { id: 'er-8', title: 'Godskin Duo (Crumbling Farum Azula)', order: 8 },
-      { id: 'er-9', title: 'Maliketh, the Black Blade (Farum Azula)', order: 9 },
-      { id: 'er-10', title: 'Sir Gideon Ofnir & Godfrey / Hoarah Loux', order: 10 },
-      { id: 'er-11', title: 'Radagon of the Golden Order & Elden Beast', order: 11 },
+      { id: 'er-1', title: 'Margit, the Fell Omen (Stormveil)', order: 1, chapterGroup: 'Limgrave' },
+      { id: 'er-2', title: 'Godrick the Grafted (Stormveil)', order: 2, chapterGroup: 'Limgrave' },
+      { id: 'er-3', title: 'Rennala, Queen of the Full Moon (Raya Lucaria)', order: 3, chapterGroup: 'Liurnia' },
+      { id: 'er-4', title: 'Starscourge Radahn (Redmane Castle)', order: 4, chapterGroup: 'Caelid' },
+      { id: 'er-5', title: 'Rykard, Lord of Blasphemy (Volcano Manor)', order: 5, chapterGroup: 'Mt. Gelmir', isOptional: true },
+      { id: 'er-6', title: 'Morgott, the Omen King (Leyndell)', order: 6, chapterGroup: 'Huvudstaden' },
+      { id: 'er-7', title: 'Fire Giant (Mountaintops of the Giants)', order: 7, chapterGroup: 'Bergen' },
+      { id: 'er-8', title: 'Godskin Duo (Crumbling Farum Azula)', order: 8, chapterGroup: 'Farum Azula' },
+      { id: 'er-9', title: 'Maliketh, the Black Blade (Farum Azula)', order: 9, chapterGroup: 'Farum Azula' },
+      { id: 'er-10', title: 'Sir Gideon Ofnir & Godfrey / Hoarah Loux', order: 10, chapterGroup: 'Askhuvudstaden' },
+      { id: 'er-11', title: 'Radagon of the Golden Order & Elden Beast', order: 11, chapterGroup: 'Final' },
     ],
   },
   'super mario odyssey': {
@@ -119,49 +147,52 @@ const CURATED_TEMPLATES: Record<string, Omit<GameProgressTemplate, 'source'>> = 
     progressionType: 'worlds',
     summary: 'Marios resa genom rikena med luftskeppet Odyssey för att rädda Peach.',
     items: [
-      { id: 'smo-1', title: 'Cap Kingdom (Bonneton)', order: 1 },
-      { id: 'smo-2', title: 'Cascade Kingdom (Fossil Falls)', order: 2 },
-      { id: 'smo-3', title: 'Sand Kingdom (Tostarena)', order: 3 },
-      { id: 'smo-4', title: 'Lake Kingdom & Wooded Kingdom', order: 4 },
-      { id: 'smo-5', title: 'Cloud Kingdom & Lost Kingdom', order: 5 },
-      { id: 'smo-6', title: 'Metro Kingdom (New Donk City)', order: 6 },
-      { id: 'smo-7', title: 'Snow Kingdom & Seaside Kingdom', order: 7 },
-      { id: 'smo-8', title: 'Luncheon Kingdom (Mount Volbono)', order: 8 },
-      { id: 'smo-9', title: 'Ruined Kingdom & Bowser\'s Kingdom', order: 9 },
-      { id: 'smo-10', title: 'Moon Kingdom & Slutstriden mot Bowser', order: 10 },
-      { id: 'smo-11', title: 'Mushroom Kingdom (Post-game)', order: 11, isOptional: true },
+      { id: 'smo-1', title: 'Cap Kingdom (Bonneton)', order: 1, chapterGroup: 'Tidiga riken' },
+      { id: 'smo-2', title: 'Cascade Kingdom (Fossil Falls)', order: 2, chapterGroup: 'Tidiga riken' },
+      { id: 'smo-3', title: 'Sand Kingdom (Tostarena)', order: 3, chapterGroup: 'Tidiga riken' },
+      { id: 'smo-4', title: 'Lake Kingdom & Wooded Kingdom', order: 4, chapterGroup: 'Skog & Sjö' },
+      { id: 'smo-5', title: 'Cloud Kingdom & Lost Kingdom', order: 5, chapterGroup: 'Mellanriken' },
+      { id: 'smo-6', title: 'Metro Kingdom (New Donk City)', order: 6, chapterGroup: 'Storstaden' },
+      { id: 'smo-7', title: 'Snow Kingdom & Seaside Kingdom', order: 7, chapterGroup: 'Snö & Kust' },
+      { id: 'smo-8', title: 'Luncheon Kingdom (Mount Volbono)', order: 8, chapterGroup: 'Vulkan' },
+      { id: 'smo-9', title: 'Ruined Kingdom & Bowser\'s Kingdom', order: 9, chapterGroup: 'Slott' },
+      { id: 'smo-10', title: 'Moon Kingdom & Slutstriden', order: 10, chapterGroup: 'Månen' },
+      { id: 'smo-11', title: 'Mushroom Kingdom (Post-game)', order: 11, chapterGroup: 'Efterspel', isOptional: true },
     ],
   },
   'resident evil 4': {
-    gameTitle: 'Resident Evil 4',
+    gameTitle: 'Resident Evil 4 (Remake)',
     hasLinearProgression: true,
     progressionType: 'chapters',
-    summary: 'Leons uppdrag att rädda presidentens dotter, uppdelat i byn, slottet och ön.',
+    summary: 'Leons uppdrag att rädda Ashley, uppdelat i byn, slottet och ön.',
     items: [
-      { id: 're4-1', title: 'Kapitel 1–2: Byn och kyrkan', order: 1 },
-      { id: 're4-2', title: 'Kapitel 3–4: Sjön och Mendez bossfajt', order: 2 },
-      { id: 're4-3', title: 'Kapitel 5–6: Flykten från byn till slottet', order: 3 },
-      { id: 're4-4', title: 'Kapitel 7–8: Slottets portar och vattenhallen', order: 4 },
-      { id: 're4-5', title: 'Kapitel 9–10: Labyrinten, balsalen och Novistadors', order: 5 },
-      { id: 're4-6', title: 'Kapitel 11–12: Gruvorna och Salazar bossfajt', order: 6 },
-      { id: 're4-7', title: 'Kapitel 13–14: Ön, Regeneradors och Krauser', order: 7 },
-      { id: 're4-8', title: 'Kapitel 15–16: Helikopterstödet och Saddler', order: 8 },
+      { id: 're4-1', title: 'Kapitel 1–2: Byn, jägarstugan och kyrkan', order: 1, chapterGroup: 'Byn' },
+      { id: 're4-2', title: 'Kapitel 3–4: Sjön, Del Lago och El Gigante', order: 2, chapterGroup: 'Byn' },
+      { id: 're4-3', title: 'Kapitel 5–6: Stugan, slakthuset och Mendez', order: 3, chapterGroup: 'Byn' },
+      { id: 're4-4', title: 'Kapitel 7–8: Slottets murar och vattenhallen', order: 4, chapterGroup: 'Slottet' },
+      { id: 're4-5', title: 'Kapitel 9–10: Labyrinten, balsalen och Verdugo', order: 5, chapterGroup: 'Slottet' },
+      { id: 're4-6', title: 'Kapitel 11–12: Gruvvagnarna och Ramon Salazar', order: 6, chapterGroup: 'Slottet' },
+      { id: 're4-7', title: 'Kapitel 13–14: Ön, Regeneradors och Jack Krauser', order: 7, chapterGroup: 'Ön' },
+      { id: 're4-8', title: 'Kapitel 15–16: Fristaden, Saddler och flykten', order: 8, chapterGroup: 'Ön' },
     ],
   },
   'baldur\'s gate 3': {
     gameTitle: 'Baldur\'s Gate 3',
     hasLinearProgression: true,
-    progressionType: 'acts',
-    summary: 'Den storslagna kampanjen uppdelad i tre massiva akter.',
+    progressionType: 'main_quests',
+    summary: 'Den storslagna kampanjen uppdelad i de huvudsakliga vändpunkterna genom akterna.',
     items: [
-      { id: 'bg3-0', title: 'Prolog: Nautiloid-flykten', order: 1 },
-      { id: 'bg3-1', title: 'Akt 1: Vildmarken, Druid Grove & Goblin Camp', order: 2 },
-      { id: 'bg3-2', title: 'Akt 1: Underdark, Grymforge & Mountain Pass', order: 3 },
-      { id: 'bg3-3', title: 'Akt 2: Shadow-Cursed Lands & Last Light Inn', order: 4 },
-      { id: 'bg3-4', title: 'Akt 2: Gauntlet of Shar & Moonrise Towers', order: 5 },
-      { id: 'bg3-5', title: 'Akt 3: Rivington & Nedre staden (Baldur\'s Gate)', order: 6 },
-      { id: 'bg3-6', title: 'Akt 3: De Tre utvalda (Gortash & Orin)', order: 7 },
-      { id: 'bg3-7', title: 'Akt 3: Slutstriden mot Netherbrain', order: 8 },
+      { id: 'bg3-0', title: 'Prolog: Flykten från Nautiloid', order: 1, chapterGroup: 'Prolog' },
+      { id: 'bg3-1', title: 'Akt 1: Druid Grove & Goblin Camp (Halsin & Minthara)', order: 2, chapterGroup: 'Akt 1' },
+      { id: 'bg3-2', title: 'Akt 1: Underdark & Grymforge (Adamantine Forge)', order: 3, chapterGroup: 'Akt 1' },
+      { id: 'bg3-3', title: 'Akt 1: Mountain Pass & Githyanki Creche (Vlaakith)', order: 4, chapterGroup: 'Akt 1' },
+      { id: 'bg3-4', title: 'Akt 2: Shadow-Cursed Lands & Last Light Inn', order: 5, chapterGroup: 'Akt 2' },
+      { id: 'bg3-5', title: 'Akt 2: Gauntlet of Shar & Nightsong', order: 6, chapterGroup: 'Akt 2' },
+      { id: 'bg3-6', title: 'Akt 2: Belägringen av Moonrise Towers & Ketheric Thorm', order: 7, chapterGroup: 'Akt 2' },
+      { id: 'bg3-7', title: 'Akt 3: Rivington & Cirkusen', order: 8, chapterGroup: 'Akt 3' },
+      { id: 'bg3-8', title: 'Akt 3: Nedre staden – Konfrontationen med Enver Gortash', order: 9, chapterGroup: 'Akt 3' },
+      { id: 'bg3-9', title: 'Akt 3: Mordtemplet – Konfrontationen med Orin the Red', order: 10, chapterGroup: 'Akt 3' },
+      { id: 'bg3-10', title: 'Akt 3: Slutstriden mot Netherbrain & Kronan', order: 11, chapterGroup: 'Akt 3' },
     ],
   },
   'rocket league': {
@@ -178,6 +209,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const gameTitle: string = (body.gameTitle || '').trim();
     const geminiKey: string = (body.geminiApiKey || process.env.GEMINI_API_KEY || '').trim();
+    const granularity: Granularity = body.granularity || 'standard';
+    const forceAI: boolean = Boolean(body.forceAI);
 
     if (!gameTitle) {
       return NextResponse.json({ error: 'gameTitle krävs' }, { status: 400 });
@@ -185,20 +218,23 @@ export async function POST(req: NextRequest) {
 
     const lower = gameTitle.toLowerCase();
 
-    // 1. Kolla kurerade mallar
-    for (const [key, template] of Object.entries(CURATED_TEMPLATES)) {
-      if (lower.includes(key) || key.includes(lower)) {
-        return NextResponse.json({
-          ...template,
-          source: 'curated',
-        } as GameProgressTemplate);
+    // 1. Kolla kurerade mallar (om inte forceAI är aktiverat)
+    if (!forceAI) {
+      for (const [key, template] of Object.entries(CURATED_TEMPLATES)) {
+        if (lower.includes(key) || key.includes(lower)) {
+          return NextResponse.json({
+            ...template,
+            granularity: 'standard',
+            source: 'curated',
+          } as GameProgressTemplate);
+        }
       }
     }
 
-    // 2. Om ingen kurerad mall matchar och Gemini-nyckel finns -> Anropa Gemini
+    // 2. Om ingen kurerad mall matchar eller om användaren vill köra med AI
     if (geminiKey) {
       try {
-        const aiTemplate = await fetchWithGemini(gameTitle, geminiKey);
+        const aiTemplate = await fetchWithGemini(gameTitle, geminiKey, granularity);
         if (aiTemplate) {
           return NextResponse.json(aiTemplate);
         }
@@ -225,19 +261,34 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function fetchWithGemini(gameTitle: string, apiKey: string): Promise<GameProgressTemplate> {
-  const prompt = `Du är en expert på TV-spel. Analysera spelet "${gameTitle}" och skapa en logisk, ren och spoiler-sanerad lista över spelets huvudsakliga progression för en spelspårningsapp.
+async function fetchWithGemini(
+  gameTitle: string,
+  apiKey: string,
+  granularity: Granularity
+): Promise<GameProgressTemplate> {
+  const targetCount =
+    granularity === 'compact'
+      ? 'ca 6 till 10'
+      : granularity === 'detailed'
+      ? 'ca 16 till 26'
+      : 'ca 11 till 18';
 
-Följ dessa regler noggrant:
-1. Om spelet saknar en linjär enspelarkampanj/story (t.ex. rena multiplayer-, sport- eller partyspel som FIFA, Rocket League, Tetris), sätt "hasLinearProgression": false, "progressionType": "none" och en tom array för "items".
-2. Om spelet HAR en linjär story eller kampanj, identifiera progressionstypen:
-   - "chapters" (om spelet är indelat i kapitel, t.ex. The Last of Us, Resident Evil)
-   - "acts" (om spelet är indelat i akter/stora huvuduppdrag, t.ex. Cyberpunk 2077, Witcher 3)
-   - "bosses" (om progressionen bäst mäts genom huvudbossar, t.ex. Souls-spel, Cuphead)
-   - "worlds" (om spelet är indelat i världar/zoner, t.ex. Mario, Crash)
-3. Ta ENDAST med HUVUDHANDLINGEN (Main story/critical path). Ta INTE med 100 sidouppdrag eller samlarföremål. Håll listan mellan 5 och 20 punkter.
-4. UNDVIK DIREKTA SPOILERS i titlarna (skriv t.ex. "Kapitel 7: Universitetet" istället för "Kapitel 7: Karaktär X dör").
-5. Skriv på svenska där det är naturligt, men behåll etablerade engelska namn på världar eller kapitel om det är standarden.
+  const prompt = `Du är en expert på TV-spel. Analysera spelet "${gameTitle}" och skapa en logisk, ren och spoiler-sanerad lista över spelets huvudsakliga progression för en spelspårningsapp.
+Önskad detaljnivå: ${granularity} (sikta på ${targetCount} delmål).
+
+Följ dessa viktiga regler:
+1. Om spelet saknar en linjär enspelarkampanj/story (t.ex. rena multiplayer-, sport- eller partyspel som FIFA, Rocket League, Balatro, Tetris), sätt "hasLinearProgression": false, "progressionType": "none" och en tom array för "items".
+2. FÖR RPG-SPEL (t.ex. Cyberpunk 2077, Baldur's Gate 3, The Witcher 3, Starfield):
+   - Skapa INTE bara 3-4 punkter som heter "Akt 1", "Akt 2", "Akt 3"! Det är för grovt.
+   - Dela upp i de FAKTISKA HUVUDUPPDRAGEN (Main Quests) och viktiga milstolparna inom akterna! Sätt "chapterGroup" till t.ex. "Akt 1", "Akt 2", "Akt 3".
+3. FÖR SURVIVAL HORROR & ÄVENTYR (t.ex. Silent Hill 2, Resident Evil, Alan Wake, Dead Space):
+   - Dela upp efter de distinkta områdena, byggnaderna och faserna (t.ex. för Silent Hill 2: Östra South Vale, Wood Side Apartments, Blue Creek Apartments, Västra South Vale, Brookhaven Hospital, Otherworld Hospital, Gatorna (Natt), Historical Society, Toluca Prison, The Labyrinth, Toluca Lake, Lakeview Hotel, Otherworld Lakeview Hotel, Finalen).
+4. FÖR LINJÄRA KAPITELSPEL (t.ex. The Last of Us, Uncharted, Half-Life):
+   - Lista de faktiska officiella kapitlen ett och ett i rätt ordning.
+5. FÖR SOULS-LIKNANDE SPEL (t.ex. Elden Ring, Dark Souls, Bloodborne):
+   - Progressionen mäts bäst genom huvudbossarna och nödvändiga områden. Sätt progressionType till "bosses".
+6. UNDVIK DIREKTA SPOILERS i titlarna: Skriv t.ex. "Sjukhuset: Andra sidan" istället för "Möt döda karaktären X".
+7. Skriv på svenska där det känns naturligt, men behåll etablerade engelska namn på områden, kapitel eller bossar om det är standarden i spelet.
 
 Svara med ett giltigt JSON-objekt med exakt detta format (inga extra kommentarer, bara ren JSON):
 {
@@ -248,8 +299,9 @@ Svara med ett giltigt JSON-objekt med exakt detta format (inga extra kommentarer
   "items": [
     {
       "id": "1",
-      "title": "Kapitel 1: Namn",
+      "title": "Namn på kapitel/quest/område",
       "order": 1,
+      "chapterGroup": "Valfri grupp (t.ex. Akt 1, South Vale, Vinter)",
       "description": "Kort valfri förklaring",
       "isOptional": false
     }
@@ -277,7 +329,6 @@ Svara med ett giltigt JSON-objekt med exakt detta format (inga extra kommentarer
           .map((m: any) => m.name.replace(/^models\//, ''));
 
         if (available.length > 0) {
-          // Prioritera flash-modeller först
           const flash = available.filter((name: string) => name.includes('flash'));
           const pro = available.filter((name: string) => name.includes('pro'));
           candidateModels = [...flash, ...pro, ...available];
@@ -308,13 +359,11 @@ Svara med ett giltigt JSON-objekt med exakt detta format (inga extra kommentarer
         });
 
         if (response.status === 404) {
-          // Denna modell finns inte under denna API-version, prova nästa
           continue;
         }
 
         if (!response.ok) {
           const errBody = await response.text();
-          // Om response_mime_type inte stöds (äldre modeller), prova utan
           if (errBody.includes('response_mime_type') || errBody.includes('generationConfig')) {
             const fallbackRes = await fetch(url, {
               method: 'POST',
@@ -326,7 +375,7 @@ Svara med ett giltigt JSON-objekt med exakt detta format (inga extra kommentarer
             if (fallbackRes.ok) {
               const data = await fallbackRes.json();
               const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-              if (text) return parseGeminiOutput(text, gameTitle);
+              if (text) return parseGeminiOutput(text, gameTitle, granularity);
             }
           }
           lastError = new Error(`Modell ${modelName} (${response.status}): ${errBody}`);
@@ -339,7 +388,7 @@ Svara med ett giltigt JSON-objekt med exakt detta format (inga extra kommentarer
           continue;
         }
 
-        return parseGeminiOutput(textContent, gameTitle);
+        return parseGeminiOutput(textContent, gameTitle, granularity);
       } catch (err: any) {
         lastError = err;
       }
@@ -349,8 +398,11 @@ Svara med ett giltigt JSON-objekt med exakt detta format (inga extra kommentarer
   throw lastError || new Error('Ingen tillgänglig Gemini-modell hittades för din API-nyckel.');
 }
 
-function parseGeminiOutput(rawText: string, gameTitle: string): GameProgressTemplate {
-  // Städa bort eventuella markdown codeblocks: ```json ... ```
+function parseGeminiOutput(
+  rawText: string,
+  gameTitle: string,
+  granularity: Granularity
+): GameProgressTemplate {
   let cleaned = rawText.trim();
   if (cleaned.startsWith('```')) {
     cleaned = cleaned.replace(/^```[a-z]*\s*/i, '').replace(/\s*```$/i, '').trim();
@@ -362,12 +414,14 @@ function parseGeminiOutput(rawText: string, gameTitle: string): GameProgressTemp
     gameTitle: parsed.gameTitle || gameTitle,
     hasLinearProgression: Boolean(parsed.hasLinearProgression),
     progressionType: parsed.progressionType || 'chapters',
+    granularity,
     summary: parsed.summary || '',
     items: Array.isArray(parsed.items)
       ? parsed.items.map((item: any, idx: number) => ({
           id: String(item.id || idx + 1),
           title: String(item.title || `Delmål ${idx + 1}`),
           order: Number(item.order || idx + 1),
+          chapterGroup: item.chapterGroup,
           description: item.description,
           isOptional: Boolean(item.isOptional),
         }))

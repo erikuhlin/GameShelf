@@ -29,6 +29,7 @@ import {
   Sliders,
   Flame,
   ExternalLink,
+  Pencil,
 } from 'lucide-react';
 
 export type Granularity = 'compact' | 'standard' | 'detailed';
@@ -103,6 +104,24 @@ export default function TestProgressPage() {
   const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
   const [newTodoTitle, setNewTodoTitle] = useState<string>('');
   const [copiedJson, setCopiedJson] = useState<boolean>(false);
+
+  // Inline-redigering av delmål
+  const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
+  const [editingTodoText, setEditingTodoText] = useState<string>('');
+
+  const startEditing = (todo: ActiveTodo) => {
+    setEditingTodoId(todo.id);
+    setEditingTodoText(todo.title);
+  };
+
+  const saveEditing = (id: string) => {
+    if (editingTodoText.trim()) {
+      setTodos((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, title: editingTodoText.trim() } : t))
+      );
+    }
+    setEditingTodoId(null);
+  };
 
   // Ladda API-nyckel från localStorage om den sparats tidigare
   useEffect(() => {
@@ -486,7 +505,7 @@ export default function TestProgressPage() {
               disabled={isLoading || !searchInput.trim()}
               className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-1.5 shadow-md"
             >
-              {isLoading ? 'Analyserar...' : 'Analysera med AI'}
+              {isLoading ? 'Söker på IGN...' : 'Sök guide på IGN'}
             </button>
           </form>
 
@@ -825,13 +844,40 @@ export default function TestProgressPage() {
                                     {item.chapterGroup}
                                   </span>
                                 )}
-                                <span
-                                  className={`text-sm font-medium ${
-                                    item.isDone ? 'line-through text-gray-500' : 'text-gray-200'
-                                  }`}
-                                >
-                                  {item.title}
-                                </span>
+                                {editingTodoId === item.id ? (
+                                  <div className="flex items-center gap-1.5 flex-1 min-w-[200px]">
+                                    <input
+                                      type="text"
+                                      value={editingTodoText}
+                                      onChange={(e) => setEditingTodoText(e.target.value)}
+                                      onBlur={() => saveEditing(item.id)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') saveEditing(item.id);
+                                        if (e.key === 'Escape') setEditingTodoId(null);
+                                      }}
+                                      autoFocus
+                                      className="bg-gray-900 border border-blue-500 rounded px-2 py-0.5 text-xs text-white focus:outline-none w-full"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => saveEditing(item.id)}
+                                      className="px-2 py-0.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-[11px] font-medium"
+                                    >
+                                      Spara
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span
+                                    onClick={() => startEditing(item)}
+                                    className={`text-sm font-medium cursor-pointer hover:text-white transition-colors group/title flex items-center gap-1.5 ${
+                                      item.isDone ? 'line-through text-gray-500' : 'text-gray-200'
+                                    }`}
+                                    title="Klicka för att redigera titel"
+                                  >
+                                    <span>{item.title}</span>
+                                    <Pencil className="w-3 h-3 text-gray-500 opacity-40 group-hover/title:opacity-100 transition-opacity" />
+                                  </span>
+                                )}
                                 {idx === currentChapterIndex && !item.isDone && (
                                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-semibold uppercase">
                                     Aktuellt mål

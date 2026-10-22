@@ -15,20 +15,27 @@ export interface ProgressTemplateItem {
   isOptional?: boolean;
 }
 
-// Hjälpfunktion för att prioritera nyaste modellen (t.ex. 3.x -> 2.5 -> 2.0 -> 1.5)
+// Hjälpfunktion för att prioritera nyaste modellen (t.ex. 4.x -> 3.x -> 2.5 -> 2.0 -> 1.5)
 function getModelPriorityScore(name: string): number {
   let score = 0;
-  // Extrahera versionsnummer dynamiskt t.ex. 3.8, 2.5, 2.0, 1.5
+  if (name.includes('gemini-4') || name.includes('argon')) {
+    score += 4000;
+  }
   const versionMatch = name.match(/gemini[^\d]*(\d+(?:\.\d+)?)/i);
   if (versionMatch) {
     const ver = parseFloat(versionMatch[1]);
     score += Math.round(ver * 1000);
   }
 
+  // Föredra snabba Flash-modeller för responsivitet
   if (name.includes('flash')) score += 50;
-  else if (name.includes('pro')) score += 40;
+  else if (name.includes('pro')) score += 30;
 
-  if (name.includes('exp') || name.includes('preview')) score -= 10;
+  // Undvik embeddings, audio eller specialmodeller
+  if (name.includes('embed') || name.includes('aqa') || name.includes('learnlm') || name.includes('imagen')) {
+    score -= 10000;
+  }
+
   return score;
 }
 
@@ -391,45 +398,47 @@ async function fetchWithGemini(
       ? 'ca 20 till 30'
       : 'ca 14 till 22';
 
-  const prompt = `Search Google for: "${gameTitle} main missions list walkthrough" or "${gameTitle} chapters guide".
-Använd Google Search för att hitta den officiella och aktuella listan över huvuduppdrag / kapitel för spelet "${gameTitle}".
+  const prompt = `Search Google for: site:ign.com "${gameTitle}" ("walkthrough" OR "main missions" OR "chapters" OR "guide").
+Hämta den officiella kapitel- och uppdragslistan för spelet "${gameTitle}" ENDAST från IGN (ign.com).
 Önskad detaljnivå: ${granularity} (sikta på ${targetCount} delmål).
 
-Följ dessa strikta regler:
-1. SÖK PÅ GOOGLE & ANVÄND OFFICIELLA ENGELSKA TITLAR:
-   - Hämta de faktiska, officiella ENGELSKA namnen på spelets huvuduppdrag / kapitel från etablerade spelguider (IGN, PowerPyx, Fandom, Game8, GameFAQs).
-   - Översätt ALDRIG officiella quest- eller kapitelnamn till svenska!
+FÖLJ DESSA STRIKTA REGLER:
+1. ENDAST IGN SOM KÄLLA:
+   - Du får ENBART hämta data från IGN:s officiella walkthrough eller guide (ign.com/wikis/...). Blanda INTE in andra webbplatser, forum eller Reddit.
+   - Om IGN saknar en publicerad walkthrough för "${gameTitle}", sätt "hasLinearProgression": false och returnera en tom items-lista och en sammanfattning som förklarar att IGN saknar guide för detta spel än.
 
-2. EXAKT SPECIFIKT SPEL:
+2. OFFICIELLA ENGELSKA TITLAR:
+   - Hämta de officiella ENGELSKA namnen på spelets uppdrag/kapitel exakt som de är rubricerade på IGN. Översätt ALDRIG officiella quest- eller kapitelnamn till svenska!
+
+3. EXAKT SPEL (INGA SAMMANBLANDNINGAR):
    - Se till att du hämtar uppdragen för exakt detta spel: "${gameTitle}". Om spelet är en uppföljare (t.ex. "Kingdom Come: Deliverance II"), lista INTE uppdragen från det första spelet!
 
-3. INGA HOPPSLAGNA UPPDRAG:
+4. INGA HOPPSLAGNA UPPDRAG:
    - Varje uppdrag ska vara ett separat delmål i listan. Slå inte ihop flera uppdrag i samma punkt.
 
-4. FORMAT:
+5. FORMAT:
    - Svara enbart med ett giltigt JSON-objekt i detta format (inga markdown-kodblock):
 {
   "gameTitle": "${gameTitle}",
   "hasLinearProgression": true,
   "progressionType": "chapters" | "acts" | "main_quests" | "bosses" | "worlds" | "none",
-  "summary": "Kort beskrivning av spelets uppbyggnad",
+  "summary": "Kort svensk sammanfattning baserad på IGN:s guide",
   "items": [
     {
       "id": "1",
-      "title": "Exact English Quest Title",
+      "title": "Exact English Quest Title from IGN",
       "order": 1,
-      "chapterGroup": "Act 1 / Area",
+      "chapterGroup": "Act or Area (if applicable)",
       "description": "Kort info",
       "isOptional": false
     }
   ]
 }`;
 
-  // 1. Verifierade stabila modeller för Gemini API
+  // 1. Upptäck modeller från användarens API-nyckel, med nyaste verifierade modellen först
   let candidateModels = [
     'gemini-2.0-flash',
     'gemini-1.5-flash',
-    'gemini-1.5-pro',
   ];
 
   try {
@@ -449,10 +458,11 @@ Följ dessa strikta regler:
           );
 
         if (available.length > 0) {
-          // Sortera med 2.0-flash och 1.5-flash som högsta prio
-          candidateModels = available.sort(
+          // Sortera med nyaste aktiva modellen först (t.ex. 4.x -> 3.x -> 2.5 -> 2.0 -> 1.5)
+          const sorted = available.sort(
             (a: string, b: string) => getModelPriorityScore(b) - getModelPriorityScore(a)
           );
+          candidateModels = sorted.slice(0, 3);
         }
       }
     }

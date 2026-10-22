@@ -370,12 +370,19 @@ Följ dessa strikta regler:
       if (Array.isArray(listData.models)) {
         const available = listData.models
           .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
-          .map((m: any) => m.name.replace(/^models\//, ''));
+          .map((m: any) => m.name.replace(/^models\//, ''))
+          .filter(
+            (name: string) =>
+              !name.includes('embedding') &&
+              !name.includes('aqa') &&
+              !name.includes('learnlm') &&
+              !name.includes('imagen')
+          );
 
         if (available.length > 0) {
-          candidateModels = available.sort(
-            (a: string, b: string) => getModelPriorityScore(b) - getModelPriorityScore(a)
-          );
+          candidateModels = available
+            .sort((a: string, b: string) => getModelPriorityScore(b) - getModelPriorityScore(a))
+            .slice(0, 3); // Max top 3 för att förhindra timeout
         }
       }
     }
@@ -387,37 +394,38 @@ Följ dessa strikta regler:
   let lastError: Error | null = null;
 
   for (const modelName of candidateModels) {
-    for (const apiVersion of ['v1beta', 'v1']) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
-        
-        // 1. Försök med Google Search Grounding
-        let response = await fetch(url, {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
+      // 1. Försök med Google Search Grounding
+      let response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(9000),
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          tools: [{ google_search: {} }],
+        }),
+      });
+
+      if (response.status === 404) {
+        continue;
+      }
+
+      // 2. Om verktyg inte stöds på denna modell/tier, prova utan verktyg
+      if (!response.ok) {
+        response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(9000),
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            tools: [{ google_search: {} }],
+            generationConfig: {
+              temperature: 0.1,
+            },
           }),
         });
-
-        if (response.status === 404) {
-          continue;
-        }
-
-        // 2. Om verktyg inte stöds på denna modell/tier, prova utan verktyg
-        if (!response.ok) {
-          response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: {
-                temperature: 0.1,
-              },
-            }),
-          });
-        }
+      }
 
         if (!response.ok) {
           const errBody = await response.text();
@@ -515,6 +523,7 @@ async function fetchAndExtractFromUrl(
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.9',
     },
+    signal: AbortSignal.timeout(7000), // Max 7 sekunder för att hämta webbsidan
     redirect: 'follow',
   });
 
@@ -543,8 +552,8 @@ async function fetchAndExtractFromUrl(
     .replace(/\n\s*\n/g, '\n')
     .trim();
 
-  // Begränsa textmängden till relevant guideinnehåll (ca 45 000 tecken)
-  const guideSample = cleanedText.substring(0, 45000);
+  // Begränsa textmängden till relevant guideinnehåll (ca 40 000 tecken)
+  const guideSample = cleanedText.substring(0, 40000);
 
   const targetCount =
     granularity === 'compact'
@@ -609,12 +618,19 @@ ${guideSample}
       if (Array.isArray(listData.models)) {
         const available = listData.models
           .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
-          .map((m: any) => m.name.replace(/^models\//, ''));
+          .map((m: any) => m.name.replace(/^models\//, ''))
+          .filter(
+            (name: string) =>
+              !name.includes('embedding') &&
+              !name.includes('aqa') &&
+              !name.includes('learnlm') &&
+              !name.includes('imagen')
+          );
 
         if (available.length > 0) {
-          candidateModels = available.sort(
-            (a: string, b: string) => getModelPriorityScore(b) - getModelPriorityScore(a)
-          );
+          candidateModels = available
+            .sort((a: string, b: string) => getModelPriorityScore(b) - getModelPriorityScore(a))
+            .slice(0, 3); // Max top 3 för att inte överstiga timeout
         }
       }
     }
@@ -624,38 +640,37 @@ ${guideSample}
 
   let lastError: Error | null = null;
   for (const modelName of candidateModels) {
-    for (const apiVersion of ['v1beta', 'v1']) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.1,
-            },
-          }),
-        });
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(9000),
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.1,
+          },
+        }),
+      });
 
-        if (response.status === 404) continue;
-        if (!response.ok) {
-          const errBody = await response.text();
-          lastError = new Error(`Modell ${modelName} (${response.status}): ${errBody}`);
-          continue;
-        }
-
-        const data = await response.json();
-        const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!textContent) continue;
-
-        const result = parseGeminiOutput(textContent, gameTitle, granularity, modelName);
-        result.source = 'scraped_guide';
-        result.sourceUrl = guideUrl;
-        return result;
-      } catch (err: any) {
-        lastError = err;
+      if (response.status === 404) continue;
+      if (!response.ok) {
+        const errBody = await response.text();
+        lastError = new Error(`Modell ${modelName} (${response.status}): ${errBody}`);
+        continue;
       }
+
+      const data = await response.json();
+      const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!textContent) continue;
+
+      const result = parseGeminiOutput(textContent, gameTitle, granularity, modelName);
+      result.source = 'scraped_guide';
+      result.sourceUrl = guideUrl;
+      return result;
+    } catch (err: any) {
+      lastError = err;
     }
   }
 

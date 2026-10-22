@@ -128,6 +128,7 @@ export default function TestProgressPage() {
       const res = await fetch('/api/games/progress-template', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(25000),
         body: JSON.stringify({
           gameTitle: title,
           guideUrl: activeUrl.trim() || undefined,
@@ -173,7 +174,11 @@ export default function TestProgressPage() {
         setEstimatedHours(20);
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Nätverksfel vid hämtning');
+      if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+        setErrorMsg('Hämtningen tog för lång tid (timeout). Kontrollera att länken fungerar eller prova igen.');
+      } else {
+        setErrorMsg(err.message || 'Nätverksfel vid hämtning');
+      }
     } finally {
       setIsLoading(false);
     }

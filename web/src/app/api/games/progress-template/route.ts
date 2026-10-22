@@ -277,10 +277,10 @@ async function fetchWithGemini(
 Önskad detaljnivå: ${granularity} (sikta på ${targetCount} delmål).
 
 Följ dessa strikta regler:
-1. EJ SLÄPPTA ELLER ICKE-LINJÄRA SPEL:
-   - Om spelet ÄNNU INTE HAR SLÄPPTS (t.ex. "007 First Light" / "Project 007") eller saknar en känd, publicerad kapitel-/uppdragsguide, sätt:
-     "hasLinearProgression": false, "progressionType": "none", "summary": "Detta spel har ännu inte släppts eller saknar en officiellt publicerad kapitelguide.", "items": []
-   - Om spelet är ett renodlat multiplayer-, sport- eller partyspel utan enspelarkampanj (t.ex. FIFA, Rocket League), sätt också "hasLinearProgression": false och tom array för items.
+1. RENODLADE MULTIPLAYER- ELLER SPORT-SPEL:
+   - Om spelet är ett renodlat multiplayer-, sport-, racing- eller partyspel helt utan en linjär storykampanj (t.ex. FIFA, Rocket League, Tetris), sätt:
+     "hasLinearProgression": false, "progressionType": "none", "summary": "Detta spel saknar en linjär enspelarkampanj eller fast kapitelordning.", "items": []
+   - Om spelet DÄREMOT ÄR ett storyspel, äventyrsspel, actionspel eller RPG (oavsett om det är en klassiker eller nysläppt, inklusive 007 First Light eller nyare titlar): analysera och lista huvuduppdragen eller kapitlen kronologiskt!
 
 2. OFFICIELLA ENGELSKA TITLAR:
    - Använd ALLTID de officiella, exakta ENGELSKA namnen från spelets interna Quest Log / Journal / Chapter Selection (t.ex. "Escape the Nautiloid", "Rescue the Druid Halsin", eller för Kingdom Come: "Unexpected Visitors", "Run!", "Homecoming", "Awakening", "Baptism of Fire").
@@ -293,8 +293,8 @@ Följ dessa strikta regler:
    - Progressionen ska bestå av de faktiska HUVUDUPPDRAGEN (Main Quests). Sätt "progressionType": "main_quests".
    - Sätt "chapterGroup" till den övergripande akten eller regionen (t.ex. "Prologue", "Act 1", "Act 2", "Act 3" eller "Skalitz", "Rattay", "Sasau").
 
-5. FÖR KAPITEL- OCH SURVIVAL HORROR-SPEL (t.ex. Silent Hill, Resident Evil, The Last of Us):
-   - Lista de faktiska kapitlen eller distinkta områdena i kronologisk ordning. Sätt "chapterGroup" till regionen/byggnaden.
+5. FÖR KAPITEL- OCH SURVIVAL HORROR-SPEL (t.ex. Silent Hill, Resident Evil, The Last of Us, 007 First Light):
+   - Lista de faktiska kapitlen, uppdragen eller distinkta områdena i kronologisk ordning. Sätt "chapterGroup" till regionen/byggnaden/uppdraget.
 
 6. UNDVIK SPOILERS:
    - Skriv rena titlar. Avslöja inte plot-twists i sammanfattningen eller namnen.
@@ -427,28 +427,48 @@ function parseGeminiOutput(
   granularity: Granularity
 ): GameProgressTemplate {
   let cleaned = rawText.trim();
-  if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```[a-z]*\s*/i, '').replace(/\s*```$/i, '').trim();
+
+  // 1. Försök hitta markdown-kodblock ```json ... ```
+  const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (codeBlockMatch) {
+    cleaned = codeBlockMatch[1].trim();
+  } else {
+    // 2. Om inget kodblock finns, hitta första { till sista }
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleaned = cleaned.substring(firstBrace, lastBrace + 1).trim();
+    }
   }
 
-  const parsed = JSON.parse(cleaned);
+  let parsed: any;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch (err) {
+    console.error('Failed to parse Gemini JSON output:', cleaned);
+    throw new Error('Kunde inte tolka svaret från AI som giltig JSON.');
+  }
+
+  const items = Array.isArray(parsed.items) ? parsed.items : [];
+  const hasLinear =
+    parsed.hasLinearProgression !== undefined
+      ? Boolean(parsed.hasLinearProgression)
+      : items.length > 0;
 
   return {
     gameTitle: parsed.gameTitle || gameTitle,
-    hasLinearProgression: Boolean(parsed.hasLinearProgression),
-    progressionType: parsed.progressionType || 'chapters',
+    hasLinearProgression: hasLinear,
+    progressionType: parsed.progressionType || (items.length > 0 ? 'chapters' : 'none'),
     granularity,
     summary: parsed.summary || '',
-    items: Array.isArray(parsed.items)
-      ? parsed.items.map((item: any, idx: number) => ({
-          id: String(item.id || idx + 1),
-          title: String(item.title || `Delmål ${idx + 1}`),
-          order: Number(item.order || idx + 1),
-          chapterGroup: item.chapterGroup,
-          description: item.description,
-          isOptional: Boolean(item.isOptional),
-        }))
-      : [],
+    items: items.map((item: any, idx: number) => ({
+      id: String(item.id || idx + 1),
+      title: String(item.title || `Delmål ${idx + 1}`),
+      order: Number(item.order || idx + 1),
+      chapterGroup: item.chapterGroup,
+      description: item.description,
+      isOptional: Boolean(item.isOptional),
+    })),
     source: 'ai',
   };
 }

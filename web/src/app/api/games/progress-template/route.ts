@@ -317,8 +317,14 @@ Svara med ett giltigt JSON-objekt med exakt detta format (bara ren JSON, inga ma
   ]
 }`;
 
-  // 1. Välj en snabb och modern modell direkt
-  let candidateModels = ['gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash'];
+  // 1. Upptäck modeller som är tillgängliga för just denna API-nyckel
+  let candidateModels = [
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash-latest',
+    'gemini-pro',
+  ];
 
   try {
     const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
@@ -329,12 +335,10 @@ Svara med ett giltigt JSON-objekt med exakt detta format (bara ren JSON, inga ma
           .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
           .map((m: any) => m.name.replace(/^models\//, ''));
 
-        const topFlash = available.find((name: string) => name.includes('2.0-flash')) ||
-                         available.find((name: string) => name.includes('1.5-flash')) ||
-                         available[0];
-
-        if (topFlash) {
-          candidateModels = [topFlash, 'gemini-1.5-flash-latest'];
+        if (available.length > 0) {
+          const flash = available.filter((name: string) => name.includes('flash'));
+          const pro = available.filter((name: string) => name.includes('pro'));
+          candidateModels = Array.from(new Set([...flash, ...pro, ...available]));
         }
       }
     }
@@ -342,39 +346,45 @@ Svara med ett giltigt JSON-objekt med exakt detta format (bara ren JSON, inga ma
     console.warn('Could not query model list, using defaults:', err);
   }
 
-  // 2. Kör max 2 snabba försök
+  // 2. Prova de tillgängliga modellerna i tur och ordning (404 svarar på 100ms)
   let lastError: Error | null = null;
 
-  for (const modelName of Array.from(new Set(candidateModels)).slice(0, 2)) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-      
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.1,
-          },
-        }),
-      });
+  for (const modelName of candidateModels) {
+    for (const apiVersion of ['v1beta', 'v1']) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
+        
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.1,
+            },
+          }),
+        });
 
-      if (!response.ok) {
-        const errBody = await response.text();
-        lastError = new Error(`Modell ${modelName} (${response.status}): ${errBody}`);
-        continue;
+        if (response.status === 404) {
+          continue;
+        }
+
+        if (!response.ok) {
+          const errBody = await response.text();
+          lastError = new Error(`Modell ${modelName} (${response.status}): ${errBody}`);
+          continue;
+        }
+
+        const data = await response.json();
+        const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!textContent) {
+          continue;
+        }
+
+        return parseGeminiOutput(textContent, gameTitle, granularity);
+      } catch (err: any) {
+        lastError = err;
       }
-
-      const data = await response.json();
-      const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!textContent) {
-        continue;
-      }
-
-      return parseGeminiOutput(textContent, gameTitle, granularity);
-    } catch (err: any) {
-      lastError = err;
     }
   }
 

@@ -268,40 +268,49 @@ async function fetchWithGemini(
 ): Promise<GameProgressTemplate> {
   const targetCount =
     granularity === 'compact'
-      ? 'ca 6 till 10'
+      ? 'ca 8 till 12'
       : granularity === 'detailed'
-      ? 'ca 16 till 26'
-      : 'ca 11 till 18';
+      ? 'ca 20 till 30'
+      : 'ca 14 till 22';
 
-  const prompt = `Du är en expert på TV-spel. Analysera spelet "${gameTitle}" och skapa en logisk, ren och spoiler-sanerad lista över spelets huvudsakliga progression för en spelspårningsapp.
+  const prompt = `Du är en expert på TV-spel och spelguider. Analysera spelet "${gameTitle}" och skapa en logisk, ren och kronologisk lista över spelets huvudsakliga progression (Main Story / Critical Path) för en spelspårningsapp.
 Önskad detaljnivå: ${granularity} (sikta på ${targetCount} delmål).
 
-Följ dessa viktiga regler:
-1. Om spelet saknar en linjär enspelarkampanj/story (t.ex. rena multiplayer-, sport- eller partyspel som FIFA, Rocket League, Balatro, Tetris), sätt "hasLinearProgression": false, "progressionType": "none" och en tom array för "items".
-2. FÖR RPG-SPEL (t.ex. Cyberpunk 2077, Baldur's Gate 3, The Witcher 3, Starfield):
-   - Skapa INTE bara 3-4 punkter som heter "Akt 1", "Akt 2", "Akt 3"! Det är för grovt.
-   - Dela upp i de FAKTISKA HUVUDUPPDRAGEN (Main Quests) och viktiga milstolparna inom akterna! Sätt "chapterGroup" till t.ex. "Akt 1", "Akt 2", "Akt 3".
-3. FÖR SURVIVAL HORROR & ÄVENTYR (t.ex. Silent Hill 2, Resident Evil, Alan Wake, Dead Space):
-   - Dela upp efter de distinkta områdena, byggnaderna och faserna (t.ex. för Silent Hill 2: Östra South Vale, Wood Side Apartments, Blue Creek Apartments, Västra South Vale, Brookhaven Hospital, Otherworld Hospital, Gatorna (Natt), Historical Society, Toluca Prison, The Labyrinth, Toluca Lake, Lakeview Hotel, Otherworld Lakeview Hotel, Finalen).
-4. FÖR LINJÄRA KAPITELSPEL (t.ex. The Last of Us, Uncharted, Half-Life):
-   - Lista de faktiska officiella kapitlen ett och ett i rätt ordning.
-5. FÖR SOULS-LIKNANDE SPEL (t.ex. Elden Ring, Dark Souls, Bloodborne):
-   - Progressionen mäts bäst genom huvudbossarna och nödvändiga områden. Sätt progressionType till "bosses".
-6. UNDVIK DIREKTA SPOILERS i titlarna: Skriv t.ex. "Sjukhuset: Andra sidan" istället för "Möt döda karaktären X".
-7. Skriv på svenska där det känns naturligt, men behåll etablerade engelska namn på områden, kapitel eller bossar om det är standarden i spelet.
+Följ dessa strikta regler:
+1. EJ SLÄPPTA ELLER ICKE-LINJÄRA SPEL:
+   - Om spelet ÄNNU INTE HAR SLÄPPTS (t.ex. "007 First Light" / "Project 007") eller saknar en känd, publicerad kapitel-/uppdragsguide, sätt:
+     "hasLinearProgression": false, "progressionType": "none", "summary": "Detta spel har ännu inte släppts eller saknar en officiellt publicerad kapitelguide.", "items": []
+   - Om spelet är ett renodlat multiplayer-, sport- eller partyspel utan enspelarkampanj (t.ex. FIFA, Rocket League), sätt också "hasLinearProgression": false och tom array för items.
 
-Svara med ett giltigt JSON-objekt med exakt detta format (inga extra kommentarer, bara ren JSON):
+2. OFFICIELLA ENGELSKA TITLAR:
+   - Använd ALLTID de officiella, exakta ENGELSKA namnen från spelets interna Quest Log / Journal / Chapter Selection (t.ex. "Escape the Nautiloid", "Rescue the Druid Halsin", eller för Kingdom Come: "Unexpected Visitors", "Run!", "Homecoming", "Awakening", "Baptism of Fire").
+   - Översätt ALDRIG officiella quest- eller kapitelnamn till svenska! Spelaren vill kunna titta i sin quest log i spelet och känna igen exakt samma namn.
+
+3. INGA HOPPSLAGNA UPPDRAG (ENDAST EN QUEST PER PUNKT):
+   - Slå ALDRIG ihop flera uppdrag i samma punkt (skriv t.ex. INTE "Druid Grove & Goblin Camp", utan lista de enskilda uppdragen separat: t.ex. "Save the Refugees", "Rescue the Druid Halsin", "Defeat the Goblin Leaders").
+
+4. FÖR RPG-SPEL (t.ex. Kingdom Come: Deliverance, Baldur's Gate 3, Cyberpunk 2077, The Witcher 3):
+   - Progressionen ska bestå av de faktiska HUVUDUPPDRAGEN (Main Quests). Sätt "progressionType": "main_quests".
+   - Sätt "chapterGroup" till den övergripande akten eller regionen (t.ex. "Prologue", "Act 1", "Act 2", "Act 3" eller "Skalitz", "Rattay", "Sasau").
+
+5. FÖR KAPITEL- OCH SURVIVAL HORROR-SPEL (t.ex. Silent Hill, Resident Evil, The Last of Us):
+   - Lista de faktiska kapitlen eller distinkta områdena i kronologisk ordning. Sätt "chapterGroup" till regionen/byggnaden.
+
+6. UNDVIK SPOILERS:
+   - Skriv rena titlar. Avslöja inte plot-twists i sammanfattningen eller namnen.
+
+Svara med ett giltigt JSON-objekt med exakt detta format (bara ren JSON, inga markdown-block):
 {
   "gameTitle": "${gameTitle}",
   "hasLinearProgression": true,
   "progressionType": "chapters" | "acts" | "main_quests" | "bosses" | "worlds" | "none",
-  "summary": "Kort beskrivning (max 2 meningar) av hur spelet är uppbyggt",
+  "summary": "Kort beskrivning (max 2 meningar) av hur spelet och dess uppdrag är uppbyggt",
   "items": [
     {
       "id": "1",
-      "title": "Namn på kapitel/quest/område",
+      "title": "Exact English Quest Title",
       "order": 1,
-      "chapterGroup": "Valfri grupp (t.ex. Akt 1, South Vale, Vinter)",
+      "chapterGroup": "Act 1 / Area Name",
       "description": "Kort valfri förklaring",
       "isOptional": false
     }

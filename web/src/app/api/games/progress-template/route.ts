@@ -12,6 +12,21 @@ export interface ProgressTemplateItem {
   isOptional?: boolean;
 }
 
+// Hjälpfunktion för att prioritera nyaste modellen (2.5 -> 2.0 -> 1.5)
+function getModelPriorityScore(name: string): number {
+  let score = 0;
+  if (name.includes('2.5')) score += 500;
+  else if (name.includes('2.0')) score += 400;
+  else if (name.includes('1.5')) score += 300;
+  else if (name.includes('1.0')) score += 100;
+
+  if (name.includes('flash')) score += 50;
+  else if (name.includes('pro')) score += 40;
+
+  if (name.includes('exp') || name.includes('preview')) score -= 10;
+  return score;
+}
+
 export interface GameProgressTemplate {
   gameTitle: string;
   igdbId?: number;
@@ -20,6 +35,7 @@ export interface GameProgressTemplate {
   granularity?: Granularity;
   items: ProgressTemplateItem[];
   source: 'curated' | 'ai' | 'custom';
+  modelUsed?: string;
   summary?: string;
 }
 
@@ -307,12 +323,12 @@ Följ dessa strikta regler:
   ]
 }`;
 
-  // 1. Upptäck modeller som är tillgängliga för just denna API-nyckel
+  // 1. Upptäck modeller som är tillgängliga för just denna API-nyckel, sorterade med nyaste först
   let candidateModels = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
     'gemini-1.5-flash',
     'gemini-1.5-pro',
-    'gemini-2.0-flash',
-    'gemini-1.5-flash-latest',
     'gemini-pro',
   ];
 
@@ -326,9 +342,9 @@ Följ dessa strikta regler:
           .map((m: any) => m.name.replace(/^models\//, ''));
 
         if (available.length > 0) {
-          const flash = available.filter((name: string) => name.includes('flash'));
-          const pro = available.filter((name: string) => name.includes('pro'));
-          candidateModels = Array.from(new Set([...flash, ...pro, ...available]));
+          candidateModels = available.sort(
+            (a: string, b: string) => getModelPriorityScore(b) - getModelPriorityScore(a)
+          );
         }
       }
     }
@@ -384,7 +400,7 @@ Följ dessa strikta regler:
           continue;
         }
 
-        return parseGeminiOutput(textContent, gameTitle, granularity);
+        return parseGeminiOutput(textContent, gameTitle, granularity, modelName);
       } catch (err: any) {
         lastError = err;
       }
@@ -397,7 +413,8 @@ Följ dessa strikta regler:
 function parseGeminiOutput(
   rawText: string,
   gameTitle: string,
-  granularity: Granularity
+  granularity: Granularity,
+  modelUsed?: string
 ): GameProgressTemplate {
   let cleaned = rawText.trim();
 
@@ -443,5 +460,6 @@ function parseGeminiOutput(
       isOptional: Boolean(item.isOptional),
     })),
     source: 'ai',
+    modelUsed,
   };
 }

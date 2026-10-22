@@ -48,6 +48,7 @@ interface LoadedTemplate {
   granularity?: Granularity;
   summary?: string;
   items: TemplateItem[];
+  modelUsed?: string;
   source: 'curated' | 'ai' | 'custom';
 }
 
@@ -435,7 +436,7 @@ export default function TestProgressPage() {
                   )}
                   {template.source === 'ai' && (
                     <span className="text-[10px] bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-                      <Sparkles className="w-3 h-3" /> Genererad med Gemini AI
+                      <Sparkles className="w-3 h-3" /> Genererad med {template.modelUsed || 'Gemini'}
                     </span>
                   )}
                 </h2>

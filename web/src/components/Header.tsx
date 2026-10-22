@@ -182,6 +182,16 @@ export function Header({
               </kbd>
             </button>
 
+            {/* Lab Test Button */}
+            <a
+              href="/test-progress"
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-amber-400 hover:text-amber-300 border border-zinc-800/80 text-xs font-semibold transition shadow-sm"
+              title="Lab: Testa kapitel och progression"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Lab</span>
+            </a>
+
             {/* Profile Dropdown / Login */}
             <ProfileMenu
               profileName={profileName}

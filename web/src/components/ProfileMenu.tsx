@@ -10,6 +10,7 @@ import {
   RefreshCw,
   QrCode,
   Layers,
+  Sparkles,
 } from 'lucide-react';
 
 import { UserProfile } from '@/types/profile';
@@ -186,6 +187,14 @@ export function ProfileMenu({
               <QrCode className="w-4 h-4 text-zinc-400" />
               <span>Koppla en annan iPhone / Visa kod</span>
             </button>
+
+            <a
+              href="/test-progress"
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-amber-400 hover:text-amber-300 hover:bg-amber-950/20 rounded-xl transition"
+            >
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span>Lab: Kapitel & Framsteg</span>
+            </a>
 
             <button
               onClick={() => {

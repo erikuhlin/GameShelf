@@ -63,6 +63,7 @@ interface ActiveTodo {
   isOptional?: boolean;
 }
 
+const PRESET_GAMES = [
   { name: 'Kingdom Come: Deliverance II', displayName: 'Kingdom Come II', type: 'main_quests', icon: Layers, tag: '32 Uppdrag (Trosky & Kuttenberg)', hltb: 50 },
   { name: '007 First Light', displayName: '007 First Light', type: 'chapters', icon: BookOpen, tag: '10 Kapitel (18 Uppdrag)', hltb: 14 },
   { name: 'Silent Hill 2', displayName: 'Silent Hill 2 (Remake)', type: 'chapters', icon: BookOpen, tag: '14 Zoner & Skräck', hltb: 16 },

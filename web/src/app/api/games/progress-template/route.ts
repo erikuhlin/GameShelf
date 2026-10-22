@@ -352,15 +352,11 @@ Följ dessa strikta regler:
   ]
 }`;
 
-  // 1. Upptäck modeller som är tillgängliga för just denna API-nyckel, sorterade med nyaste först
+  // 1. Verifierade stabila modeller för Gemini API
   let candidateModels = [
-    'gemini-3.8-flash',
-    'gemini-3.5-flash',
-    'gemini-2.5-flash',
     'gemini-2.0-flash',
     'gemini-1.5-flash',
     'gemini-1.5-pro',
-    'gemini-pro',
   ];
 
   try {
@@ -380,9 +376,10 @@ Följ dessa strikta regler:
           );
 
         if (available.length > 0) {
-          candidateModels = available
-            .sort((a: string, b: string) => getModelPriorityScore(b) - getModelPriorityScore(a))
-            .slice(0, 3); // Max top 3 för att förhindra timeout
+          // Sortera med 2.0-flash och 1.5-flash som högsta prio
+          candidateModels = available.sort(
+            (a: string, b: string) => getModelPriorityScore(b) - getModelPriorityScore(a)
+          );
         }
       }
     }
@@ -515,44 +512,50 @@ async function fetchAndExtractFromUrl(
     throw new Error('Ogiltig webbadress. Ange en fullständig länk inklusive https://');
   }
 
-  const res = await fetch(parsedUrl.toString(), {
-    headers: {
-      'User-Agent':
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-    },
-    signal: AbortSignal.timeout(7000), // Max 7 sekunder för att hämta webbsidan
-    redirect: 'follow',
-  });
+  let guideSample = '';
+  let fetchedDirectly = false;
 
-  if (!res.ok) {
-    throw new Error(`Källsidan svarade med HTTP-status ${res.status} (${res.statusText})`);
+  // 1. Försök med direkt webbhämtning
+  try {
+    const res = await fetch(parsedUrl.toString(), {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: AbortSignal.timeout(6000),
+      redirect: 'follow',
+    });
+
+    if (res.ok) {
+      const html = await res.text();
+      const cleanedText = html
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
+        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
+        .replace(/<noscript\b[^<]*(?:(?!<\/noscript>)<[^<]*)*<\/noscript>/gi, ' ')
+        .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, ' ')
+        .replace(/<!--[\s\S]*?-->/g, ' ')
+        .replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '\n### $1\n')
+        .replace(/<li[^>]*>(.*?)<\/li>/gi, '\n- $1\n')
+        .replace(/<a [^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '$2 ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/\s{2,}/g, ' ')
+        .replace(/\n\s*\n/g, '\n')
+        .trim();
+
+      if (cleanedText.length > 200) {
+        guideSample = cleanedText.substring(0, 40000);
+        fetchedDirectly = true;
+      }
+    }
+  } catch (fetchErr) {
+    console.warn('Direct guide fetch failed, falling back to search grounding:', fetchErr);
   }
-
-  const html = await res.text();
-
-  // Rensa HTML och extrahera meningsfull text (rubriker, listor, länkar, stycken)
-  const cleanedText = html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
-    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
-    .replace(/<noscript\b[^<]*(?:(?!<\/noscript>)<[^<]*)*<\/noscript>/gi, ' ')
-    .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, ' ')
-    .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '\n### $1\n')
-    .replace(/<li[^>]*>(.*?)<\/li>/gi, '\n- $1\n')
-    .replace(/<a [^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '$2 ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s{2,}/g, ' ')
-    .replace(/\n\s*\n/g, '\n')
-    .trim();
-
-  // Begränsa textmängden till relevant guideinnehåll (ca 40 000 tecken)
-  const guideSample = cleanedText.substring(0, 40000);
 
   const targetCount =
     granularity === 'compact'
@@ -561,7 +564,12 @@ async function fetchAndExtractFromUrl(
       ? 'ca 20 till 30'
       : 'ca 14 till 22';
 
-  const prompt = `You are an expert game progression extractor.
+  // Skapa anpassad prompt beroende på om vi fick råtexten direkt eller behöver söka upp URL:en
+  let prompt: string;
+  let useSearchTool = false;
+
+  if (fetchedDirectly) {
+    prompt = `You are an expert game progression extractor.
 The user wants to track story progress for "${gameTitle}".
 Extract the official, chronological list of main missions / chapters / areas directly from the provided guide text below.
 
@@ -600,11 +608,44 @@ STRICT EXTRACTION RULES:
 --- GUIDE TEXT CONTENT ---
 ${guideSample}
 --- END GUIDE TEXT CONTENT ---`;
+  } else {
+    useSearchTool = true;
+    prompt = `Search Google for the guide at "${guideUrl}" or "${gameTitle} walkthrough" on that website.
+Extract the official, chronological list of main story missions / chapters / areas for "${gameTitle}".
 
+Target game: "${gameTitle}"
+Guide source: ${guideUrl}
+Desired granularity: ${granularity} (target ${targetCount} items).
+
+STRICT EXTRACTION RULES:
+1. USE OFFICIAL IN-GAME ENGLISH TITLES:
+   - Do NOT translate quest titles to Swedish!
+2. CHRONOLOGICAL ORDER:
+   - List the items in story completion order.
+3. EXCLUDE SIDE QUESTS & COLLECTIBLES:
+   - Only include main story chapters/quests.
+4. FORMAT:
+   - Output ONLY a valid JSON object matching this schema (no markdown formatting):
+{
+  "gameTitle": "${gameTitle}",
+  "hasLinearProgression": true,
+  "progressionType": "chapters" | "acts" | "main_quests" | "bosses" | "worlds" | "none",
+  "summary": "Kort svensk sammanfattning baserat på guiden",
+  "items": [
+    {
+      "id": "1",
+      "title": "Exact English Quest Title",
+      "order": 1,
+      "chapterGroup": "Act or Area",
+      "description": "Kort info",
+      "isOptional": false
+    }
+  ]
+}`;
+  }
+
+  // Verifierade stabila modeller
   let candidateModels = [
-    'gemini-3.8-flash',
-    'gemini-3.5-flash',
-    'gemini-2.5-flash',
     'gemini-2.0-flash',
     'gemini-1.5-flash',
     'gemini-1.5-pro',
@@ -627,9 +668,9 @@ ${guideSample}
           );
 
         if (available.length > 0) {
-          candidateModels = available
-            .sort((a: string, b: string) => getModelPriorityScore(b) - getModelPriorityScore(a))
-            .slice(0, 3); // Max top 3 för att inte överstiga timeout
+          candidateModels = available.sort(
+            (a: string, b: string) => getModelPriorityScore(b) - getModelPriorityScore(a)
+          );
         }
       }
     }
@@ -641,19 +682,38 @@ ${guideSample}
   for (const modelName of candidateModels) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-      const response = await fetch(url, {
+      const bodyPayload: any = {
+        contents: [{ parts: [{ text: prompt }] }],
+      };
+
+      if (useSearchTool) {
+        bodyPayload.tools = [{ google_search: {} }];
+      } else {
+        bodyPayload.generationConfig = { temperature: 0.1 };
+      }
+
+      let response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: AbortSignal.timeout(9000),
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.1,
-          },
-        }),
+        body: JSON.stringify(bodyPayload),
       });
 
       if (response.status === 404) continue;
+
+      // Om sökintegration inte stöds på modellen, prova utan
+      if (!response.ok && useSearchTool) {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(9000),
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.1 },
+          }),
+        });
+      }
+
       if (!response.ok) {
         const errBody = await response.text();
         lastError = new Error(`Modell ${modelName} (${response.status}): ${errBody}`);

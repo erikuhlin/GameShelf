@@ -28,6 +28,7 @@ import {
   Check,
   Sliders,
   Flame,
+  ExternalLink,
 } from 'lucide-react';
 
 export type Granularity = 'compact' | 'standard' | 'detailed';
@@ -49,7 +50,8 @@ interface LoadedTemplate {
   summary?: string;
   items: TemplateItem[];
   modelUsed?: string;
-  source: 'curated' | 'ai' | 'custom';
+  source: 'curated' | 'ai' | 'custom' | 'scraped_guide';
+  sourceUrl?: string;
 }
 
 interface ActiveTodo {
@@ -76,6 +78,7 @@ const PRESET_GAMES = [
 export default function TestProgressPage() {
   const [selectedGameName, setSelectedGameName] = useState<string>('Silent Hill 2');
   const [searchInput, setSearchInput] = useState<string>('');
+  const [guideUrlInput, setGuideUrlInput] = useState<string>('');
   const [geminiApiKey, setGeminiApiKey] = useState<string>('');
   const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(false);
 
@@ -112,11 +115,14 @@ export default function TestProgressPage() {
   const loadGameTemplate = async (
     title: string,
     currentGranularity: Granularity = granularity,
-    shouldForceAI: boolean = forceAI
+    shouldForceAI: boolean = forceAI,
+    customGuideUrl?: string
   ) => {
     setIsLoading(true);
     setErrorMsg(null);
     setRevealedIds(new Set());
+
+    const activeUrl = customGuideUrl !== undefined ? customGuideUrl : guideUrlInput;
 
     try {
       const res = await fetch('/api/games/progress-template', {
@@ -124,9 +130,10 @@ export default function TestProgressPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           gameTitle: title,
+          guideUrl: activeUrl.trim() || undefined,
           geminiApiKey: geminiApiKey.trim() || undefined,
           granularity: currentGranularity,
-          forceAI: shouldForceAI,
+          forceAI: shouldForceAI || Boolean(activeUrl.trim()),
         }),
       });
 
@@ -414,6 +421,53 @@ export default function TestProgressPage() {
             </button>
           </form>
 
+          {/* Alternativ 2: Hämta direkt från källguide (Scraping + AI) */}
+          <div className="bg-gray-950/70 border border-blue-500/30 rounded-xl p-3.5 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-blue-400 flex items-center gap-1.5">
+                <Globe className="w-4 h-4" />
+                Alternativ 2: Hämta direkt från en guide-URL (100% träffsäkert)
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 font-medium">
+                Rekommenderas
+              </span>
+            </div>
+            <p className="text-[11px] text-gray-400">
+              Klistra in en länk till spelets walkthrough eller kapitelöversikt (från t.ex. PowerPyx, IGN, Game8). AI:n läser direkt av sidans text och extraherar rätt engelska uppdrag utan risk för sammanblandning eller felaktiga kapitel!
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2 pt-1">
+              <input
+                type="url"
+                placeholder="https://www.powerpyx.com/... eller https://www.ign.com/wikis/..."
+                value={guideUrlInput}
+                onChange={(e) => setGuideUrlInput(e.target.value)}
+                className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (guideUrlInput.trim()) {
+                    loadGameTemplate(searchInput.trim() || selectedGameName, granularity, true, guideUrlInput.trim());
+                  }
+                }}
+                disabled={isLoading || !guideUrlInput.trim()}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap shadow-md shadow-blue-500/10"
+              >
+                {isLoading ? (
+                  <>
+                    <Globe className="w-3.5 h-3.5 animate-spin" />
+                    Läser guide...
+                  </>
+                ) : (
+                  <>
+                    <Globe className="w-3.5 h-3.5" />
+                    Extrahera från guide-URL
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
           {errorMsg && (
             <div className="p-3 rounded-xl bg-red-950/40 border border-red-800/60 text-red-300 text-xs flex items-start gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -427,7 +481,7 @@ export default function TestProgressPage() {
           <section className="bg-gray-900/60 border border-gray-800 rounded-2xl p-5 sm:p-6 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800 pb-4">
               <div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <h2 className="text-lg font-bold text-white flex flex-wrap items-center gap-2">
                   {template.gameTitle}
                   {template.source === 'curated' && (
                     <span className="text-[10px] bg-green-500/20 text-green-400 border border-green-500/30 px-2 py-0.5 rounded-full font-medium">
@@ -439,9 +493,25 @@ export default function TestProgressPage() {
                       <Sparkles className="w-3 h-3" /> Genererad med {template.modelUsed || 'Gemini'}
                     </span>
                   )}
+                  {template.source === 'scraped_guide' && (
+                    <span className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                      <Globe className="w-3 h-3" /> Hämtad från källguide ({template.modelUsed || 'Gemini'})
+                    </span>
+                  )}
                 </h2>
                 {template.summary && (
                   <p className="text-xs text-gray-400 mt-1 max-w-xl">{template.summary}</p>
+                )}
+                {template.sourceUrl && (
+                  <a
+                    href={template.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 mt-1 underline"
+                  >
+                    <span>Öppna källan: {template.sourceUrl}</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
                 )}
               </div>
 

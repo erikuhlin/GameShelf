@@ -36,7 +36,8 @@ export interface GameProgressTemplate {
   progressionType: ProgressionType;
   granularity?: Granularity;
   items: ProgressTemplateItem[];
-  source: 'curated' | 'ai' | 'custom';
+  source: 'curated' | 'ai' | 'custom' | 'scraped_guide';
+  sourceUrl?: string;
   modelUsed?: string;
   summary?: string;
 }
@@ -226,12 +227,38 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const gameTitle: string = (body.gameTitle || '').trim();
+    const guideUrl: string = (body.guideUrl || '').trim();
     const geminiKey: string = (body.geminiApiKey || process.env.GEMINI_API_KEY || '').trim();
     const granularity: Granularity = body.granularity || 'standard';
-    const forceAI: boolean = Boolean(body.forceAI);
+    const forceAI: boolean = Boolean(body.forceAI) || Boolean(guideUrl);
 
-    if (!gameTitle) {
-      return NextResponse.json({ error: 'gameTitle krävs' }, { status: 400 });
+    if (!gameTitle && !guideUrl) {
+      return NextResponse.json({ error: 'gameTitle eller guideUrl krävs' }, { status: 400 });
+    }
+
+    // 0. Om en specifik guide-URL angetts (Alternativ 2: Scraping + AI)
+    if (guideUrl) {
+      if (!geminiKey) {
+        return NextResponse.json(
+          { error: 'En Gemini API-nyckel krävs för att analysera innehållet från guiden.' },
+          { status: 400 }
+        );
+      }
+      try {
+        const scrapedTemplate = await fetchAndExtractFromUrl(
+          gameTitle || 'Spelet',
+          guideUrl,
+          geminiKey,
+          granularity
+        );
+        return NextResponse.json(scrapedTemplate);
+      } catch (err: any) {
+        console.error('Guide URL extraction failed:', err);
+        return NextResponse.json(
+          { error: `Kunde inte hämta eller tolka guiden: ${err.message || 'Okänt fel'}` },
+          { status: 500 }
+        );
+      }
     }
 
     const lower = gameTitle.toLowerCase();
@@ -467,3 +494,171 @@ function parseGeminiOutput(
     modelUsed,
   };
 }
+
+async function fetchAndExtractFromUrl(
+  gameTitle: string,
+  guideUrl: string,
+  apiKey: string,
+  granularity: Granularity
+): Promise<GameProgressTemplate> {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(guideUrl);
+  } catch {
+    throw new Error('Ogiltig webbadress. Ange en fullständig länk inklusive https://');
+  }
+
+  const res = await fetch(parsedUrl.toString(), {
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
+    redirect: 'follow',
+  });
+
+  if (!res.ok) {
+    throw new Error(`Källsidan svarade med HTTP-status ${res.status} (${res.statusText})`);
+  }
+
+  const html = await res.text();
+
+  // Rensa HTML och extrahera meningsfull text (rubriker, listor, länkar, stycken)
+  const cleanedText = html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
+    .replace(/<noscript\b[^<]*(?:(?!<\/noscript>)<[^<]*)*<\/noscript>/gi, ' ')
+    .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '\n### $1\n')
+    .replace(/<li[^>]*>(.*?)<\/li>/gi, '\n- $1\n')
+    .replace(/<a [^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '$2 ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\n\s*\n/g, '\n')
+    .trim();
+
+  // Begränsa textmängden till relevant guideinnehåll (ca 45 000 tecken)
+  const guideSample = cleanedText.substring(0, 45000);
+
+  const targetCount =
+    granularity === 'compact'
+      ? 'ca 8 till 12'
+      : granularity === 'detailed'
+      ? 'ca 20 till 30'
+      : 'ca 14 till 22';
+
+  const prompt = `You are an expert game progression extractor.
+The user wants to track story progress for "${gameTitle}".
+Extract the official, chronological list of main missions / chapters / areas directly from the provided guide text below.
+
+Target game: "${gameTitle}"
+Desired granularity: ${granularity} (target ${targetCount} items).
+Source URL: ${guideUrl}
+
+STRICT EXTRACTION RULES:
+1. ONLY USE THE TEXT PROVIDED BELOW:
+   - Extract the exact chapter or quest titles as listed in this guide.
+   - Do NOT invent or hallucinate quests.
+   - Keep the original OFFICIAL ENGLISH titles from the guide. Do not translate them to Swedish!
+2. CHRONOLOGICAL ORDER:
+   - List the items in the order they are completed in the main story.
+3. EXCLUDE SIDE QUESTS & COLLECTIBLES:
+   - Only include main story chapters/quests (unless marked isOptional: true).
+4. FORMAT:
+   - Output ONLY a valid JSON object matching this schema (no markdown formatting):
+{
+  "gameTitle": "${gameTitle}",
+  "hasLinearProgression": true,
+  "progressionType": "chapters" | "acts" | "main_quests" | "bosses" | "worlds" | "none",
+  "summary": "Kort svensk sammanfattning av spelets kapitelindelning baserat på guiden",
+  "items": [
+    {
+      "id": "1",
+      "title": "Exact Title From Guide",
+      "order": 1,
+      "chapterGroup": "Act or Area (if applicable)",
+      "description": "Kort beskrivning",
+      "isOptional": false
+    }
+  ]
+}
+
+--- GUIDE TEXT CONTENT ---
+${guideSample}
+--- END GUIDE TEXT CONTENT ---`;
+
+  let candidateModels = [
+    'gemini-3.8-flash',
+    'gemini-3.5-flash',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+  ];
+
+  try {
+    const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    if (listRes.ok) {
+      const listData = await listRes.json();
+      if (Array.isArray(listData.models)) {
+        const available = listData.models
+          .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
+          .map((m: any) => m.name.replace(/^models\//, ''));
+
+        if (available.length > 0) {
+          candidateModels = available.sort(
+            (a: string, b: string) => getModelPriorityScore(b) - getModelPriorityScore(a)
+          );
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Could not query model list, using defaults:', err);
+  }
+
+  let lastError: Error | null = null;
+  for (const modelName of candidateModels) {
+    for (const apiVersion of ['v1beta', 'v1']) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.1,
+            },
+          }),
+        });
+
+        if (response.status === 404) continue;
+        if (!response.ok) {
+          const errBody = await response.text();
+          lastError = new Error(`Modell ${modelName} (${response.status}): ${errBody}`);
+          continue;
+        }
+
+        const data = await response.json();
+        const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!textContent) continue;
+
+        const result = parseGeminiOutput(textContent, gameTitle, granularity, modelName);
+        result.source = 'scraped_guide';
+        result.sourceUrl = guideUrl;
+        return result;
+      } catch (err: any) {
+        lastError = err;
+      }
+    }
+  }
+
+  throw lastError || new Error('Kunde inte generera kapitel från källguiden.');
+}
+

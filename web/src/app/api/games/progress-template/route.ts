@@ -591,17 +591,17 @@ STRICT RULES:
     } else {
       const listData = await listRes.json();
       if (Array.isArray(listData.models)) {
-        const supported = listData.models
+        const supported: string[] = listData.models
           .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
-          .map((m: any) => m.name.replace(/^models\//, ''))
+          .map((m: any) => (m.name as string).replace(/^models\//, ''))
           .filter((name: string) => !name.includes('embed') && !name.includes('imagen') && !name.includes('aqa'));
 
         const ordered = [
-          ...supported.filter((m) => m === 'gemini-2.0-flash'),
-          ...supported.filter((m) => m === 'gemini-1.5-flash'),
-          ...supported.filter((m) => m.includes('2.0') && m.includes('flash')),
-          ...supported.filter((m) => m.includes('1.5') && m.includes('flash')),
-          ...supported.filter((m) => m.includes('1.5') && m.includes('pro')),
+          ...supported.filter((m: string) => m === 'gemini-2.0-flash'),
+          ...supported.filter((m: string) => m === 'gemini-1.5-flash'),
+          ...supported.filter((m: string) => m.includes('2.0') && m.includes('flash')),
+          ...supported.filter((m: string) => m.includes('1.5') && m.includes('flash')),
+          ...supported.filter((m: string) => m.includes('1.5') && m.includes('pro')),
           ...supported,
         ];
         const unique = Array.from(new Set(ordered));

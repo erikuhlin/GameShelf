@@ -119,6 +119,20 @@ export default function TestProgressPage() {
   const [newTodoChapterGroup, setNewTodoChapterGroup] = useState<string>('');
   const [copiedJson, setCopiedJson] = useState<boolean>(false);
 
+  // Visningsläge: Grupperad per Akt/Tråd (RPG-anpassat) eller platt kronologisk
+  const [viewMode, setViewMode] = useState<'grouped' | 'chronological'>('grouped');
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('all');
+
+  const toggleGroupCollapse = (groupName: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupName)) next.delete(groupName);
+      else next.add(groupName);
+      return next;
+    });
+  };
+
   // Inline-redigering av delmål
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
   const [editingTodoText, setEditingTodoText] = useState<string>('');
@@ -534,6 +548,51 @@ Rules:
     const idx = todos.findIndex((t) => !t.isDone);
     return idx === -1 ? todos.length : idx;
   }, [todos]);
+
+  // Grupperade delmål per Akt / Zon / Tråd
+  const groups = useMemo(() => {
+    const map = new Map<string, ActiveTodo[]>();
+    todos.forEach((todo) => {
+      const g = todo.chapterGroup || 'Huvudstory';
+      if (!map.has(g)) map.set(g, []);
+      map.get(g)!.push(todo);
+    });
+    return Array.from(map.entries()).map(([name, items]) => {
+      const done = items.filter((i) => i.isDone).length;
+      const total = items.length;
+      const isCompleted = done === total && total > 0;
+      return { name, items, done, total, isCompleted };
+    });
+  }, [todos]);
+
+  // Index för den aktiva fasen (första gruppen med oklara uppdrag)
+  const activeGroupIndex = useMemo(() => {
+    const idx = groups.findIndex((g) => !g.isCompleted);
+    return idx === -1 ? groups.length : idx;
+  }, [groups]);
+
+  // Smart Spoilerskydd per Fas (RPG-anpassat):
+  // Alla quests i nuvarande akt/fas (samt avklarade akter) är synliga så du kan välja fritt bland dem.
+  // Endast framtida akter döljs bakom spoilerskydd!
+  const isItemHiddenBySpoiler = (item: ActiveTodo, indexInFlatList: number) => {
+    if (!spoilerProtection) return false;
+    if (item.isDone) return false;
+    if (revealedIds.has(item.id)) return false;
+
+    const groupIdx = groups.findIndex((g) => g.name === (item.chapterGroup || 'Huvudstory'));
+    if (groupIdx !== -1 && activeGroupIndex !== -1) {
+      if (groupIdx <= activeGroupIndex) return false; // Nuvarande eller tidigare akt: Synlig!
+      return true; // Framtida akt: Dold av spoilerskydd!
+    }
+
+    return indexInFlatList > currentChapterIndex;
+  };
+
+  // Filtrerade delmål för visning
+  const filteredTodos = useMemo(() => {
+    if (selectedGroupFilter === 'all') return todos;
+    return todos.filter((t) => (t.chapterGroup || 'Huvudstory') === selectedGroupFilter);
+  }, [todos, selectedGroupFilter]);
 
   // Bocka av / på ett delmål
   const toggleTodo = (id: string) => {
@@ -1025,24 +1084,54 @@ Rules:
               <>
                 {/* Steg 3: Framstegs-Dashboard (Hur det ser ut i appen) */}
                 <div className="space-y-4 pt-1">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-300 flex items-center gap-2">
                       <span className="w-5 h-5 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center text-xs font-bold">2</span>
                       Interaktiv Framstegsmätare
                     </h3>
 
-                    {/* Spoilerskydd Toggle */}
-                    <button
-                      onClick={() => setSpoilerProtection(!spoilerProtection)}
-                      className={`px-3 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition-all ${
-                        spoilerProtection
-                          ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-                          : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'
-                      }`}
-                    >
-                      <Shield className="w-3.5 h-3.5" />
-                      {spoilerProtection ? '🛡️ Spoilerskydd PÅ' : 'Spoilerskydd AV'}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Vy-väljare: Grupperad per Akt eller Kronologisk */}
+                      <div className="inline-flex rounded-xl bg-gray-950 p-1 border border-gray-800 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setViewMode('grouped')}
+                          className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1.5 ${
+                            viewMode === 'grouped'
+                              ? 'bg-red-600 text-white shadow-sm'
+                              : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          <Layers className="w-3.5 h-3.5" />
+                          <span>Grupperad (Akter/Trådar)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setViewMode('chronological')}
+                          className={`px-2.5 py-1 rounded-lg font-medium transition flex items-center gap-1.5 ${
+                            viewMode === 'chronological'
+                              ? 'bg-red-600 text-white shadow-sm'
+                              : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          <ListChecks className="w-3.5 h-3.5" />
+                          <span>Kronologisk</span>
+                        </button>
+                      </div>
+
+                      {/* Spoilerskydd Toggle */}
+                      <button
+                        onClick={() => setSpoilerProtection(!spoilerProtection)}
+                        className={`px-3 py-1.5 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition-all ${
+                          spoilerProtection
+                            ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                            : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        <Shield className="w-3.5 h-3.5" />
+                        {spoilerProtection ? '🛡️ Spoilerskydd PÅ' : 'Spoilerskydd AV'}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Stora framstegskort */}
@@ -1092,15 +1181,23 @@ Rules:
                     </div>
                   </div>
 
+                  {/* Förklaringsruta om parallella RPG-uppdrag */}
+                  <div className="flex items-center gap-2 p-2.5 rounded-xl bg-gray-950/80 border border-blue-500/20 text-xs text-blue-300">
+                    <Sparkles className="w-4 h-4 text-blue-400 shrink-0" />
+                    <span>
+                      <strong>Parallella RPG-uppdrag:</strong> Du kan bocka av uppdragen i vilken ordning du vill! Spoilerskyddet håller hela den aktiva fasen öppen så du ser dina valmöjligheter, medan framtida akter hålls skyddade.
+                    </span>
+                  </div>
+
                   {/* Snabbknappar */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                     <button
                       onClick={checkNextTodo}
                       disabled={doneCount === totalCount}
                       className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white text-xs font-semibold rounded-xl transition-all shadow-md flex items-center gap-1.5"
                     >
                       <CheckCircle2 className="w-4 h-4" />
-                      Bocka av nästa kapitel ({currentChapterIndex < todos.length ? todos[currentChapterIndex]?.title : 'Alla klara!'})
+                      Bocka av nästa uppdrag ({currentChapterIndex < todos.length ? todos[currentChapterIndex]?.title : 'Alla klara!'})
                     </button>
 
                     <div className="flex items-center gap-2">
@@ -1123,177 +1220,449 @@ Rules:
                     </div>
                   </div>
 
-                  {/* Steg 4: Själva Checklistan med Full Redigerbarhet */}
-                  <div className="border border-gray-800 rounded-xl overflow-hidden bg-gray-950/40 divide-y divide-gray-800/60 mt-4">
-                    {todos.map((item, idx) => {
-                      const isFuture = idx > currentChapterIndex && !item.isDone;
-                      const isHiddenBySpoiler = spoilerProtection && isFuture && !revealedIds.has(item.id);
-
-                      return (
-                        <div
-                          key={item.id}
-                          className={`p-3 sm:p-3.5 flex items-center gap-2 sm:gap-3 transition-colors ${
-                            item.isDone
-                              ? 'bg-emerald-950/10 text-gray-400'
-                              : idx === currentChapterIndex
-                              ? 'bg-red-500/5 text-white'
-                              : 'text-gray-300 hover:bg-gray-900/40'
-                          }`}
-                        >
-                          {/* Sorteringspilar upp/ner */}
-                          <div className="flex flex-col items-center -space-y-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => moveTodoUp(idx)}
-                              disabled={idx === 0}
-                              className="p-0.5 text-gray-500 hover:text-white disabled:opacity-20 transition-colors"
-                              title="Flytta uppåt"
-                            >
-                              <ChevronUp className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => moveTodoDown(idx)}
-                              disabled={idx === todos.length - 1}
-                              className="p-0.5 text-gray-500 hover:text-white disabled:opacity-20 transition-colors"
-                              title="Flytta nedåt"
-                            >
-                              <ChevronDown className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-
-                          {/* Index-nummer */}
-                          <span className="text-[11px] font-mono text-gray-500 w-4 text-center shrink-0">
-                            {idx + 1}
-                          </span>
-
-                          {/* Checkbox */}
+                  {/* Snabbfilter för Akter / Trådar */}
+                  {groups.length > 1 && (
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 text-xs">
+                      <span className="text-[11px] text-gray-500 font-medium shrink-0 mr-1">Fasfilter:</span>
+                      <button
+                        onClick={() => setSelectedGroupFilter('all')}
+                        className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 ${
+                          selectedGroupFilter === 'all'
+                            ? 'bg-red-600/20 text-red-300 border border-red-500/30'
+                            : 'bg-gray-900 border border-gray-800 text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        Alla akter ({todos.length})
+                      </button>
+                      {groups.map((g) => {
+                        const isSelected = selectedGroupFilter === g.name;
+                        return (
                           <button
-                            onClick={() => toggleTodo(item.id)}
-                            className="flex-shrink-0 text-gray-400 hover:text-white transition-colors"
+                            key={g.name}
+                            onClick={() => setSelectedGroupFilter(isSelected ? 'all' : g.name)}
+                            className={`px-2.5 py-1 rounded-lg font-medium transition shrink-0 flex items-center gap-1.5 ${
+                              isSelected
+                                ? 'bg-red-600 text-white shadow-sm'
+                                : g.isCompleted
+                                ? 'bg-emerald-950/30 border border-emerald-800/40 text-emerald-400'
+                                : 'bg-gray-900 border border-gray-800 text-gray-400 hover:text-white'
+                            }`}
                           >
-                            {item.isDone ? (
-                              <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                            ) : (
-                              <Circle className={`w-5 h-5 ${idx === currentChapterIndex ? 'text-red-400' : 'text-gray-600'}`} />
-                            )}
+                            <span>{g.name}</span>
+                            <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
+                              g.isCompleted ? 'bg-emerald-500/20 text-emerald-300' : 'bg-gray-800 text-gray-400'
+                            }`}>
+                              {g.done}/{g.total}
+                            </span>
                           </button>
+                        );
+                      })}
+                    </div>
+                  )}
 
-                          {/* Titel & ChapterGroup / Spoilerskydd */}
-                          <div className="flex-1 min-w-0">
-                            {isHiddenBySpoiler ? (
-                              <div className="flex items-center gap-2 text-xs text-gray-500 italic">
-                                <Shield className="w-3.5 h-3.5 text-amber-500/70" />
-                                <span>Delmål {idx + 1} (Titel dold av spoilerskydd)</span>
-                                <button
-                                  onClick={() => toggleReveal(item.id)}
-                                  className="text-[11px] not-italic text-amber-400 hover:underline flex items-center gap-1 ml-1"
-                                >
-                                  <Eye className="w-3 h-3" /> Visa
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex flex-wrap items-center gap-2">
-                                {editingTodoId === item.id ? (
-                                  <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-[240px]">
-                                    <input
-                                      type="text"
-                                      placeholder="Grupp / Akt (valfritt)"
-                                      value={editingTodoGroup}
-                                      onChange={(e) => setEditingTodoGroup(e.target.value)}
-                                      className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none w-28"
-                                    />
-                                    <input
-                                      type="text"
-                                      value={editingTodoText}
-                                      onChange={(e) => setEditingTodoText(e.target.value)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') saveEditing(item.id);
-                                        if (e.key === 'Escape') setEditingTodoId(null);
-                                      }}
-                                      autoFocus
-                                      className="bg-gray-900 border border-blue-500 rounded px-2 py-1 text-xs text-white focus:outline-none flex-1 min-w-[140px]"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => saveEditing(item.id)}
-                                      className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium"
-                                    >
-                                      Spara
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setEditingTodoId(null)}
-                                      className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-xs"
-                                    >
-                                      Avbryt
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <>
-                                    {item.chapterGroup && (
-                                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-gray-800/90 text-gray-400 font-medium shrink-0 border border-gray-700/50">
-                                        {item.chapterGroup}
-                                      </span>
-                                    )}
-                                    <span
-                                      onClick={() => startEditing(item)}
-                                      className={`text-sm font-medium cursor-pointer hover:text-white transition-colors group/title flex items-center gap-1.5 ${
-                                        item.isDone ? 'line-through text-gray-500' : 'text-gray-200'
-                                      }`}
-                                      title="Klicka för att redigera titel och grupp"
-                                    >
-                                      <span>{item.title}</span>
-                                      <Pencil className="w-3 h-3 text-gray-500 opacity-40 group-hover/title:opacity-100 transition-opacity" />
+                  {/* Steg 4: Själva Checklistan */}
+                  {viewMode === 'grouped' ? (
+                    /* GRUPPERAD VY PER AKT / TRÅD (Perfekt för RPG) */
+                    <div className="space-y-3 mt-4">
+                      {groups
+                        .filter((g) => selectedGroupFilter === 'all' || selectedGroupFilter === g.name)
+                        .map((group, groupIdx) => {
+                          const isCollapsed = collapsedGroups.has(group.name);
+                          const isCurrentPhase = groupIdx === activeGroupIndex;
+
+                          return (
+                            <div
+                              key={group.name}
+                              className={`border rounded-xl overflow-hidden transition-all ${
+                                isCurrentPhase
+                                  ? 'border-red-500/40 bg-gray-950/60 shadow-lg shadow-red-500/5'
+                                  : group.isCompleted
+                                  ? 'border-emerald-500/30 bg-gray-950/40'
+                                  : 'border-gray-800 bg-gray-950/30'
+                              }`}
+                            >
+                              {/* Grupprubrik (Fällbar) */}
+                              <div
+                                onClick={() => toggleGroupCollapse(group.name)}
+                                className="p-3 sm:p-3.5 flex items-center justify-between cursor-pointer hover:bg-gray-900/50 transition-colors select-none"
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  {isCollapsed ? (
+                                    <ChevronRight className="w-4 h-4 text-gray-400" />
+                                  ) : (
+                                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                                  )}
+                                  <span className="text-sm font-bold text-white">{group.name}</span>
+                                  {isCurrentPhase && (
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-semibold uppercase border border-red-500/30">
+                                      Aktiv fas
                                     </span>
-                                  </>
-                                )}
+                                  )}
+                                  {group.isCompleted && (
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/30 flex items-center gap-1">
+                                      <Check className="w-2.5 h-2.5" /> Klar
+                                    </span>
+                                  )}
+                                </div>
 
-                                {idx === currentChapterIndex && !item.isDone && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-semibold uppercase">
-                                    Aktuellt mål
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-mono text-gray-400">
+                                    {group.done} / {group.total}
                                   </span>
-                                )}
+                                  <div className="w-16 bg-gray-800 rounded-full h-1.5 overflow-hidden hidden sm:block">
+                                    <div
+                                      className={`h-full rounded-full ${
+                                        group.isCompleted ? 'bg-emerald-500' : 'bg-red-500'
+                                      }`}
+                                      style={{ width: `${group.total > 0 ? (group.done / group.total) * 100 : 0}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
 
-                                {/* Knapp för frivillig / obligatorisk */}
-                                <button
-                                  type="button"
-                                  onClick={() => toggleOptional(item.id)}
-                                  className={`text-[10px] px-2 py-0.5 rounded transition ${
-                                    item.isOptional
-                                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                      : 'bg-gray-800/70 text-gray-500 hover:text-gray-300'
-                                  }`}
-                                  title={item.isOptional ? 'Klicka för att göra obligatoriskt' : 'Klicka för att göra frivilligt'}
-                                >
-                                  {item.isOptional ? 'Frivilligt' : 'Obligatoriskt'}
-                                </button>
+                              {/* Gruppens delmål */}
+                              {!isCollapsed && (
+                                <div className="divide-y divide-gray-800/60 border-t border-gray-800/80">
+                                  {group.items.map((item) => {
+                                    const flatIndex = todos.findIndex((t) => t.id === item.id);
+                                    const isHiddenBySpoiler = isItemHiddenBySpoiler(item, flatIndex);
 
-                                {spoilerProtection && isFuture && revealedIds.has(item.id) && (
+                                    return (
+                                      <div
+                                        key={item.id}
+                                        className={`p-3 sm:p-3.5 flex items-center gap-2 sm:gap-3 transition-colors ${
+                                          item.isDone
+                                            ? 'bg-emerald-950/10 text-gray-400'
+                                            : flatIndex === currentChapterIndex
+                                            ? 'bg-red-500/5 text-white'
+                                            : 'text-gray-300 hover:bg-gray-900/40'
+                                        }`}
+                                      >
+                                        {/* Sorteringspilar upp/ner */}
+                                        <div className="flex flex-col items-center -space-y-1 shrink-0">
+                                          <button
+                                            type="button"
+                                            onClick={() => moveTodoUp(flatIndex)}
+                                            disabled={flatIndex === 0}
+                                            className="p-0.5 text-gray-500 hover:text-white disabled:opacity-20 transition-colors"
+                                            title="Flytta uppåt"
+                                          >
+                                            <ChevronUp className="w-3.5 h-3.5" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => moveTodoDown(flatIndex)}
+                                            disabled={flatIndex === todos.length - 1}
+                                            className="p-0.5 text-gray-500 hover:text-white disabled:opacity-20 transition-colors"
+                                            title="Flytta nedåt"
+                                          >
+                                            <ChevronDown className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+
+                                        {/* Index-nummer */}
+                                        <span className="text-[11px] font-mono text-gray-500 w-4 text-center shrink-0">
+                                          {flatIndex + 1}
+                                        </span>
+
+                                        {/* Checkbox */}
+                                        <button
+                                          onClick={() => toggleTodo(item.id)}
+                                          className="flex-shrink-0 text-gray-400 hover:text-white transition-colors"
+                                        >
+                                          {item.isDone ? (
+                                            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                                          ) : (
+                                            <Circle className={`w-5 h-5 ${flatIndex === currentChapterIndex ? 'text-red-400' : 'text-gray-600'}`} />
+                                          )}
+                                        </button>
+
+                                        {/* Titel & ChapterGroup / Spoilerskydd */}
+                                        <div className="flex-1 min-w-0">
+                                          {isHiddenBySpoiler ? (
+                                            <div className="flex items-center gap-2 text-xs text-gray-500 italic">
+                                              <Shield className="w-3.5 h-3.5 text-amber-500/70" />
+                                              <span>Delmål {flatIndex + 1} (Dold av spoilerskydd - Framtida akt)</span>
+                                              <button
+                                                onClick={() => toggleReveal(item.id)}
+                                                className="text-[11px] not-italic text-amber-400 hover:underline flex items-center gap-1 ml-1"
+                                              >
+                                                <Eye className="w-3 h-3" /> Visa
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              {editingTodoId === item.id ? (
+                                                <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-[240px]">
+                                                  <input
+                                                    type="text"
+                                                    placeholder="Grupp / Akt (valfritt)"
+                                                    value={editingTodoGroup}
+                                                    onChange={(e) => setEditingTodoGroup(e.target.value)}
+                                                    className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none w-28"
+                                                  />
+                                                  <input
+                                                    type="text"
+                                                    value={editingTodoText}
+                                                    onChange={(e) => setEditingTodoText(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                      if (e.key === 'Enter') saveEditing(item.id);
+                                                      if (e.key === 'Escape') setEditingTodoId(null);
+                                                    }}
+                                                    autoFocus
+                                                    className="bg-gray-900 border border-blue-500 rounded px-2 py-1 text-xs text-white focus:outline-none flex-1 min-w-[140px]"
+                                                  />
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => saveEditing(item.id)}
+                                                    className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium"
+                                                  >
+                                                    Spara
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setEditingTodoId(null)}
+                                                    className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-xs"
+                                                  >
+                                                    Avbryt
+                                                  </button>
+                                                </div>
+                                              ) : (
+                                                <span
+                                                  onClick={() => startEditing(item)}
+                                                  className={`text-sm font-medium cursor-pointer hover:text-white transition-colors group/title flex items-center gap-1.5 ${
+                                                    item.isDone ? 'line-through text-gray-500' : 'text-gray-200'
+                                                  }`}
+                                                  title="Klicka för att redigera titel och grupp"
+                                                >
+                                                  <span>{item.title}</span>
+                                                  <Pencil className="w-3 h-3 text-gray-500 opacity-40 group-hover/title:opacity-100 transition-opacity" />
+                                                </span>
+                                              )}
+
+                                              {flatIndex === currentChapterIndex && !item.isDone && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-semibold uppercase">
+                                                  Aktuellt mål
+                                                </span>
+                                              )}
+
+                                              {/* Knapp för frivillig / obligatorisk */}
+                                              <button
+                                                type="button"
+                                                onClick={() => toggleOptional(item.id)}
+                                                className={`text-[10px] px-2 py-0.5 rounded transition ${
+                                                  item.isOptional
+                                                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                                    : 'bg-gray-800/70 text-gray-500 hover:text-gray-300'
+                                                }`}
+                                                title={item.isOptional ? 'Klicka för att göra obligatoriskt' : 'Klicka för att göra frivilligt'}
+                                              >
+                                                {item.isOptional ? 'Frivilligt' : 'Obligatoriskt'}
+                                              </button>
+
+                                              {spoilerProtection && revealedIds.has(item.id) && (
+                                                <button
+                                                  onClick={() => toggleReveal(item.id)}
+                                                  className="text-[11px] text-gray-500 hover:text-gray-300"
+                                                  title="Dölj igen"
+                                                >
+                                                  <EyeOff className="w-3 h-3" />
+                                                </button>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        {/* Ta bort knapp */}
+                                        <button
+                                          onClick={() => removeTodo(item.id)}
+                                          className="text-gray-600 hover:text-red-400 p-1 transition-colors shrink-0"
+                                          title="Ta bort från din lista"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  ) : (
+                    /* KRONOLOGISK PLATT VY */
+                    <div className="border border-gray-800 rounded-xl overflow-hidden bg-gray-950/40 divide-y divide-gray-800/60 mt-4">
+                      {filteredTodos.map((item) => {
+                        const flatIndex = todos.findIndex((t) => t.id === item.id);
+                        const isHiddenBySpoiler = isItemHiddenBySpoiler(item, flatIndex);
+
+                        return (
+                          <div
+                            key={item.id}
+                            className={`p-3 sm:p-3.5 flex items-center gap-2 sm:gap-3 transition-colors ${
+                              item.isDone
+                                ? 'bg-emerald-950/10 text-gray-400'
+                                : flatIndex === currentChapterIndex
+                                ? 'bg-red-500/5 text-white'
+                                : 'text-gray-300 hover:bg-gray-900/40'
+                            }`}
+                          >
+                            {/* Sorteringspilar upp/ner */}
+                            <div className="flex flex-col items-center -space-y-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => moveTodoUp(flatIndex)}
+                                disabled={flatIndex === 0}
+                                className="p-0.5 text-gray-500 hover:text-white disabled:opacity-20 transition-colors"
+                                title="Flytta uppåt"
+                              >
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => moveTodoDown(flatIndex)}
+                                disabled={flatIndex === todos.length - 1}
+                                className="p-0.5 text-gray-500 hover:text-white disabled:opacity-20 transition-colors"
+                                title="Flytta nedåt"
+                              >
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            {/* Index-nummer */}
+                            <span className="text-[11px] font-mono text-gray-500 w-4 text-center shrink-0">
+                              {flatIndex + 1}
+                            </span>
+
+                            {/* Checkbox */}
+                            <button
+                              onClick={() => toggleTodo(item.id)}
+                              className="flex-shrink-0 text-gray-400 hover:text-white transition-colors"
+                            >
+                              {item.isDone ? (
+                                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                              ) : (
+                                <Circle className={`w-5 h-5 ${flatIndex === currentChapterIndex ? 'text-red-400' : 'text-gray-600'}`} />
+                              )}
+                            </button>
+
+                            {/* Titel & ChapterGroup / Spoilerskydd */}
+                            <div className="flex-1 min-w-0">
+                              {isHiddenBySpoiler ? (
+                                <div className="flex items-center gap-2 text-xs text-gray-500 italic">
+                                  <Shield className="w-3.5 h-3.5 text-amber-500/70" />
+                                  <span>Delmål {flatIndex + 1} (Titel dold av spoilerskydd)</span>
                                   <button
                                     onClick={() => toggleReveal(item.id)}
-                                    className="text-[11px] text-gray-500 hover:text-gray-300"
-                                    title="Dölj igen"
+                                    className="text-[11px] not-italic text-amber-400 hover:underline flex items-center gap-1 ml-1"
                                   >
-                                    <EyeOff className="w-3 h-3" />
+                                    <Eye className="w-3 h-3" /> Visa
                                   </button>
-                                )}
-                              </div>
-                            )}
-                          </div>
+                                </div>
+                              ) : (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {editingTodoId === item.id ? (
+                                    <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-[240px]">
+                                      <input
+                                        type="text"
+                                        placeholder="Grupp / Akt (valfritt)"
+                                        value={editingTodoGroup}
+                                        onChange={(e) => setEditingTodoGroup(e.target.value)}
+                                        className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none w-28"
+                                      />
+                                      <input
+                                        type="text"
+                                        value={editingTodoText}
+                                        onChange={(e) => setEditingTodoText(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') saveEditing(item.id);
+                                          if (e.key === 'Escape') setEditingTodoId(null);
+                                        }}
+                                        autoFocus
+                                        className="bg-gray-900 border border-blue-500 rounded px-2 py-1 text-xs text-white focus:outline-none flex-1 min-w-[140px]"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => saveEditing(item.id)}
+                                        className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium"
+                                      >
+                                        Spara
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingTodoId(null)}
+                                        className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-xs"
+                                      >
+                                        Avbryt
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      {item.chapterGroup && (
+                                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-gray-800/90 text-gray-400 font-medium shrink-0 border border-gray-700/50">
+                                          {item.chapterGroup}
+                                        </span>
+                                      )}
+                                      <span
+                                        onClick={() => startEditing(item)}
+                                        className={`text-sm font-medium cursor-pointer hover:text-white transition-colors group/title flex items-center gap-1.5 ${
+                                          item.isDone ? 'line-through text-gray-500' : 'text-gray-200'
+                                        }`}
+                                        title="Klicka för att redigera titel och grupp"
+                                      >
+                                        <span>{item.title}</span>
+                                        <Pencil className="w-3 h-3 text-gray-500 opacity-40 group-hover/title:opacity-100 transition-opacity" />
+                                      </span>
+                                    </>
+                                  )}
 
-                          {/* Ta bort knapp */}
-                          <button
-                            onClick={() => removeTodo(item.id)}
-                            className="text-gray-600 hover:text-red-400 p-1 transition-colors shrink-0"
-                            title="Ta bort från din lista"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
+                                  {flatIndex === currentChapterIndex && !item.isDone && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-semibold uppercase">
+                                      Aktuellt mål
+                                    </span>
+                                  )}
+
+                                  {/* Knapp för frivillig / obligatorisk */}
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleOptional(item.id)}
+                                    className={`text-[10px] px-2 py-0.5 rounded transition ${
+                                      item.isOptional
+                                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                        : 'bg-gray-800/70 text-gray-500 hover:text-gray-300'
+                                    }`}
+                                    title={item.isOptional ? 'Klicka för att göra obligatoriskt' : 'Klicka för att göra frivilligt'}
+                                  >
+                                    {item.isOptional ? 'Frivilligt' : 'Obligatoriskt'}
+                                  </button>
+
+                                  {spoilerProtection && revealedIds.has(item.id) && (
+                                    <button
+                                      onClick={() => toggleReveal(item.id)}
+                                      className="text-[11px] text-gray-500 hover:text-gray-300"
+                                      title="Dölj igen"
+                                    >
+                                      <EyeOff className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Ta bort knapp */}
+                            <button
+                              onClick={() => removeTodo(item.id)}
+                              className="text-gray-600 hover:text-red-400 p-1 transition-colors shrink-0"
+                              title="Ta bort från din lista"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   {/* Lägg till eget delmål med valfri grupp */}
                   <form onSubmit={handleAddCustomTodo} className="flex flex-col sm:flex-row gap-2 pt-2">

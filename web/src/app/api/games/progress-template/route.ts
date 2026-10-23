@@ -540,32 +540,25 @@ async function fetchWithGemini(
       ? 'ca 20 till 30'
       : 'ca 14 till 22';
 
-  const prompt = `You are an expert video game progression analyst.
-Extract the official chapter and main quest progression list for the video game "${gameTitle}" based on IGN's official walkthrough / guide.
-Target granularity: ${granularity} (approximately ${targetCount} story milestones).
+  const prompt = `Task: Provide the official main story chapter and quest progression list for the game "${gameTitle}" based on IGN walkthroughs and guides.
+Desired granularity: ${granularity} (target ${targetCount} items).
 
-STRICT RULES:
-1. IGN WALKTHROUGH ACCURACY:
-   - Extract the exact chapter or quest titles as structured in IGN's official walkthrough / guide for "${gameTitle}".
-   - Keep the original OFFICIAL ENGLISH titles for all items (e.g. "R.P.D. - Central Hall", "The Sewers", "NEST Laboratory"). Do not translate quest titles to Swedish!
-2. CHRONOLOGICAL STORY ORDER:
-   - List the items in the order they are completed in the main story.
-3. EXCLUDE SIDE ACTIVITIES:
-   - Only include main story chapters, acts, or major story bosses.
-4. VALID JSON:
-   - Return valid JSON matching this schema:
+Rules:
+1. Chronological main story order. Exclude minor side quests.
+2. Keep official ENGLISH titles for all items (e.g. "R.P.D. - Central Hall", "The Sewers", "NEST Laboratory"). Do not translate quest titles to Swedish!
+3. Output valid JSON matching this schema:
 {
   "gameTitle": "${gameTitle}",
   "hasLinearProgression": true,
   "progressionType": "chapters" | "acts" | "main_quests" | "bosses" | "worlds" | "none",
-  "summary": "Kort svensk sammanfattning av spelets handling och upplägg baserat på IGN:s guide",
+  "summary": "Kort svensk sammanfattning baserad på IGN:s guide",
   "items": [
     {
       "id": "1",
       "title": "Exact English Quest / Chapter Title",
       "order": 1,
       "chapterGroup": "Area or Act",
-      "description": "Kort beskrivning",
+      "description": "Kort info",
       "isOptional": false
     }
   ]
@@ -574,9 +567,7 @@ STRICT RULES:
   // 1. Verifiera först API-nyckeln och hämta de aktiva modellerna från Google
   let candidateModels = [
     'gemini-3.8-flash',
-    'gemini-3.0-flash',
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
+    'gemini-3.7-flash',
   ];
   let keyError: string | null = null;
 
@@ -610,15 +601,11 @@ STRICT RULES:
               !name.includes('learnlm')
           );
 
-        // Hjälpfunktion för att extrahera versionsnummer (t.ex. gemini-3.8-flash -> 3.8)
         const getVer = (name: string): number => {
           const match = name.match(/gemini[^\d]*(\d+(?:\.\d+)?)/i);
           return match ? parseFloat(match[1]) : 0;
         };
 
-        // Sortera:
-        // 1. Flash-modeller först, sorterade med nyast version först (t.ex. 3.8 -> 3.5 -> 3.0 -> 2.5)
-        // 2. Pro-modeller därefter, också nyast först
         const flashModels = supported
           .filter((m: string) => m.includes('flash'))
           .sort((a: string, b: string) => getVer(b) - getVer(a));
@@ -630,7 +617,8 @@ STRICT RULES:
         const ordered = [...flashModels, ...otherModels];
         const unique = Array.from(new Set(ordered));
         if (unique.length > 0) {
-          candidateModels = unique.slice(0, 2);
+          // Välj primär Flash-modell (t.ex. gemini-3.8-flash)
+          candidateModels = unique.slice(0, 1);
         }
       }
     }
@@ -649,30 +637,35 @@ STRICT RULES:
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
 
+      // Försök först med thinkingBudget: 0 (stänger av tankeläge på Gemini 3.x Flash så att den svarar omedelbart)
       let response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(24000),
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.1,
             responseMimeType: 'application/json',
             maxOutputTokens: 2048,
+            thinkingConfig: {
+              thinkingBudget: 0,
+            },
           },
         }),
       });
 
-      // Om modellen inte stöder responseMimeType, prova utan
+      // Om modellen inte känner till thinkingConfig (400), anropa utan
       if (!response.ok && response.status === 400) {
         response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          signal: AbortSignal.timeout(15000),
+          signal: AbortSignal.timeout(24000),
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
               temperature: 0.1,
+              responseMimeType: 'application/json',
               maxOutputTokens: 2048,
             },
           }),

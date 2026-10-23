@@ -136,6 +136,152 @@ export default function TestProgressPage() {
     localStorage.setItem('gameshelf_gemini_key', key);
   };
 
+  // Applicera mall på sidans tillstånd
+  const applyTemplate = (data: LoadedTemplate, title: string) => {
+    setTemplate(data);
+    setSelectedGameName(data.gameTitle || title);
+
+    const initialTodos: ActiveTodo[] = (data.items || []).map((item: TemplateItem, index: number) => ({
+      id: item.id || `todo-${index}`,
+      title: item.title,
+      chapterGroup: item.chapterGroup,
+      isDone: false,
+      order: item.order || index + 1,
+      isOptional: item.isOptional,
+    }));
+    setTodos(initialTodos);
+
+    const preset = PRESET_GAMES.find(
+      (p) => p.name.toLowerCase() === title.toLowerCase() || p.displayName.toLowerCase() === title.toLowerCase()
+    );
+    if (preset) {
+      setEstimatedHours(preset.hltb);
+    } else {
+      setEstimatedHours(20);
+    }
+  };
+
+  // Anropa Google Gemini direkt från webbläsaren (eliminerar Vercels 10s serverless timeout helt)
+  const generateDirectlyWithGemini = async (
+    title: string,
+    key: string,
+    gran: Granularity
+  ): Promise<LoadedTemplate> => {
+    const cleanKey = key.trim();
+    const targetCount = gran === 'compact' ? 'ca 8 till 12' : gran === 'detailed' ? 'ca 20 till 30' : 'ca 14 till 22';
+    const prompt = `Task: Provide the official main story chapter and quest progression list for the video game "${title}" based on IGN walkthroughs and guides.
+Target granularity: ${gran} (approximately ${targetCount} story milestones).
+
+Rules:
+1. Chronological main story order. Exclude minor side quests.
+2. Keep official ENGLISH titles for all items (e.g. "R.P.D. - Central Hall", "The Sewers", "NEST Laboratory"). Do not translate quest titles to Swedish!
+3. Output valid JSON matching this schema:
+{
+  "gameTitle": "${title}",
+  "hasLinearProgression": true,
+  "progressionType": "chapters" | "acts" | "main_quests" | "bosses" | "worlds" | "none",
+  "summary": "Kort svensk sammanfattning av handlingen baserat på IGN:s guide",
+  "items": [
+    {
+      "id": "1",
+      "title": "Exact English Quest / Chapter Title",
+      "order": 1,
+      "chapterGroup": "Area or Act",
+      "description": "Kort info",
+      "isOptional": false
+    }
+  ]
+}`;
+
+    // 1. Fråga Google efter aktiva modeller för denna API-nyckel
+    let candidateModels = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-2.5-flash'];
+    try {
+      const listRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(cleanKey)}`
+      );
+      if (!listRes.ok) {
+        const errJson = await listRes.json().catch(() => null);
+        throw new Error(errJson?.error?.message || `Google API-fel (${listRes.status})`);
+      }
+      const listData = await listRes.json();
+      if (Array.isArray(listData.models)) {
+        const supported = listData.models
+          .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
+          .map((m: any) => (m.name as string).replace(/^models\//, ''))
+          .filter((n: string) => !n.includes('tts') && !n.includes('audio') && !n.includes('embed') && !n.includes('imagen') && !n.includes('aqa'));
+
+        const getVer = (n: string): number => {
+          const match = n.match(/gemini[^\d]*(\d+(?:\.\d+)?)/i);
+          return match ? parseFloat(match[1]) : 0;
+        };
+
+        const flash = supported.filter((m: string) => m.includes('flash')).sort((a: string, b: string) => getVer(b) - getVer(a));
+        const others = supported.filter((m: string) => !m.includes('flash')).sort((a: string, b: string) => getVer(b) - getVer(a));
+        const unique = Array.from(new Set([...flash, ...others]));
+        if (unique.length > 0) candidateModels = unique.slice(0, 2);
+      }
+    } catch (listErr: any) {
+      if (listErr.message?.includes('API key')) throw listErr;
+    }
+
+    let lastError: Error | null = null;
+    for (const modelName of candidateModels) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: 'application/json',
+              maxOutputTokens: 2048,
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          const errJson = await response.json().catch(() => null);
+          throw new Error(errJson?.error?.message || `Modell ${modelName} (${response.status})`);
+        }
+
+        const data = await response.json();
+        const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!textContent) throw new Error(`Modell ${modelName} returnerade tomt svar.`);
+
+        let cleaned = textContent.trim();
+        const codeBlock = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        if (codeBlock) cleaned = codeBlock[1].trim();
+
+        const parsed = JSON.parse(cleaned);
+        const items = Array.isArray(parsed.items) ? parsed.items : [];
+
+        return {
+          gameTitle: parsed.gameTitle || title,
+          hasLinearProgression: parsed.hasLinearProgression !== undefined ? Boolean(parsed.hasLinearProgression) : items.length > 0,
+          progressionType: parsed.progressionType || (items.length > 0 ? 'chapters' : 'none'),
+          granularity: gran,
+          summary: parsed.summary || '',
+          items: items.map((it: any, idx: number) => ({
+            id: String(it.id || idx + 1),
+            title: String(it.title || `Delmål ${idx + 1}`),
+            order: Number(it.order || idx + 1),
+            chapterGroup: it.chapterGroup,
+            description: it.description,
+            isOptional: Boolean(it.isOptional),
+          })),
+          source: 'ai',
+          modelUsed: modelName,
+        };
+      } catch (err: any) {
+        lastError = err;
+      }
+    }
+
+    throw lastError || new Error('Kunde inte generera progression med Gemini.');
+  };
+
   // Hämta mall för ett spel
   const loadGameTemplate = async (
     title: string,
@@ -150,60 +296,42 @@ export default function TestProgressPage() {
     const activeUrl = customGuideUrl !== undefined ? customGuideUrl : guideUrlInput;
 
     try {
-      const res = await fetch('/api/games/progress-template', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(45000),
-        body: JSON.stringify({
-          gameTitle: title,
-          guideUrl: activeUrl.trim() || undefined,
-          geminiApiKey: geminiApiKey.trim() || undefined,
-          granularity: currentGranularity,
-          forceAI: shouldForceAI || Boolean(activeUrl.trim()),
-        }),
-      });
+      // 1. Försök först med kurerade mallar från servern (svarar på ~20ms)
+      if (!shouldForceAI && !activeUrl.trim()) {
+        const res = await fetch('/api/games/progress-template', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            gameTitle: title,
+            granularity: currentGranularity,
+            forceAI: false,
+          }),
+        });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        if (data.notFound) {
-          setErrorMsg(data.message);
-        } else {
-          setErrorMsg(data.error || 'Kunde inte hämta progression.');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.items && data.items.length > 0) {
+            applyTemplate(data, title);
+            return;
+          }
         }
-        setIsLoading(false);
+      }
+
+      // 2. Om AI ska användas och användaren har angett en API-nyckel:
+      // Anropa Google Gemini direkt från webbläsaren!
+      // Detta eliminerar Vercels serverless tidsgräns (10s) helt och hållet.
+      if (geminiApiKey.trim()) {
+        const aiTemplate = await generateDirectlyWithGemini(title, geminiApiKey.trim(), currentGranularity);
+        applyTemplate(aiTemplate, title);
         return;
       }
 
-      setTemplate(data);
-      setSelectedGameName(data.gameTitle);
-
-      // Skapa aktiva todos från mallen
-      const initialTodos: ActiveTodo[] = (data.items || []).map((item: TemplateItem, index: number) => ({
-        id: item.id || `todo-${index}`,
-        title: item.title,
-        chapterGroup: item.chapterGroup,
-        isDone: false,
-        order: item.order || index + 1,
-        isOptional: item.isOptional,
-      }));
-      setTodos(initialTodos);
-
-      // Sätt ungefärlig HLTB om vi känner till spelet
-      const preset = PRESET_GAMES.find(
-        (p) => p.name.toLowerCase() === title.toLowerCase() || p.displayName.toLowerCase() === title.toLowerCase()
+      // 3. Om ingen mall finns och ingen API-nyckel angetts:
+      setErrorMsg(
+        `Ingen förberedd mall hittades för "${title}". Ange din Gemini API-nyckel under knappen "Gemini AI-nyckel" för att generera kapitel i realtid, eller klistra in en lista direkt i textfliken.`
       );
-      if (preset) {
-        setEstimatedHours(preset.hltb);
-      } else {
-        setEstimatedHours(20);
-      }
     } catch (err: any) {
-      if (err.name === 'TimeoutError' || err.name === 'AbortError') {
-        setErrorMsg('Hämtningen tog för lång tid (timeout). Kontrollera att länken fungerar eller prova igen.');
-      } else {
-        setErrorMsg(err.message || 'Nätverksfel vid hämtning');
-      }
+      setErrorMsg(err.message || 'Kunde inte hämta progression.');
     } finally {
       setIsLoading(false);
     }

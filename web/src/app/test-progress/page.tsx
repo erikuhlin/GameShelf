@@ -17,6 +17,8 @@ import {
   Search,
   Key,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   RotateCcw,
   BookOpen,
   Gamepad2,
@@ -30,6 +32,12 @@ import {
   Flame,
   ExternalLink,
   Pencil,
+  FileText,
+  Info,
+  ArrowUpDown,
+  Tag,
+  Star,
+  CheckCheck,
 } from 'lucide-react';
 
 export type Granularity = 'compact' | 'standard' | 'detailed';
@@ -82,10 +90,11 @@ const PRESET_GAMES = [
 
 export default function TestProgressPage() {
   const [selectedGameName, setSelectedGameName] = useState<string>('Kingdom Come: Deliverance II');
+  const [activeStep1Tab, setActiveStep1Tab] = useState<'presets' | 'paste' | 'search'>('presets');
   const [searchInput, setSearchInput] = useState<string>('');
   const [guideUrlInput, setGuideUrlInput] = useState<string>('');
   const [rawTextInput, setRawTextInput] = useState<string>('');
-  const [inputMode, setInputMode] = useState<'url' | 'text'>('text');
+  const [rawTextGameTitle, setRawTextGameTitle] = useState<string>('Alan Wake 2');
   const [geminiApiKey, setGeminiApiKey] = useState<string>('');
   const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(false);
 
@@ -99,31 +108,119 @@ export default function TestProgressPage() {
 
   // Användarens aktiva bocklista (motsvarar Game.todos i iOS/web)
   const [todos, setTodos] = useState<ActiveTodo[]>([]);
+  // Grundmallen sparad för att användaren när som helst ska kunna "Återställa till grundmall"
+  const [masterTemplateTodos, setMasterTemplateTodos] = useState<ActiveTodo[]>([]);
   const [estimatedHours, setEstimatedHours] = useState<number>(16);
 
   // Inställningar för test
   const [spoilerProtection, setSpoilerProtection] = useState<boolean>(true);
   const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
   const [newTodoTitle, setNewTodoTitle] = useState<string>('');
+  const [newTodoChapterGroup, setNewTodoChapterGroup] = useState<string>('');
   const [copiedJson, setCopiedJson] = useState<boolean>(false);
 
   // Inline-redigering av delmål
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
   const [editingTodoText, setEditingTodoText] = useState<string>('');
+  const [editingTodoGroup, setEditingTodoGroup] = useState<string>('');
 
   const startEditing = (todo: ActiveTodo) => {
     setEditingTodoId(todo.id);
     setEditingTodoText(todo.title);
+    setEditingTodoGroup(todo.chapterGroup || '');
   };
 
   const saveEditing = (id: string) => {
     if (editingTodoText.trim()) {
       setTodos((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, title: editingTodoText.trim() } : t))
+        prev.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                title: editingTodoText.trim(),
+                chapterGroup: editingTodoGroup.trim() || undefined,
+              }
+            : t
+        )
       );
     }
     setEditingTodoId(null);
   };
+
+  // Flytta delmål uppåt
+  const moveTodoUp = (index: number) => {
+    if (index <= 0) return;
+    setTodos((prev) => {
+      const updated = [...prev];
+      const temp = updated[index];
+      updated[index] = updated[index - 1];
+      updated[index - 1] = temp;
+      return updated.map((t, idx) => ({ ...t, order: idx + 1 }));
+    });
+  };
+
+  // Flytta delmål nedåt
+  const moveTodoDown = (index: number) => {
+    if (index >= todos.length - 1) return;
+    setTodos((prev) => {
+      const updated = [...prev];
+      const temp = updated[index];
+      updated[index] = updated[index + 1];
+      updated[index + 1] = temp;
+      return updated.map((t, idx) => ({ ...t, order: idx + 1 }));
+    });
+  };
+
+  // Växla om ett delmål är frivilligt
+  const toggleOptional = (id: string) => {
+    setTodos((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, isOptional: !t.isOptional } : t))
+    );
+  };
+
+  // Återställ listan till den ursprungliga grundmallen
+  const restoreMasterTemplate = () => {
+    if (masterTemplateTodos.length > 0) {
+      setTodos(masterTemplateTodos.map((t) => ({ ...t, isDone: false })));
+    }
+  };
+
+  // Fyll i exempel för Alan Wake 2
+  const fillAlanWakeExample = () => {
+    setRawTextGameTitle('Alan Wake 2');
+    setRawTextInput(
+`Chapter 1: The Cult (Return 1)
+Chapter 2: The Heart (Return 2)
+Chapter 3: Local Girl (Return 3)
+Chapter 4: No Chance (Return 4)
+Chapter 5: Old Gods (Return 5)
+Chapter 6: Scratch (Return 6)
+Chapter 7: Summoning (Return 7)
+Chapter 8: Deerfest (Return 8)
+Chapter 9: Come Home (Return 9)
+Initiation 1: Victims
+Initiation 2: Casey
+Initiation 3: Haunting
+Initiation 4: We Sing
+Initiation 5: Room 665
+Initiation 6: Return
+Initiation 7: Masks
+Initiation 8: Zane's Film
+Initiation 9: Gone`
+    );
+  };
+
+  // Räkna antal upptäckta rader i råtext i realtid
+  const detectedItemsCount = useMemo(() => {
+    return rawTextInput
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((line) => {
+        if (line.length < 2 || line.length > 140) return false;
+        if (/^(cookie|copyright|privacy|advertisement|follow us|subscribe|sign up)/i.test(line)) return false;
+        return true;
+      }).length;
+  }, [rawTextInput]);
 
   // Ladda API-nyckel från localStorage om den sparats tidigare
   useEffect(() => {
@@ -150,6 +247,7 @@ export default function TestProgressPage() {
       isOptional: item.isOptional,
     }));
     setTodos(initialTodos);
+    setMasterTemplateTodos(initialTodos);
 
     const preset = PRESET_GAMES.find(
       (p) => p.name.toLowerCase() === title.toLowerCase() || p.displayName.toLowerCase() === title.toLowerCase()
@@ -393,6 +491,7 @@ Rules:
     });
     setSelectedGameName(gameTitle);
     setTodos(items);
+    setMasterTemplateTodos(items);
     setEstimatedHours(Math.max(10, Math.round(items.length * 1.5)));
     setIsLoading(false);
   };
@@ -463,11 +562,13 @@ Rules:
     const newItem: ActiveTodo = {
       id: `custom-${Date.now()}`,
       title: newTodoTitle.trim(),
+      chapterGroup: newTodoChapterGroup.trim() || undefined,
       isDone: false,
       order: todos.length + 1,
     };
     setTodos([...todos, newItem]);
     setNewTodoTitle('');
+    setNewTodoChapterGroup('');
   };
 
   // Ta bort delmål
@@ -527,190 +628,273 @@ Rules:
           </p>
         </header>
 
-        {/* Steg 1: Välj / Sök Spel */}
-        <section className="bg-gray-900/60 border border-gray-800 rounded-2xl p-5 sm:p-6 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-300 flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center text-xs font-bold">1</span>
-              Välj förberett exempel eller sök valfritt spel
-            </h2>
+        {/* Steg 1: Välj / Importera / Sök Spel */}
+        <section className="bg-gray-900/60 border border-gray-800 rounded-2xl p-5 sm:p-6 space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800 pb-3">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-200 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center text-xs font-bold">1</span>
+                Välj spelmall eller importera egen guide
+              </h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Välj bland förberedda verifierade spel, eller klistra in en rå lista från valfri walkthrough.
+              </p>
+            </div>
 
-            <div className="flex items-center gap-3">
+            {/* Huvudflikar för Steg 1 */}
+            <div className="inline-flex rounded-xl bg-gray-950 p-1 border border-gray-800 text-xs">
               <button
-                onClick={() => setShowApiKeyInput(!showApiKeyInput)}
-                className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1.5 transition-colors font-medium"
+                type="button"
+                onClick={() => setActiveStep1Tab('presets')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1.5 ${
+                  activeStep1Tab === 'presets'
+                    ? 'bg-red-600 text-white shadow-sm'
+                    : 'text-gray-400 hover:text-white'
+                }`}
               >
-                <Key className="w-3.5 h-3.5" />
-                {showApiKeyInput ? 'Dölj AI-nyckel' : 'Gemini AI-nyckel'}
+                <Shield className="w-3.5 h-3.5" />
+                <span>Verifierade mallar (12 st)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveStep1Tab('paste')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1.5 ${
+                  activeStep1Tab === 'paste'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Klistra in guide / lista</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveStep1Tab('search')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1.5 ${
+                  activeStep1Tab === 'search'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span>Sök / Gemini AI</span>
               </button>
             </div>
           </div>
 
-          {/* Valfri Gemini API Key inställning */}
-          {showApiKeyInput && (
-            <div className="bg-gray-950/80 border border-amber-500/30 rounded-xl p-4 text-xs space-y-2">
-              <div className="flex items-center gap-2 text-amber-300 font-medium">
-                <Key className="w-4 h-4" />
-                Google Gemini API-inställning
+          {/* FLIK 1: Verifierade mallar */}
+          {activeStep1Tab === 'presets' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs text-gray-400 bg-gray-950/60 p-2.5 rounded-xl border border-gray-800/80">
+                <span className="flex items-center gap-1.5 text-gray-300 font-medium">
+                  <Shield className="w-4 h-4 text-emerald-400" />
+                  Officiellt kurerade och verifierade spel i Gameshelf
+                </span>
+                <span className="text-[11px] text-gray-500">Laddas omedelbart • 0 ms fördröjning</span>
               </div>
-              <p className="text-gray-400">
-                För att testa <strong>vilket spel som helst i världen</strong> eller tvinga AI att analysera om kurerade spel med olika detaljnivåer:
-              </p>
-              <div className="flex gap-2">
-                <input
-                  type="password"
-                  placeholder="Klistra in Gemini API-nyckel här..."
-                  value={geminiApiKey}
-                  onChange={(e) => saveApiKey(e.target.value)}
-                  className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white w-full focus:outline-none focus:border-red-500"
-                />
-              </div>
-              <div className="flex items-center gap-2 pt-1 text-gray-400">
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={forceAI}
-                    onChange={(e) => setForceAI(e.target.checked)}
-                    className="rounded border-gray-700 bg-gray-900 text-red-600 focus:ring-0"
-                  />
-                  <span>Tvinga AI-generering (använd inte förberedda mallar för snabbvalsspelen)</span>
-                </label>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                {PRESET_GAMES.map((p) => {
+                  const Icon = p.icon;
+                  const isSelected = selectedGameName.toLowerCase() === p.name.toLowerCase() || selectedGameName.toLowerCase() === p.displayName.toLowerCase();
+                  return (
+                    <button
+                      key={p.name}
+                      onClick={() => {
+                        setSelectedGameName(p.name);
+                        loadGameTemplate(p.name, granularity, forceAI);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                        isSelected
+                          ? 'bg-red-500/15 border-red-500 text-white shadow-lg shadow-red-500/10'
+                          : 'bg-gray-950/60 border-gray-800 text-gray-300 hover:bg-gray-800/50 hover:border-gray-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <Icon className={`w-4 h-4 ${isSelected ? 'text-red-400' : 'text-gray-400'}`} />
+                        {p.type !== 'none' ? (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium flex items-center gap-0.5">
+                            <Shield className="w-2.5 h-2.5" /> Verifierad
+                          </span>
+                        ) : (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400">
+                            Ej linjär
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs font-semibold line-clamp-1">{p.displayName}</span>
+                      <div className="flex items-center justify-between mt-2 pt-1 border-t border-gray-800/60 text-[10px] text-gray-400">
+                        <span className="line-clamp-1 text-gray-400">{p.tag}</span>
+                        {p.hltb > 0 && <span className="font-mono text-gray-500 ml-1 shrink-0">~{p.hltb}h</span>}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* Snabbvals-knappar */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {PRESET_GAMES.map((p) => {
-              const Icon = p.icon;
-              const isSelected = selectedGameName.toLowerCase() === p.name.toLowerCase() || selectedGameName.toLowerCase() === p.displayName.toLowerCase();
-              return (
-                <button
-                  key={p.name}
-                  onClick={() => {
-                    setSelectedGameName(p.name);
-                    loadGameTemplate(p.name, granularity, forceAI);
-                  }}
-                  className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                    isSelected
-                      ? 'bg-red-500/15 border-red-500 text-white shadow-lg shadow-red-500/10'
-                      : 'bg-gray-950/50 border-gray-800 text-gray-300 hover:bg-gray-800/50 hover:border-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <Icon className={`w-4 h-4 ${isSelected ? 'text-red-400' : 'text-gray-500'}`} />
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 font-mono">
-                      {p.tag}
-                    </span>
-                  </div>
-                  <span className="text-xs font-semibold line-clamp-1">{p.displayName}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Sökfält för valfritt spel */}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (searchInput.trim()) {
-                setSelectedGameName(searchInput.trim());
-                loadGameTemplate(searchInput.trim(), granularity, forceAI);
-              }
-            }}
-            className="flex gap-2 pt-2"
-          >
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Skriv in valfritt spel (t.ex. Silent Hill 2, Alan Wake 2, Halo...)"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                className="w-full bg-gray-950 border border-gray-800 rounded-xl pl-9 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500 transition-colors"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={isLoading || !searchInput.trim()}
-              className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-1.5 shadow-md"
-            >
-              {isLoading ? 'Söker på IGN...' : 'Sök guide på IGN'}
-            </button>
-          </form>
-
-          {/* Alternativ 2: Importera från guide (Text eller URL) */}
-          <div className="bg-gray-950/70 border border-blue-500/30 rounded-xl p-3.5 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-              <span className="font-semibold text-blue-400 flex items-center gap-1.5">
-                <Globe className="w-4 h-4" />
-                Alternativ 2: Importera guide (100% träffsäkert)
-              </span>
-              <div className="inline-flex rounded-lg bg-gray-900 p-0.5 border border-gray-800 text-[11px]">
+          {/* FLIK 2: Klistra in text / guide */}
+          {activeStep1Tab === 'paste' && (
+            <div className="bg-gray-950/80 border border-blue-500/30 rounded-xl p-4 sm:p-5 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-blue-400" />
+                    Enkel textimport (100% träffsäkert, 1 millisekund)
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Kopiera kapitel eller uppdrag från IGN, PowerPyx eller Reddit och klistra in här.
+                  </p>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setInputMode('text')}
-                  className={`px-2.5 py-1 rounded-md font-medium transition ${
-                    inputMode === 'text'
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
+                  onClick={fillAlanWakeExample}
+                  className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5"
                 >
-                  Klistra in text / lista
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInputMode('url')}
-                  className={`px-2.5 py-1 rounded-md font-medium transition ${
-                    inputMode === 'url'
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  Guide-URL
+                  <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                  Fyll i Alan Wake 2 (Exempel)
                 </button>
               </div>
-            </div>
 
-            {inputMode === 'text' ? (
-              <div className="space-y-2">
-                <p className="text-[11px] text-gray-400">
-                  Kopiera kapitellistan eller texten från en walkthrough (t.ex. PowerPyx, IGN eller Reddit) och klistra in här. Den skapar checklistan <strong>omedelbart på 1 millisekund</strong> utan risk för blockering eller timeout!
-                </p>
+              {/* Speltitel */}
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1">Speltitel:</label>
+                <input
+                  type="text"
+                  placeholder="T.ex. Alan Wake 2, Dead Space, Sekiro..."
+                  value={rawTextGameTitle}
+                  onChange={(e) => setRawTextGameTitle(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {/* Textarea */}
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1">
+                  Klistra in kapitel (ett per rad):
+                </label>
                 <textarea
-                  rows={4}
-                  placeholder={`Klistra in kapitel eller uppdrag här (ett per rad, t.ex):\n1. East South Vale\n2. Wood Side Apartments\n3. Blue Creek Apartments\n4. Brookhaven Hospital...`}
+                  rows={7}
+                  placeholder={`Klistra in kapitellista här, t.ex:\nChapter 1: The Cult\nChapter 2: The Heart\nChapter 3: Local Girl\nChapter 4: No Chance\nChapter 5: Old Gods...`}
                   value={rawTextInput}
                   onChange={(e) => setRawTextInput(e.target.value)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono leading-relaxed"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono leading-relaxed"
                 />
-                <div className="flex justify-between items-center pt-1">
-                  <span className="text-[10px] text-gray-500">
-                    Tips: Tar bort siffror, bindestreck och formatering automatiskt.
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => parseFromRawText(rawTextInput, searchInput.trim() || selectedGameName)}
-                    disabled={!rawTextInput.trim()}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-md shadow-blue-500/10"
-                  >
-                    <ListChecks className="w-3.5 h-3.5" />
-                    Skapa checklista direkt
-                  </button>
-                </div>
               </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-[11px] text-gray-400">
-                  Klistra in en länk till spelets walkthrough eller kapitelöversikt (från t.ex. PowerPyx, IGN, Game8).
-                </p>
-                <div className="flex flex-col sm:flex-row gap-2 pt-1">
+
+              {/* Nedre statusrad med Live Counter & Skapa-knapp */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-gray-800">
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1.5 ${
+                    detectedItemsCount > 0
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      : 'bg-gray-800 text-gray-400'
+                  }`}>
+                    <CheckCheck className="w-3.5 h-3.5" />
+                    {detectedItemsCount > 0
+                      ? `${detectedItemsCount} delmål upptäckta och redo att importeras`
+                      : 'Inga rader upptäckta ännu'}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => parseFromRawText(rawTextInput, rawTextGameTitle)}
+                  disabled={detectedItemsCount === 0}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-semibold rounded-xl transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2"
+                >
+                  <ListChecks className="w-4 h-4" />
+                  Skapa checklista direkt (1 ms)
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* FLIK 3: Sök & Gemini AI */}
+          {activeStep1Tab === 'search' && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs text-gray-400">
+                  Sök efter valfritt spel på IGN eller använd Google Gemini AI för att analysera spelet.
+                </span>
+                <button
+                  onClick={() => setShowApiKeyInput(!showApiKeyInput)}
+                  className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1.5 transition-colors font-medium"
+                >
+                  <Key className="w-3.5 h-3.5" />
+                  {showApiKeyInput ? 'Dölj Gemini AI-nyckel' : 'Konfigurera Gemini AI-nyckel'}
+                </button>
+              </div>
+
+              {showApiKeyInput && (
+                <div className="bg-gray-950/80 border border-amber-500/30 rounded-xl p-4 text-xs space-y-2">
+                  <div className="flex items-center gap-2 text-amber-300 font-medium">
+                    <Key className="w-4 h-4" />
+                    Google Gemini API-inställning (Körs direkt i webbläsaren)
+                  </div>
+                  <p className="text-gray-400">
+                    Genom att anropa Gemini direkt från webbläsaren elimineras Vercels 10s serverless timeout helt.
+                  </p>
+                  <input
+                    type="password"
+                    placeholder="Klistra in Gemini API-nyckel här..."
+                    value={geminiApiKey}
+                    onChange={(e) => saveApiKey(e.target.value)}
+                    className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white w-full focus:outline-none focus:border-red-500"
+                  />
+                  <label className="flex items-center gap-1.5 cursor-pointer pt-1 text-gray-400">
+                    <input
+                      type="checkbox"
+                      checked={forceAI}
+                      onChange={(e) => setForceAI(e.target.checked)}
+                      className="rounded border-gray-700 bg-gray-900 text-red-600 focus:ring-0"
+                    />
+                    <span>Tvinga AI-generering (hoppa över förberedda mallar)</span>
+                  </label>
+                </div>
+              )}
+
+              {/* Sökfält för valfritt spel */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (searchInput.trim()) {
+                    setSelectedGameName(searchInput.trim());
+                    loadGameTemplate(searchInput.trim(), granularity, forceAI);
+                  }
+                }}
+                className="flex gap-2"
+              >
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Skriv in valfritt spel (t.ex. Halo, Dead Space, Zelda...)"
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    className="w-full bg-gray-950 border border-gray-800 rounded-xl pl-9 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isLoading || !searchInput.trim()}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-1.5 shadow-md shadow-purple-500/10"
+                >
+                  {isLoading ? 'Söker...' : 'Hämta'}
+                </button>
+              </form>
+
+              {/* Guide URL */}
+              <div className="pt-2 border-t border-gray-800">
+                <span className="text-xs text-gray-400 block mb-1.5">Eller ange en direkt guide-URL (från t.ex. PowerPyx eller IGN):</span>
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="url"
                     placeholder="https://www.powerpyx.com/... eller https://www.ign.com/wikis/..."
                     value={guideUrlInput}
                     onChange={(e) => setGuideUrlInput(e.target.value)}
-                    className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono"
+                    className="flex-1 bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 font-mono"
                   />
                   <button
                     type="button"
@@ -720,27 +904,17 @@ Rules:
                       }
                     }}
                     disabled={isLoading || !guideUrlInput.trim()}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap shadow-md shadow-blue-500/10"
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap"
                   >
-                    {isLoading ? (
-                      <>
-                        <Globe className="w-3.5 h-3.5 animate-spin" />
-                        Läser guide...
-                      </>
-                    ) : (
-                      <>
-                        <Globe className="w-3.5 h-3.5" />
-                        Extrahera från guide-URL
-                      </>
-                    )}
+                    {isLoading ? 'Läser guide...' : 'Extrahera från URL'}
                   </button>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {errorMsg && (
-            <div className="p-3 rounded-xl bg-red-950/40 border border-red-800/60 text-red-300 text-xs flex items-start gap-2">
+            <div className="p-3.5 rounded-xl bg-red-950/40 border border-red-800/60 text-red-300 text-xs flex items-start gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <div>{errorMsg}</div>
             </div>
@@ -753,19 +927,24 @@ Rules:
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800 pb-4">
               <div>
                 <h2 className="text-lg font-bold text-white flex flex-wrap items-center gap-2">
-                  {template.gameTitle}
+                  <span>{template.gameTitle}</span>
                   {template.source === 'curated' && (
-                    <span className="text-[10px] bg-green-500/20 text-green-400 border border-green-500/30 px-2 py-0.5 rounded-full font-medium">
-                      Verifierad mall
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                      <Shield className="w-3 h-3 text-emerald-400" /> Verifierad Gameshelf-mall
+                    </span>
+                  )}
+                  {template.source === 'custom' && (
+                    <span className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                      <FileText className="w-3 h-3 text-blue-400" /> Egen textimport
                     </span>
                   )}
                   {template.source === 'ai' && (
-                    <span className="text-[10px] bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                    <span className="text-[10px] bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1">
                       <Sparkles className="w-3 h-3" /> Genererad med {template.modelUsed || 'Gemini'}
                     </span>
                   )}
                   {template.source === 'scraped_guide' && (
-                    <span className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                    <span className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1">
                       <Globe className="w-3 h-3" /> Hämtad från källguide ({template.modelUsed || 'Gemini'})
                     </span>
                   )}
@@ -824,6 +1003,14 @@ Rules:
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* Information om personlig isolering */}
+            <div className="flex items-center gap-2.5 p-3 rounded-xl bg-gray-950/70 border border-gray-800 text-xs text-gray-400">
+              <Info className="w-4 h-4 text-blue-400 shrink-0" />
+              <span>
+                <strong className="text-gray-200">Personliga anpassningar:</strong> Du kan ändra ordning (pil upp/ned), redigera titlar och grupper, markera delmål som frivilliga eller ta bort dem. Ändringarna är helt isolerade till ditt spelbibliotek och påverkar aldrig grundmallen.
+              </span>
             </div>
 
             {!template.hasLinearProgression ? (
@@ -916,16 +1103,27 @@ Rules:
                       Bocka av nästa kapitel ({currentChapterIndex < todos.length ? todos[currentChapterIndex]?.title : 'Alla klara!'})
                     </button>
 
-                    <button
-                      onClick={resetAll}
-                      className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded-xl transition-colors flex items-center gap-1"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      Nollställ framsteg
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={restoreMasterTemplate}
+                        className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded-xl transition-colors flex items-center gap-1"
+                        title="Återställer listan till ursprungsmallen ifall du flyttat eller raderat delmål"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        Återställ till grundmall
+                      </button>
+
+                      <button
+                        onClick={resetAll}
+                        className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded-xl transition-colors flex items-center gap-1"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        Nollställ framsteg
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Steg 4: Själva Checklistan */}
+                  {/* Steg 4: Själva Checklistan med Full Redigerbarhet */}
                   <div className="border border-gray-800 rounded-xl overflow-hidden bg-gray-950/40 divide-y divide-gray-800/60 mt-4">
                     {todos.map((item, idx) => {
                       const isFuture = idx > currentChapterIndex && !item.isDone;
@@ -934,7 +1132,7 @@ Rules:
                       return (
                         <div
                           key={item.id}
-                          className={`p-3.5 flex items-center gap-3 transition-colors ${
+                          className={`p-3 sm:p-3.5 flex items-center gap-2 sm:gap-3 transition-colors ${
                             item.isDone
                               ? 'bg-emerald-950/10 text-gray-400'
                               : idx === currentChapterIndex
@@ -942,6 +1140,33 @@ Rules:
                               : 'text-gray-300 hover:bg-gray-900/40'
                           }`}
                         >
+                          {/* Sorteringspilar upp/ner */}
+                          <div className="flex flex-col items-center -space-y-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => moveTodoUp(idx)}
+                              disabled={idx === 0}
+                              className="p-0.5 text-gray-500 hover:text-white disabled:opacity-20 transition-colors"
+                              title="Flytta uppåt"
+                            >
+                              <ChevronUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveTodoDown(idx)}
+                              disabled={idx === todos.length - 1}
+                              className="p-0.5 text-gray-500 hover:text-white disabled:opacity-20 transition-colors"
+                              title="Flytta nedåt"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Index-nummer */}
+                          <span className="text-[11px] font-mono text-gray-500 w-4 text-center shrink-0">
+                            {idx + 1}
+                          </span>
+
                           {/* Checkbox */}
                           <button
                             onClick={() => toggleTodo(item.id)}
@@ -954,7 +1179,7 @@ Rules:
                             )}
                           </button>
 
-                          {/* Titel & ChapterGroup */}
+                          {/* Titel & ChapterGroup / Spoilerskydd */}
                           <div className="flex-1 min-w-0">
                             {isHiddenBySpoiler ? (
                               <div className="flex items-center gap-2 text-xs text-gray-500 italic">
@@ -969,55 +1194,81 @@ Rules:
                               </div>
                             ) : (
                               <div className="flex flex-wrap items-center gap-2">
-                                {item.chapterGroup && (
-                                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-gray-800/90 text-gray-400 font-medium shrink-0 border border-gray-700/50">
-                                    {item.chapterGroup}
-                                  </span>
-                                )}
                                 {editingTodoId === item.id ? (
-                                  <div className="flex items-center gap-1.5 flex-1 min-w-[200px]">
+                                  <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-[240px]">
+                                    <input
+                                      type="text"
+                                      placeholder="Grupp / Akt (valfritt)"
+                                      value={editingTodoGroup}
+                                      onChange={(e) => setEditingTodoGroup(e.target.value)}
+                                      className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none w-28"
+                                    />
                                     <input
                                       type="text"
                                       value={editingTodoText}
                                       onChange={(e) => setEditingTodoText(e.target.value)}
-                                      onBlur={() => saveEditing(item.id)}
                                       onKeyDown={(e) => {
                                         if (e.key === 'Enter') saveEditing(item.id);
                                         if (e.key === 'Escape') setEditingTodoId(null);
                                       }}
                                       autoFocus
-                                      className="bg-gray-900 border border-blue-500 rounded px-2 py-0.5 text-xs text-white focus:outline-none w-full"
+                                      className="bg-gray-900 border border-blue-500 rounded px-2 py-1 text-xs text-white focus:outline-none flex-1 min-w-[140px]"
                                     />
                                     <button
                                       type="button"
                                       onClick={() => saveEditing(item.id)}
-                                      className="px-2 py-0.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-[11px] font-medium"
+                                      className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium"
                                     >
                                       Spara
                                     </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingTodoId(null)}
+                                      className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-xs"
+                                    >
+                                      Avbryt
+                                    </button>
                                   </div>
                                 ) : (
-                                  <span
-                                    onClick={() => startEditing(item)}
-                                    className={`text-sm font-medium cursor-pointer hover:text-white transition-colors group/title flex items-center gap-1.5 ${
-                                      item.isDone ? 'line-through text-gray-500' : 'text-gray-200'
-                                    }`}
-                                    title="Klicka för att redigera titel"
-                                  >
-                                    <span>{item.title}</span>
-                                    <Pencil className="w-3 h-3 text-gray-500 opacity-40 group-hover/title:opacity-100 transition-opacity" />
-                                  </span>
+                                  <>
+                                    {item.chapterGroup && (
+                                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-gray-800/90 text-gray-400 font-medium shrink-0 border border-gray-700/50">
+                                        {item.chapterGroup}
+                                      </span>
+                                    )}
+                                    <span
+                                      onClick={() => startEditing(item)}
+                                      className={`text-sm font-medium cursor-pointer hover:text-white transition-colors group/title flex items-center gap-1.5 ${
+                                        item.isDone ? 'line-through text-gray-500' : 'text-gray-200'
+                                      }`}
+                                      title="Klicka för att redigera titel och grupp"
+                                    >
+                                      <span>{item.title}</span>
+                                      <Pencil className="w-3 h-3 text-gray-500 opacity-40 group-hover/title:opacity-100 transition-opacity" />
+                                    </span>
+                                  </>
                                 )}
+
                                 {idx === currentChapterIndex && !item.isDone && (
                                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-semibold uppercase">
                                     Aktuellt mål
                                   </span>
                                 )}
-                                {item.isOptional && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400">
-                                    Frivilligt
-                                  </span>
-                                )}
+
+                                {/* Knapp för frivillig / obligatorisk */}
+                                <button
+                                  type="button"
+                                  onClick={() => toggleOptional(item.id)}
+                                  className={`text-[10px] px-2 py-0.5 rounded transition ${
+                                    item.isOptional
+                                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                      : 'bg-gray-800/70 text-gray-500 hover:text-gray-300'
+                                  }`}
+                                  title={item.isOptional ? 'Klicka för att göra obligatoriskt' : 'Klicka för att göra frivilligt'}
+                                >
+                                  {item.isOptional ? 'Frivilligt' : 'Obligatoriskt'}
+                                </button>
+
                                 {spoilerProtection && isFuture && revealedIds.has(item.id) && (
                                   <button
                                     onClick={() => toggleReveal(item.id)}
@@ -1034,8 +1285,8 @@ Rules:
                           {/* Ta bort knapp */}
                           <button
                             onClick={() => removeTodo(item.id)}
-                            className="text-gray-600 hover:text-red-400 p-1 transition-colors"
-                            title="Ta bort från lista"
+                            className="text-gray-600 hover:text-red-400 p-1 transition-colors shrink-0"
+                            title="Ta bort från din lista"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -1044,11 +1295,18 @@ Rules:
                     })}
                   </div>
 
-                  {/* Lägg till eget delmål */}
-                  <form onSubmit={handleAddCustomTodo} className="flex gap-2 pt-2">
+                  {/* Lägg till eget delmål med valfri grupp */}
+                  <form onSubmit={handleAddCustomTodo} className="flex flex-col sm:flex-row gap-2 pt-2">
                     <input
                       type="text"
-                      placeholder="Lägg till eget delmål (t.ex. 'Klara DLC' eller 'Samla alla vapen')..."
+                      placeholder="Grupp / Akt (t.ex. Akt 2, DLC)"
+                      value={newTodoChapterGroup}
+                      onChange={(e) => setNewTodoChapterGroup(e.target.value)}
+                      className="w-full sm:w-44 bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-red-500"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Titel på delmål (t.ex. 'Klara sidouppdrag' eller 'Hitta alla samlarobjekt')..."
                       value={newTodoTitle}
                       onChange={(e) => setNewTodoTitle(e.target.value)}
                       className="flex-1 bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-red-500"
@@ -1056,7 +1314,7 @@ Rules:
                     <button
                       type="submit"
                       disabled={!newTodoTitle.trim()}
-                      className="px-3 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white text-xs font-semibold rounded-xl flex items-center gap-1 transition-colors"
+                      className="px-4 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap"
                     >
                       <Plus className="w-4 h-4" /> Lägg till
                     </button>

@@ -571,16 +571,13 @@ STRICT RULES:
   ]
 }`;
 
-  // 1. Verifiera först API-nyckeln och hämta de standardmodeller som användaren har tillgång till
-  const ALLOWED_MODELS = [
+  // 1. Verifiera först API-nyckeln och hämta de aktiva modellerna från Google
+  let candidateModels = [
+    'gemini-3.8-flash',
+    'gemini-3.0-flash',
+    'gemini-2.5-flash',
     'gemini-2.0-flash',
-    'gemini-2.0-flash-lite',
-    'gemini-1.5-flash',
-    'gemini-1.5-flash-8b',
-    'gemini-1.5-pro',
   ];
-
-  let candidateModels = ['gemini-2.0-flash', 'gemini-1.5-flash'];
   let keyError: string | null = null;
 
   try {
@@ -602,16 +599,35 @@ STRICT RULES:
         const supported: string[] = listData.models
           .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
           .map((m: any) => (m.name as string).replace(/^models\//, ''))
-          // Filtrera strikt bort TTS, audio, previews, tts-preview och betalmodeller med limit 0
-          .filter((name: string) => ALLOWED_MODELS.includes(name));
+          // Filtrera strikt bort TTS, audio, bild och embeddings
+          .filter(
+            (name: string) =>
+              !name.includes('tts') &&
+              !name.includes('audio') &&
+              !name.includes('embed') &&
+              !name.includes('imagen') &&
+              !name.includes('aqa') &&
+              !name.includes('learnlm')
+          );
 
-        const ordered = [
-          ...supported.filter((m: string) => m === 'gemini-2.0-flash'),
-          ...supported.filter((m: string) => m === 'gemini-2.0-flash-lite'),
-          ...supported.filter((m: string) => m === 'gemini-1.5-flash'),
-          ...supported.filter((m: string) => m === 'gemini-1.5-flash-8b'),
-          ...supported.filter((m: string) => m === 'gemini-1.5-pro'),
-        ];
+        // Hjälpfunktion för att extrahera versionsnummer (t.ex. gemini-3.8-flash -> 3.8)
+        const getVer = (name: string): number => {
+          const match = name.match(/gemini[^\d]*(\d+(?:\.\d+)?)/i);
+          return match ? parseFloat(match[1]) : 0;
+        };
+
+        // Sortera:
+        // 1. Flash-modeller först, sorterade med nyast version först (t.ex. 3.8 -> 3.5 -> 3.0 -> 2.5)
+        // 2. Pro-modeller därefter, också nyast först
+        const flashModels = supported
+          .filter((m: string) => m.includes('flash'))
+          .sort((a: string, b: string) => getVer(b) - getVer(a));
+
+        const otherModels = supported
+          .filter((m: string) => !m.includes('flash'))
+          .sort((a: string, b: string) => getVer(b) - getVer(a));
+
+        const ordered = [...flashModels, ...otherModels];
         const unique = Array.from(new Set(ordered));
         if (unique.length > 0) {
           candidateModels = unique.slice(0, 3);

@@ -571,8 +571,16 @@ STRICT RULES:
   ]
 }`;
 
-  // 1. Verifiera först API-nyckeln och hämta de modeller användaren faktiskt har tillgång till
-  let candidateModels = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+  // 1. Verifiera först API-nyckeln och hämta de standardmodeller som användaren har tillgång till
+  const ALLOWED_MODELS = [
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash',
+    'gemini-1.5-flash-8b',
+    'gemini-1.5-pro',
+  ];
+
+  let candidateModels = ['gemini-2.0-flash', 'gemini-1.5-flash'];
   let keyError: string | null = null;
 
   try {
@@ -594,19 +602,19 @@ STRICT RULES:
         const supported: string[] = listData.models
           .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
           .map((m: any) => (m.name as string).replace(/^models\//, ''))
-          .filter((name: string) => !name.includes('embed') && !name.includes('imagen') && !name.includes('aqa'));
+          // Filtrera strikt bort TTS, audio, previews, tts-preview och betalmodeller med limit 0
+          .filter((name: string) => ALLOWED_MODELS.includes(name));
 
         const ordered = [
           ...supported.filter((m: string) => m === 'gemini-2.0-flash'),
+          ...supported.filter((m: string) => m === 'gemini-2.0-flash-lite'),
           ...supported.filter((m: string) => m === 'gemini-1.5-flash'),
-          ...supported.filter((m: string) => m.includes('2.0') && m.includes('flash')),
-          ...supported.filter((m: string) => m.includes('1.5') && m.includes('flash')),
-          ...supported.filter((m: string) => m.includes('1.5') && m.includes('pro')),
-          ...supported,
+          ...supported.filter((m: string) => m === 'gemini-1.5-flash-8b'),
+          ...supported.filter((m: string) => m === 'gemini-1.5-pro'),
         ];
         const unique = Array.from(new Set(ordered));
         if (unique.length > 0) {
-          candidateModels = unique.slice(0, 4);
+          candidateModels = unique.slice(0, 3);
         }
       }
     }
@@ -619,13 +627,13 @@ STRICT RULES:
     throw new Error(keyError);
   }
 
-  let lastError: Error | null = null;
+  const attemptErrors: string[] = [];
 
   for (const modelName of candidateModels) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
 
-      const response = await fetch(url, {
+      let response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: AbortSignal.timeout(8000),
@@ -633,10 +641,25 @@ STRICT RULES:
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.1,
-            response_mime_type: 'application/json',
+            responseMimeType: 'application/json',
           },
         }),
       });
+
+      // Om modellen inte stöder responseMimeType, prova utan
+      if (!response.ok && response.status === 400) {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(8000),
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.1,
+            },
+          }),
+        });
+      }
 
       if (!response.ok) {
         const errBody = await response.text();
@@ -645,24 +668,24 @@ STRICT RULES:
           const errJson = JSON.parse(errBody);
           errMsg = errJson.error?.message || errBody;
         } catch {}
-        lastError = new Error(`Modell ${modelName} (${response.status}): ${errMsg}`);
+        attemptErrors.push(`${modelName} (${response.status}): ${errMsg}`);
         continue;
       }
 
       const data = await response.json();
       const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!textContent) {
-        lastError = new Error(`Modell ${modelName} returnerade tomt svar.`);
+        attemptErrors.push(`${modelName}: tomt svar`);
         continue;
       }
 
       return parseGeminiOutput(textContent, gameTitle, granularity, modelName);
     } catch (err: any) {
-      lastError = err;
+      attemptErrors.push(`${modelName}: ${err.message || 'Okänt fel'}`);
     }
   }
 
-  throw lastError || new Error('Ingen tillgänglig Gemini-modell kunde generera svar för din API-nyckel.');
+  throw new Error(`Kunde inte generera med modellerna (${attemptErrors.join(' | ')})`);
 }
 
 function parseGeminiOutput(

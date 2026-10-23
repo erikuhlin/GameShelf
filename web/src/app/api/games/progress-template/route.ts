@@ -630,7 +630,7 @@ STRICT RULES:
         const ordered = [...flashModels, ...otherModels];
         const unique = Array.from(new Set(ordered));
         if (unique.length > 0) {
-          candidateModels = unique.slice(0, 3);
+          candidateModels = unique.slice(0, 2);
         }
       }
     }
@@ -652,12 +652,13 @@ STRICT RULES:
       let response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(20000),
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.1,
             responseMimeType: 'application/json',
+            maxOutputTokens: 2048,
           },
         }),
       });
@@ -667,11 +668,12 @@ STRICT RULES:
         response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          signal: AbortSignal.timeout(8000),
+          signal: AbortSignal.timeout(15000),
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
               temperature: 0.1,
+              maxOutputTokens: 2048,
             },
           }),
         });

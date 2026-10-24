@@ -25,13 +25,4 @@ public extension Color {
             })
         }
     }
-
-    static var neutralBackground: Color { ds.background }
-    static var neutralSurface: Color { ds.surface }
-    static var textPrimary: Color { ds.textPrimary }
-    static var textSecondary: Color { ds.textSecondary }
-    static var feedbackSuccess: Color { ds.success }
-    static var feedbackWarning: Color { ds.warning }
-    static var brandRed: Color { ds.brandRed }
-    static var accentIndigo: Color { ds.accentIndigo }
 }

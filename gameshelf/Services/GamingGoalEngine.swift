@@ -41,27 +41,67 @@ enum GamingGoalEngine {
         Calendar.current.component(.year, from: Date())
     }
 
-    static func completedCount(in games: [Game], for year: Int = currentYear) -> Int {
+    static func completedGames(in games: [Game], for year: Int = currentYear) -> [Game] {
         games.filter { g in
             guard g.isOwned, g.status == .completed else { return false }
             if let y = g.completedYear {
                 return y == year
             }
-            if let date = g.completedDate ?? g.lastPlayedDate {
+            if let date = g.completedDate {
                 return Calendar.current.component(.year, from: date) == year
             }
+            if let lastPlayed = g.lastPlayedDate {
+                return Calendar.current.component(.year, from: lastPlayed) == year
+            }
             return false
-        }.count
+        }
+        .sorted { (g1, g2) -> Bool in
+            let d1 = g1.completedDate ?? g1.lastPlayedDate ?? Date.distantPast
+            let d2 = g2.completedDate ?? g2.lastPlayedDate ?? Date.distantPast
+            return d1 > d2
+        }
     }
 
-    static func focusGames(from allGames: [Game], targetIDs: [String]) -> [Game] {
-        let lookup: [String: Game] = Dictionary(
-            allGames.map { ($0.id.uuidString.lowercased(), $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        return targetIDs.compactMap { id in
-            lookup[id.lowercased()]
+    static func completedCount(in games: [Game], for year: Int = currentYear) -> Int {
+        completedGames(in: games, for: year).count
+    }
+
+    static func focusGames(from allGames: [Game], targetIDs: [String] = []) -> [Game] {
+        var result: [Game] = []
+        var seenIDs = Set<UUID>()
+
+        // 1. Singleplayer-spel i "Spelar nu" blir automatiskt fokusmål (exkluderar multiplayer/ongoing)
+        let activePlayingSingleplayer = allGames
+            .filter { g in
+                g.isOwned && g.status == .playing && !g.isMultiplayerOrOngoing
+            }
+            .sorted { (g1, g2) in
+                let d1 = g1.lastPlayedDate ?? g1.dateAdded
+                let d2 = g2.lastPlayedDate ?? g2.dateAdded
+                return d1 > d2
+            }
+
+        for game in activePlayingSingleplayer {
+            if result.count < 3 && seenIDs.insert(game.id).inserted {
+                result.append(game)
+            }
         }
+
+        // 2. Om platser finns kvar: Fyll på med eventuella manuellt valda targetIDs från profilen
+        if result.count < 3 && !targetIDs.isEmpty {
+            let lookup: [String: Game] = Dictionary(
+                allGames.map { ($0.id.uuidString.lowercased(), $0) },
+                uniquingKeysWith: { first, _ in first }
+            )
+            for id in targetIDs {
+                if let game = lookup[id.lowercased()], game.status != .completed, seenIDs.insert(game.id).inserted {
+                    result.append(game)
+                    if result.count == 3 { break }
+                }
+            }
+        }
+
+        return result
     }
 
     static func calculateProgress(for game: Game) -> GameGoalProgressInfo {
@@ -182,20 +222,22 @@ enum GamingGoalEngine {
         let isUnrealistic = daysPerGame < 7
 
         // Beräkna om man ligger före schema
-        // Dag på året hittills (1...365)
         let dayOfYear = calendar.ordinality(of: .day, in: .year, for: now) ?? 1
         let totalDaysInYear = calendar.range(of: .day, in: .year, for: now)?.count ?? 365
         let expectedCompleted = (Double(dayOfYear) / Double(totalDaysInYear)) * Double(goal)
         let isAhead = Double(completed) >= expectedCompleted
 
         let text: String = {
+            if remainingGames == 1 {
+                return "\(daysRemaining) dagar kvar · Bara 1 spel kvar till målet! 🎯"
+            }
             if isUnrealistic {
                 return "\(daysRemaining) dagar kvar · ca ett spel var \(daysPerGame):e dag"
             }
             if isAhead && completed > 0 {
                 return "\(daysRemaining) dagar kvar · Du ligger före! · ca ett spel var \(daysPerGame):e dag"
             }
-            return "\(daysRemaining) dagar kvar · ca ett spel var \(daysPerGame):e dag för att nå målet"
+            return "\(daysRemaining) dagar kvar · ca ett spel var \(daysPerGame):e dag"
         }()
 
         return GameGoalTempoInfo(

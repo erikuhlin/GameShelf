@@ -26,6 +26,10 @@ struct GameGoalsView: View {
         GamingGoalEngine.completedCount(in: store.games, for: currentYear)
     }
 
+    private var completedGamesList: [Game] {
+        GamingGoalEngine.completedGames(in: store.games, for: currentYear)
+    }
+
     private var annualGoal: Int {
         max(1, profile.annualGamingGoal)
     }
@@ -93,15 +97,18 @@ struct GameGoalsView: View {
                     // 1. Årsmålskort
                     annualGoalCard
 
-                    // 2. Närmast i mål (om något fokusspel uppfyller villkoret)
+                    // 2. Klarade spel för året (Visar vilka spel som ingår i målet!)
+                    completedGamesSection
+
+                    // 3. Närmast i mål (om något fokusspel uppfyller villkoret)
                     if let closest = closestGame {
                         closestToFinishCard(game: closest.game, info: closest.info)
                     }
 
-                    // 3. Fokusmål (X/3)
+                    // 4. Fokusmål (X/3)
                     focusSection
 
-                    // 4. Märken & Milstolpar
+                    // 5. Märken & Milstolpar
                     badgesSection
                 }
                 .padding(.horizontal, 16)
@@ -247,7 +254,109 @@ struct GameGoalsView: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
-    // MARK: - 2. Närmast i mål (Matchar Mockup)
+    // MARK: - 2. Klarade spel för året
+    @ViewBuilder
+    private var completedGamesSection: some View {
+        if !completedGamesList.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("KLARADE \(String(currentYear)) · \(completedGamesList.count) SPEL")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .tracking(0.5)
+
+                    Spacer()
+                }
+
+                VStack(spacing: 8) {
+                    ForEach(completedGamesList) { game in
+                        Button {
+                            selectedGameForDetail = game
+                        } label: {
+                            HStack(spacing: 12) {
+                                CoverView(title: game.title, url: game.coverURL, corner: 8, height: 52)
+                                    .frame(width: 38, height: 52)
+
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(game.title)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+
+                                    HStack(spacing: 6) {
+                                        if let date = game.completedDate {
+                                            Text(formatCompletionDate(date))
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                        } else if let year = game.completedYear {
+                                            Text("Klarat \(String(year))")
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                        } else {
+                                            Text("Klarat \(String(currentYear))")
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                        }
+
+                                        if let r = game.rating, r > 0 {
+                                            Text("·")
+                                                .foregroundStyle(.tertiary)
+                                            HStack(spacing: 2) {
+                                                Image(systemName: "star.fill")
+                                                    .font(.system(size: 9))
+                                                    .foregroundStyle(.yellow)
+                                                Text("\(r)")
+                                                    .font(.caption2.bold())
+                                                    .foregroundStyle(.primary)
+                                            }
+                                        }
+
+                                        if let p = game.platforms.first {
+                                            Text("·")
+                                                .foregroundStyle(.tertiary)
+                                            Text(compactPlatformName(p))
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(1)
+                                        }
+                                    }
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(.green)
+                            }
+                            .padding(10)
+                            .background(Color(.secondarySystemGroupedBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private func formatCompletionDate(_ date: Date) -> String {
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "sv_SE")
+        df.dateFormat = "d MMMM yyyy"
+        return "Klarat \(df.string(from: date))"
+    }
+
+    private func compactPlatformName(_ name: String) -> String {
+        let lower = name.lowercased()
+        if lower.contains("playstation 5") || lower == "ps5" { return "PS5" }
+        if lower.contains("playstation 4") || lower == "ps4" { return "PS4" }
+        if lower.contains("switch") { return "Switch" }
+        if lower.contains("xbox series") || lower.contains("series x") || lower.contains("series s") { return "Xbox" }
+        if lower.contains("pc") || lower.contains("windows") { return "PC" }
+        return name
+    }
+
+    // MARK: - 3. Närmast i mål (Matchar Mockup)
     private func closestToFinishCard(game: Game, info: GameGoalProgressInfo) -> some View {
         Button {
             selectedGameForDetail = game
@@ -290,7 +399,7 @@ struct GameGoalsView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - 3. Fokusmål (Matchar Mockup)
+    // MARK: - 4. Fokusmål (Matchar Mockup)
     private var focusSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -317,9 +426,14 @@ struct GameGoalsView: View {
                                 .font(.headline)
                                 .foregroundStyle(.red)
 
-                            Text("Lägg till fokusspel (\(3 - focusGames.count) platser kvar)")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.primary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Välj nästa fokusspel (\(3 - focusGames.count) platser kvar)")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                                Text("Spel du sätter till \"Spelar nu\" blir automatiskt fokusmål")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
 
                             Spacer()
 
@@ -327,7 +441,7 @@ struct GameGoalsView: View {
                                 .font(.caption.bold())
                                 .foregroundStyle(.secondary)
                         }
-                        .padding(16)
+                        .padding(14)
                         .frame(maxWidth: .infinity)
                         .background(Color(.secondarySystemGroupedBackground))
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -339,9 +453,10 @@ struct GameGoalsView: View {
                     }
                     .buttonStyle(.plain)
                 } else {
-                    Text("Max 3 fokusspel. Klara ett för att göra plats.")
+                    Text("Dina pågående singleplayer-spel i Spelar nu är dina fokusmål. Klara ett för att göra plats!")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.top, 2)
                 }

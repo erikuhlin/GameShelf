@@ -76,28 +76,30 @@ struct LibraryGameGoalsBanner: View {
 
                 // Mini-kort för fokusspelen (om det finns fokusspel)
                 if !focusGames.isEmpty {
-                    HStack(spacing: 8) {
-                        ForEach(focusGames) { game in
-                            let progress = GamingGoalEngine.calculateProgress(for: game)
-                            HStack(spacing: 6) {
-                                CoverView(title: game.title, url: game.coverURL, corner: 4, height: 32)
-                                    .frame(width: 22, height: 32)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(focusGames) { game in
+                                let progress = GamingGoalEngine.calculateProgress(for: game)
+                                HStack(spacing: 6) {
+                                    CoverView(title: game.title, url: game.coverURL, corner: 4, height: 32)
+                                        .frame(width: 22, height: 32)
 
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(game.title)
-                                        .font(.system(size: 11, weight: .semibold))
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(1)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(game.title)
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .foregroundStyle(.primary)
+                                            .lineLimit(1)
 
-                                    Text("\(progress.percentage) %")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundStyle(Color.red)
+                                        Text("\(progress.percentage) %")
+                                            .font(.system(size: 10, weight: .bold))
+                                            .foregroundStyle(Color.red)
+                                    }
                                 }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 5)
+                                .background(Color(.tertiarySystemGroupedBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                             }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(Color(.tertiarySystemGroupedBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                         }
                     }
                 }

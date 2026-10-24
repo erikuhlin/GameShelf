@@ -371,9 +371,7 @@ struct ExploreView: View {
     }
 
     private var currentYearCompletedCount: Int {
-        store.games.filter {
-            $0.status == .completed && $0.isOwned && $0.completedYear == currentYear
-        }.count
+        GamingGoalEngine.completedCount(in: store.games, for: currentYear)
     }
 
     private var goalBadge: some View {

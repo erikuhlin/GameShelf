@@ -15,12 +15,13 @@ struct SelectFocusGameSheet: View {
     @State private var search = ""
 
     private var availableGames: [Game] {
-        let currentTargetIDs = Set(profile.targetGameIDs.map { $0.lowercased() })
+        let currentFocusIDs = Set(GamingGoalEngine.focusGames(from: store.games, targetIDs: profile.targetGameIDs).map { $0.id.uuidString.lowercased() })
         return store.games.filter { game in
-            // Endast spel i ägo som inte redan är fokusmål och inte redan är klara
+            // Endast singleplayer-spel i ägo som inte redan är fokusmål och inte redan är klara
             game.isOwned &&
             game.status != .completed &&
-            !currentTargetIDs.contains(game.id.uuidString.lowercased())
+            !game.isMultiplayerOrOngoing &&
+            !currentFocusIDs.contains(game.id.uuidString.lowercased())
         }
     }
 
@@ -59,7 +60,7 @@ struct SelectFocusGameSheet: View {
                             .foregroundStyle(.secondary)
                         Text("Inga fler tillgängliga spel")
                             .font(.headline)
-                        Text("Alla spel i ditt bibliotek är redan fokusmål eller genomspelade.")
+                        Text("Alla singleplayer-spel i ditt bibliotek är redan fokusmål eller genomspelade.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -70,6 +71,13 @@ struct SelectFocusGameSheet: View {
                     List {
                         ForEach(filteredGames) { game in
                             Button {
+                                var copy = game
+                                if copy.status != .playing {
+                                    copy.status = .playing
+                                    copy.isBacklog = false
+                                    copy.lastPlayedDate = Date()
+                                    store.update(copy)
+                                }
                                 profile.addTargetGoal(gameID: game.id)
                                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                                 dismiss()

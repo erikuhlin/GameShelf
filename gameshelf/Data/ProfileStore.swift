@@ -8,6 +8,7 @@
 
 import Foundation
 import Combine
+import SwiftUI
 
 final class ProfileStore: ObservableObject {
     public static let shared = ProfileStore()

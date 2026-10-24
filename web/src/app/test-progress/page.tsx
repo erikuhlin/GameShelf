@@ -439,17 +439,15 @@ STRICT RULES:
 }`;
 
     try {
-      // Prioritera stabila och snabba Flash-modeller först så vi slipper 503 High Demand på preview-modeller
-      let candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-3.8-flash', 'gemini-1.5-flash'];
+      let candidateModels = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-2.5-flash'];
       try {
         const listRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(cleanKey)}`,
-          { signal: AbortSignal.timeout(5000) }
+          `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(cleanKey)}`
         );
         if (listRes.ok) {
           const listData = await listRes.json();
           if (Array.isArray(listData.models)) {
-            const supported: string[] = listData.models
+            const supported = listData.models
               .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
               .map((m: any) => (m.name as string).replace(/^models\//, ''))
               .filter(
@@ -461,16 +459,18 @@ STRICT RULES:
                   !n.includes('aqa') &&
                   !n.includes('learnlm')
               );
-
-            // Sortera så att 2.5-flash och 2.0-flash ligger före preview-modeller som ofta har High Demand
-            const preferredOrder = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-3.8-flash', 'gemini-3.7-flash'];
-            const sorted = [
-              ...preferredOrder.filter((p) => supported.includes(p)),
-              ...supported.filter((s) => s.includes('flash') && !preferredOrder.includes(s)),
-            ];
-            if (sorted.length > 0) {
-              candidateModels = Array.from(new Set(sorted)).slice(0, 4);
-            }
+            const getVer = (n: string): number => {
+              const match = n.match(/gemini[^\d]*(\d+(?:\.\d+)?)/i);
+              return match ? parseFloat(match[1]) : 0;
+            };
+            const flash = supported
+              .filter((m: string) => m.includes('flash'))
+              .sort((a: string, b: string) => getVer(b) - getVer(a));
+            const others = supported
+              .filter((m: string) => !m.includes('flash'))
+              .sort((a: string, b: string) => getVer(b) - getVer(a));
+            const unique = Array.from(new Set([...flash, ...others]));
+            if (unique.length > 0) candidateModels = unique.slice(0, 4);
           }
         }
       } catch {}
@@ -482,7 +482,7 @@ STRICT RULES:
         try {
           if (i > 0) {
             setLoadingStatus(
-              `Modell upptagen – växlar automatiskt till reservmodell (${modelName}) för ${selectedGame.displayName}...`
+              `Försöker med reservmodell (${modelName}) för ${selectedGame.displayName}...`
             );
           }
 
@@ -491,7 +491,6 @@ STRICT RULES:
           let response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            signal: AbortSignal.timeout(15000),
             body: JSON.stringify({
               contents: [{ parts: [{ text: prompt }] }],
               generationConfig: {
@@ -507,7 +506,6 @@ STRICT RULES:
             response = await fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              signal: AbortSignal.timeout(15000),
               body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
                 generationConfig: {

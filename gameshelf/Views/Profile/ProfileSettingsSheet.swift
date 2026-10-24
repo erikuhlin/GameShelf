@@ -46,7 +46,15 @@ struct ProfileSettingsSheet: View {
                 }
 
                 Section("Spelmål") {
-                    Stepper("Årligt spelmål: \(profile.annualGamingGoal) spel", value: $profile.annualGamingGoal, in: 1...100)
+                    NavigationLink(destination: GameGoalsView().environmentObject(store).environmentObject(profile)) {
+                        HStack {
+                            Label("Spelmål \(String(GamingGoalEngine.currentYear))", systemImage: "trophy.fill")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Text("\(profile.annualGamingGoal) mål")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
 
                 Section("Om Gameshelf") {

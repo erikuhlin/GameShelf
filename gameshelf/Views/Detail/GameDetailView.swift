@@ -345,6 +345,7 @@ struct GameDetailView: View {
             if let g = currentGame {
                 GameCompletionCelebrationSheet(game: g) { updatedGame in
                     updateLocal(updatedGame)
+                    profile.removeTargetGoal(gameID: updatedGame.id)
                 }
             }
         }
@@ -908,18 +909,38 @@ struct GameDetailView: View {
             }
             .padding(.horizontal, 4)
 
-            // Fokusmål visas EN gång, som markör i statusrutan (inga dubbletter i överrad eller separat chip-rad)
+            // Fokusmål visas EN gång, som markör i statusrutan (matchar mockup)
             if isTarget || g.status == .completed {
                 Divider()
                 HStack(spacing: 10) {
                     if isTarget {
                         HStack(spacing: 5) {
-                            Image(systemName: "target")
-                                .font(.caption2.bold())
-                                .foregroundStyle(.yellow)
+                            Image(systemName: "record.circle")
+                                .font(.system(size: 11, weight: .bold))
                             Text("Fokusmål")
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(.yellow)
+                        }
+                        .foregroundStyle(Color.yellow)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .stroke(Color.yellow.opacity(0.55), lineWidth: 1)
+                        )
+
+                        let progress = GamingGoalEngine.calculateProgress(for: g)
+                        if progress.hasTasks {
+                            Text("\(progress.percentage) % · \(progress.completedTasks) av \(progress.totalTasks) klara")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.primary)
+                        } else if let sp = g.storyProgress {
+                            Text("\(progress.percentage) % · \(sp.rawValue)")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.primary)
+                        } else {
+                            Text(progress.displaySubtext)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
                         }
                     }
 

@@ -466,6 +466,24 @@ final class ProfileStore: ObservableObject {
         }
     }
 
+    func removeTargetGoal(gameID: UUID) {
+        let str = gameID.uuidString.lowercased()
+        targetGameIDs.removeAll(where: { $0.lowercased() == str })
+    }
+
+    func addTargetGoal(gameID: UUID) {
+        let str = gameID.uuidString.lowercased()
+        guard !targetGameIDs.contains(where: { $0.lowercased() == str }) else { return }
+        if targetGameIDs.count >= 3 {
+            targetGameIDs.removeFirst()
+        }
+        targetGameIDs.append(str)
+    }
+
+    func reorderTargetGoals(from source: IndexSet, to destination: Int) {
+        targetGameIDs.move(fromOffsets: source, toOffset: destination)
+    }
+
     func toggle(_ platform: String) {
         if platforms.contains(platform) { platforms.remove(platform) } else { platforms.insert(platform) }
     }

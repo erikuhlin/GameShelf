@@ -939,6 +939,13 @@ struct LibraryView: View {
     @ViewBuilder
     private var ownedSection: some View {
         VStack(alignment: .leading, spacing: 18) {
+            // Spelmål 2026 Toppkort
+            if !isSearching && searchText.isEmpty && selectedStatusFilter == .all && selectedPlatformIDs.isEmpty {
+                LibraryGameGoalsBanner()
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 2)
+            }
+
             // Huvudrutnät: Mina spel i ägo
             VStack(alignment: .leading, spacing: 10) {
                 if !ownedGames.isEmpty || isSearching || !searchText.isEmpty {

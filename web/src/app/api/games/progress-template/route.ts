@@ -698,10 +698,15 @@ function extractIgnWalkthroughText(html: string, url: string): string {
       walkAll(nextData.props || nextData);
 
       // Plocka även ut alla "/wikis/<slug>/<subpage>" direkt ur rå-JSON ifall Apollo-state lagrar dem som strängar
-      const rawWikiPaths = [...rawJson.matchAll(/\/wikis\/([a-z0-9-_]+)\/([A-Za-z0-9-_%'().]+)/g)];
-      for (const m of rawWikiPaths) {
-        const pageSlug = decodeURIComponent(m[2]).replace(/_/g, ' ').trim();
-        const fullPath = m[0];
+      const rawWikiRegex = /\/wikis\/([a-z0-9-_]+)\/([A-Za-z0-9-_%'().]+)/g;
+      let rawMatch: RegExpExecArray | null;
+      while ((rawMatch = rawWikiRegex.exec(rawJson)) !== null) {
+        let pageSlug = rawMatch[2];
+        try {
+          pageSlug = decodeURIComponent(pageSlug);
+        } catch {}
+        pageSlug = pageSlug.replace(/_/g, ' ').trim();
+        const fullPath = rawMatch[0];
         const dedupKey = `${pageSlug.toLowerCase()}|${fullPath}`;
         if (pageSlug.length >= 2 && !seenNav.has(dedupKey)) {
           seenNav.add(dedupKey);

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { findVerifiedWalkthrough } from '@/lib/verifiedWalkthroughs';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -527,6 +528,21 @@ function normalizeTitle(t: string): string {
 }
 
 function findCuratedTemplate(gameTitle: string): GameProgressTemplate | null {
+  const verified = findVerifiedWalkthrough(gameTitle);
+  if (verified) {
+    return {
+      gameTitle: verified.title,
+      igdbId: verified.igdbId,
+      hasLinearProgression: verified.hasLinearProgression,
+      progressionType: verified.progressionType,
+      granularity: 'standard',
+      summary: verified.summary,
+      items: verified.items,
+      source: 'curated',
+      sourceUrl: verified.sourceUrl,
+    };
+  }
+
   const normQuery = normalizeTitle(gameTitle);
   if (!normQuery) return null;
 

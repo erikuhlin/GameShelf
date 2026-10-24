@@ -19,131 +19,203 @@ struct GameWalkthroughSectionView: View {
     @State private var isGeneratingAI = false
     @State private var aiErrorMessage: String? = nil
 
-    // Spoiler & Act collapse state
-    @State private var unlockedActNames: Set<String> = []
-    @State private var collapsedActNames: Set<String> = []
-    @State private var showAllActsSpoilerFree = false
-    @State private var isExpandedView = false
+    // Expansion per group
+    @State private var isMainQuestsExpanded = false
+    @State private var isSideQuestsExpanded = false
+    @State private var isPersonalGoalsExpanded = false
 
-    // Redigeringsläge
-    @State private var isEditingWalkthrough = false
+    // Sheets
+    @State private var showingAddModal = false
     @State private var newStepTitle = ""
-    @State private var newStepGroup = ""
+    @State private var selectedCategory: TaskCategory = .main
     @State private var showingManualImportSheet = false
     @State private var manualImportText = ""
     @State private var showingAPIKeyPrompt = false
     @State private var apiKeyDraft = ""
 
-    private var walkthroughItems: [GameTodoItem] {
-        let items = game.todos.filter { $0.chapterGroup != nil || $0.order != nil }
-        return items.sorted { ($0.order ?? 9999) < ($1.order ?? 9999) }
+    enum TaskCategory: String, CaseIterable, Identifiable {
+        case main = "Huvuduppdrag"
+        case side = "Sidouppdrag"
+        case goal = "Eget mål"
+
+        var id: String { rawValue }
     }
 
-    private var personalTodoItems: [GameTodoItem] {
-        game.todos.filter { $0.chapterGroup == nil && $0.order == nil }
-    }
+    // MARK: - Filtered Categories
 
-    private struct ActSection: Identifiable {
-        var id: String { name }
-        let name: String
-        let index: Int
-        let items: [GameTodoItem]
-
-        var completedCount: Int {
-            items.filter(\.isDone).count
-        }
-
-        var isCompleted: Bool {
-            !items.isEmpty && completedCount == items.count
-        }
-    }
-
-    private var actSections: [ActSection] {
-        var order: [String] = []
-        var dict: [String: [GameTodoItem]] = [:]
-
-        for item in walkthroughItems {
-            let group = (item.chapterGroup?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? "Huvudberättelsen"
-            if dict[group] == nil {
-                order.append(group)
-                dict[group] = []
+    private var mainQuests: [GameTodoItem] {
+        game.todos.filter { item in
+            if item.isOptional || item.chapterGroup == "Sidouppdrag" || item.chapterGroup == "Egna mål" {
+                return false
             }
-            dict[group]?.append(item)
+            if item.chapterGroup == nil && item.order == nil {
+                let hasStructured = game.todos.contains { $0.chapterGroup != nil || $0.order != nil }
+                return !hasStructured
+            }
+            return true
         }
-
-        return order.enumerated().map { idx, name in
-            ActSection(name: name, index: idx, items: dict[name] ?? [])
-        }
+        .sorted { ($0.order ?? 9999) < ($1.order ?? 9999) }
     }
 
-    /// Den akt där spelaren befinner sig just nu (första akten med minst ett oavklarat kapitel)
-    private var activeActIndex: Int {
-        if let idx = actSections.firstIndex(where: { !$0.isCompleted }) {
-            return idx
+    private var sideQuests: [GameTodoItem] {
+        game.todos.filter { item in
+            item.isOptional || item.chapterGroup == "Sidouppdrag"
         }
-        return max(0, actSections.count - 1)
+        .sorted { ($0.order ?? 9999) < ($1.order ?? 9999) }
     }
 
-    private var nextActiveStep: GameTodoItem? {
-        walkthroughItems.first(where: { !$0.isDone })
+    private var personalGoals: [GameTodoItem] {
+        game.todos.filter { item in
+            if item.chapterGroup == "Egna mål" { return true }
+            let hasStructured = game.todos.contains { $0.chapterGroup != nil || $0.order != nil }
+            return hasStructured && item.chapterGroup == nil && item.order == nil
+        }
+        .sorted { ($0.order ?? 9999) < ($1.order ?? 9999) }
     }
+
+    private var allTodos: [GameTodoItem] {
+        mainQuests + sideQuests + personalGoals
+    }
+
+    private var totalCount: Int {
+        allTodos.count
+    }
+
+    private var completedCount: Int {
+        allTodos.filter(\.isDone).count
+    }
+
+    // MARK: - Body
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Divider()
-                .padding(.vertical, 2)
+        VStack(alignment: .leading, spacing: 10) {
+            // Rubrikrad ovanför kortet
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("Kapitel & uppdrag")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.primary)
 
-            // Rubrikrad
-            HStack(alignment: .center, spacing: 8) {
-                HStack(spacing: 6) {
-                    Image(systemName: "list.Number")
-                        .font(.caption.bold())
-                        .foregroundStyle(.red)
-                    Text("STORY & KAPITELLISTA")
-                        .font(.system(size: 11, weight: .bold))
+                if totalCount > 0 {
+                    Text("· \(completedCount) av \(totalCount)")
+                        .font(.headline.weight(.semibold))
                         .foregroundStyle(.secondary)
-                        .tracking(0.5)
                 }
 
                 Spacer()
-
-                if !walkthroughItems.isEmpty {
-                    let done = walkthroughItems.filter(\.isDone).count
-                    let total = walkthroughItems.count
-                    let pct = total > 0 ? Int(round((Double(done) / Double(total)) * 100)) : 0
-
-                    Text("\(done)/\(total) (\(pct)%)")
-                        .font(.caption.bold())
-                        .foregroundStyle(done == total ? .green : .red)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background((done == total ? Color.green : Color.red).opacity(0.12), in: Capsule())
-                }
             }
 
-            if isCheckingSupabase && walkthroughItems.isEmpty {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Kontrollerar verifierad kapitellista...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            // Huvudkort
+            VStack(alignment: .leading, spacing: 14) {
+                // Röd progressbar i toppen av kortet
+                if totalCount > 0 {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Color(.tertiarySystemFill))
+                                .frame(height: 7)
+
+                            let ratio = CGFloat(Double(completedCount) / Double(totalCount))
+                            let fillWidth = max(7, geo.size.width * ratio)
+                            Capsule()
+                                .fill(Color.red)
+                                .frame(width: fillWidth, height: 7)
+                        }
+                    }
+                    .frame(height: 7)
+                    .padding(.top, 2)
                 }
-                .padding(.vertical, 6)
-            } else if !walkthroughItems.isEmpty {
-                loadedWalkthroughContent
-            } else {
-                emptyWalkthroughPrompt
+
+                if isCheckingSupabase && totalCount == 0 {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Kontrollerar verifierad kapitellista...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 8)
+                } else if totalCount == 0 {
+                    emptyStateView
+                } else {
+                    // Grupp 1: HUVUDUPPDRAG
+                    if !mainQuests.isEmpty {
+                        questGroupSection(
+                            title: "HUVUDUPPDRAG",
+                            items: mainQuests,
+                            isExpanded: isMainQuestsExpanded,
+                            onToggleExpand: {
+                                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                                    isMainQuestsExpanded.toggle()
+                                }
+                            }
+                        )
+                    }
+
+                    // Grupp 2: SIDOUUPPDRAG
+                    if !sideQuests.isEmpty {
+                        questGroupSection(
+                            title: "SIDOUUPPDRAG",
+                            items: sideQuests,
+                            isExpanded: isSideQuestsExpanded,
+                            onToggleExpand: {
+                                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                                    isSideQuestsExpanded.toggle()
+                                }
+                            }
+                        )
+                    }
+
+                    // Grupp 3: EGNA MÅL
+                    if !personalGoals.isEmpty {
+                        questGroupSection(
+                            title: "EGNA MÅL",
+                            items: personalGoals,
+                            isExpanded: isPersonalGoalsExpanded,
+                            onToggleExpand: {
+                                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                                    isPersonalGoalsExpanded.toggle()
+                                }
+                            }
+                        )
+                    }
+                }
+
+                // Avgränsare och bottenåtgärd
+                Divider()
+                    .opacity(0.4)
+                    .padding(.top, 2)
+
+                Button {
+                    newStepTitle = ""
+                    selectedCategory = .main
+                    showingAddModal = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus")
+                            .font(.subheadline.bold())
+                        Text("Lägg till kapitel eller uppdrag")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .foregroundStyle(Color.red)
+                }
+                .buttonStyle(.plain)
             }
+            .padding(16)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             if let err = aiErrorMessage {
                 Text(err)
                     .font(.caption2)
                     .foregroundStyle(.red)
+                    .padding(.horizontal, 4)
             }
         }
         .task(id: game.id) {
             await autoLoadWalkthroughIfNeeded()
+        }
+        .sheet(isPresented: $showingAddModal) {
+            addChapterOrQuestSheet
         }
         .sheet(isPresented: $showingManualImportSheet) {
             manualImportSheetView
@@ -163,291 +235,95 @@ struct GameWalkthroughSectionView: View {
         }
     }
 
-    // MARK: - Loaded Walkthrough View
+    // MARK: - Quest Group Section
 
-    @ViewBuilder
-    private var loadedWalkthroughContent: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // Kompakt "Nästa steg"-kort så man snabbt kan bocka av utan att fälla ut hela listan
-            if let next = nextActiveStep {
-                HStack(spacing: 10) {
-                    Button {
-                        toggleStep(next)
-                    } label: {
-                        Image(systemName: "circle")
-                            .font(.title3)
-                            .foregroundStyle(.red)
-                    }
-                    .buttonStyle(.plain)
+    private func questGroupSection(
+        title: String,
+        items: [GameTodoItem],
+        isExpanded: Bool,
+        onToggleExpand: @escaping () -> Void
+    ) -> some View {
+        let doneCount = items.filter(\.isDone).count
+        let total = items.count
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 5) {
-                            Text("NÄSTA KAPITEL")
-                                .font(.system(size: 9, weight: .heavy))
-                                .foregroundStyle(.red)
-                                .tracking(0.5)
-                            if let grp = next.chapterGroup, !grp.isEmpty {
-                                Text("· \(grp)")
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                        }
-                        Text(next.title)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(2)
-                    }
-
-                    Spacer()
-
-                    Button {
-                        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                            isExpandedView.toggle()
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(isExpandedView ? "Dölj" : "Alla kapitel")
-                                .font(.caption.bold())
-                            Image(systemName: isExpandedView ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 10, weight: .bold))
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color(.tertiarySystemFill), in: Capsule())
-                        .foregroundStyle(.primary)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(12)
-                .background(Color(.tertiarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            } else {
-                // Alla kapitel avklarade
-                HStack(spacing: 10) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .foregroundStyle(.green)
-                    Text("Alla \(walkthroughItems.count) kapitel avklarade!")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
-                    Spacer()
-                    Button(isExpandedView ? "Dölj" : "Visa lista") {
-                        withAnimation { isExpandedView.toggle() }
-                    }
-                    .font(.caption.bold())
-                    .foregroundStyle(.red)
-                }
-                .padding(12)
-                .background(Color.green.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        let displayItems: [GameTodoItem] = {
+            if isExpanded || total <= 4 {
+                return items
             }
-
-            // Utfälld akt-grupperad 1:1-lista med spoilerskydd på aktnivå
-            if isExpandedView {
-                VStack(alignment: .leading, spacing: 10) {
-                    // Verktygsrad för spoilerskydd & redigering
-                    HStack(spacing: 10) {
-                        Button {
-                            withAnimation {
-                                showAllActsSpoilerFree.toggle()
-                            }
-                        } label: {
-                            Label(
-                                showAllActsSpoilerFree ? "Spoilerskydd: Av" : "Spoilerskydd: På",
-                                systemImage: showAllActsSpoilerFree ? "eye.fill" : "eye.slash.fill"
-                            )
-                            .font(.caption2.bold())
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 5)
-                            .background(Color(.tertiarySystemFill), in: Capsule())
-                            .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-
-                        Spacer()
-
-                        Button {
-                            withAnimation {
-                                isEditingWalkthrough.toggle()
-                            }
-                        } label: {
-                            Label(isEditingWalkthrough ? "Klar" : "Redigera", systemImage: isEditingWalkthrough ? "checkmark" : "pencil")
-                                .font(.caption2.bold())
-                                .padding(.horizontal, 9)
-                                .padding(.vertical, 5)
-                                .background(isEditingWalkthrough ? Color.red : Color(.tertiarySystemFill), in: Capsule())
-                                .foregroundStyle(isEditingWalkthrough ? .white : .secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    // Akter
-                    ForEach(actSections) { section in
-                        actSectionView(section)
-                    }
-
-                    // Lägg till nytt kapitel i redigeringsläge
-                    if isEditingWalkthrough {
-                        addCustomWalkthroughStepRow
-                    }
-                }
-                .padding(.top, 2)
+            // Visa de senaste 2 avklarade och de kommande 2 oavklarade
+            let completed = items.filter(\.isDone)
+            let uncompleted = items.filter { !$0.isDone }
+            var result: [GameTodoItem] = []
+            if !completed.isEmpty {
+                result.append(contentsOf: completed.suffix(2))
             }
-        }
-    }
+            result.append(contentsOf: uncompleted.prefix(max(2, 4 - result.count)))
+            return result
+        }()
 
-    @ViewBuilder
-    private func actSectionView(_ section: ActSection) -> some View {
-        let isFutureLockedAct = section.index > activeActIndex && !showAllActsSpoilerFree && !unlockedActNames.contains(section.name) && !isEditingWalkthrough
-        let isCollapsed = collapsedActNames.contains(section.name)
-
-        VStack(alignment: .leading, spacing: 6) {
-            // Akt-header
-            HStack(spacing: 8) {
-                Button {
-                    if isFutureLockedAct {
-                        withAnimation {
-                            _ = unlockedActNames.insert(section.name)
-                        }
-                    } else {
-                        withAnimation {
-                            if isCollapsed {
-                                collapsedActNames.remove(section.name)
-                            } else {
-                                _ = collapsedActNames.insert(section.name)
-                            }
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: isFutureLockedAct ? "lock.fill" : (section.isCompleted ? "checkmark.circle.fill" : (isCollapsed ? "chevron.right" : "chevron.down")))
-                            .font(.caption2.bold())
-                            .foregroundStyle(isFutureLockedAct ? Color.secondary : (section.isCompleted ? Color.green : Color.red))
-
-                        Text(isFutureLockedAct ? "Akt \(section.index + 1) (Spoilerskyddad)" : section.name)
-                            .font(.caption.bold())
-                            .foregroundStyle(isFutureLockedAct ? .secondary : .primary)
-                            .lineLimit(1)
-
-                        Spacer()
-
-                        Text("\(section.completedCount)/\(section.items.count)")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .buttonStyle(.plain)
-
-                if isFutureLockedAct {
-                    Button("Lås upp") {
-                        withAnimation {
-                            _ = unlockedActNames.insert(section.name)
-                        }
-                    }
-                    .font(.caption2.bold())
-                    .foregroundStyle(.red)
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(Color(.tertiarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-
-            // Kapitel i akten (visas om ej låst och ej ihopfälld)
-            if !isFutureLockedAct && !isCollapsed {
-                VStack(spacing: 4) {
-                    ForEach(section.items) { item in
-                        HStack(spacing: 10) {
-                            Button {
-                                toggleStep(item)
-                            } label: {
-                                Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
-                                    .font(.subheadline)
-                                    .foregroundStyle(item.isDone ? .green : .secondary)
-                            }
-                            .buttonStyle(.plain)
-
-                            if let ord = item.order {
-                                Text("\(ord).")
-                                    .font(.caption2.monospacedDigit())
-                                    .foregroundStyle(.tertiary)
-                                    .frame(width: 22, alignment: .trailing)
-                            }
-
-                            Text(item.title)
-                                .font(.caption)
-                                .foregroundStyle(item.isDone ? .secondary : .primary)
-                                .strikethrough(item.isDone, color: .secondary)
-                                .lineLimit(2)
-
-                            Spacer()
-
-                            if isEditingWalkthrough {
-                                Button(role: .destructive) {
-                                    deleteStep(item)
-                                } label: {
-                                    Image(systemName: "trash")
-                                        .font(.caption2)
-                                        .foregroundStyle(.red)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color(.tertiarySystemFill).opacity(0.45))
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    }
-                }
-                .padding(.leading, 8)
-            }
-        }
-    }
-
-    private var addCustomWalkthroughStepRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Lägg till eget kapitel")
-                .font(.caption2.bold())
+        return VStack(alignment: .leading, spacing: 8) {
+            // Grupprubrik (t.ex. HUVUDUPPDRAG · 5/12)
+            Text("\(title) · \(doneCount)/\(total)")
+                .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.secondary)
+                .tracking(0.5)
 
-            HStack(spacing: 6) {
-                TextField("Akt (valfritt)", text: $newStepGroup)
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .background(Color(.tertiarySystemFill))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .frame(width: 110)
+            VStack(spacing: 0) {
+                ForEach(Array(displayItems.enumerated()), id: \.element.id) { index, item in
+                    if index > 0 {
+                        Divider()
+                            .padding(.leading, 30)
+                            .opacity(0.35)
+                    }
 
-                TextField("Kapitelnamn...", text: $newStepTitle)
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .background(Color(.tertiarySystemFill))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    HStack(spacing: 12) {
+                        Button {
+                            toggleStep(item)
+                        } label: {
+                            Image(systemName: item.isDone ? "checkmark.square.fill" : "square")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundStyle(item.isDone ? Color.secondary : Color.secondary)
+                        }
+                        .buttonStyle(.plain)
 
-                Button {
-                    addCustomStep()
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(newStepTitle.trimmingCharacters(in: .whitespaces).isEmpty ? .gray : .red)
+                        Text(item.title)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(item.isDone ? Color.secondary : Color.primary)
+                            .strikethrough(item.isDone, color: Color.secondary)
+                            .lineLimit(2)
+
+                        Spacer()
+                    }
+                    .padding(.vertical, 7)
                 }
-                .disabled(newStepTitle.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+
+            // Visa alla X ›-knapp om det finns fler än 4 punkter
+            if total > 4 {
+                Button {
+                    onToggleExpand()
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(isExpanded ? "Visa färre" : "Visa alla \(total)")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Color.red)
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.right")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Color.red)
+                    }
+                    .padding(.vertical, 4)
+                }
                 .buttonStyle(.plain)
             }
         }
-        .padding(10)
-        .background(Color(.tertiarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
-    // MARK: - Empty State (Hämta med AI eller Klistra in)
+    // MARK: - Empty State View
 
-    private var emptyWalkthroughPrompt: some View {
+    private var emptyStateView: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Ingen kapitellista laddad för detta spel ännu. Hämta en komplett 1:1-guide med AI (sparas till databasen) eller klistra in en egen lista.")
-                .font(.caption)
+            Text("Ingen kapitellista inlagd än för detta spel.")
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 8) {
@@ -471,11 +347,11 @@ struct GameWalkthroughSectionView: View {
                         Text(isGeneratingAI ? "Skapar 1:1-guide..." : "Hämta med AI")
                             .font(.caption.bold())
                     }
-                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 14)
                     .padding(.vertical, 9)
                     .background(Color.red)
                     .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .clipShape(Capsule())
                 }
                 .disabled(isGeneratingAI)
                 .buttonStyle(.plain)
@@ -490,24 +366,95 @@ struct GameWalkthroughSectionView: View {
                         Text("Klistra in")
                             .font(.caption.bold())
                     }
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 14)
                     .padding(.vertical, 9)
                     .background(Color(.tertiarySystemFill))
                     .foregroundStyle(.primary)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(12)
-        .background(Color(.tertiarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.vertical, 4)
+    }
+
+    // MARK: - Add Chapter or Quest Sheet
+
+    private var addChapterOrQuestSheet: some View {
+        NavigationStack {
+            Form {
+                Section("Nytt uppdrag eller mål") {
+                    TextField("Titel på uppdraget...", text: $newStepTitle)
+                        .font(.body)
+
+                    Picker("Kategori", selection: $selectedCategory) {
+                        ForEach(TaskCategory.allCases) { cat in
+                            Text(cat.rawValue).tag(cat)
+                        }
+                    }
+                }
+
+                Section("Importera eller hämta lista") {
+                    Button {
+                        showingAddModal = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            manualImportText = ""
+                            showingManualImportSheet = true
+                        }
+                    } label: {
+                        Label("Klistra in kapitellista", systemImage: "doc.on.clipboard")
+                            .foregroundStyle(.primary)
+                    }
+
+                    Button {
+                        showingAddModal = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            if geminiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                apiKeyDraft = ""
+                                showingAPIKeyPrompt = true
+                            } else {
+                                Task { await generateWithGeminiAI() }
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Label("Hämta 1:1-guide med AI", systemImage: "sparkles")
+                                .foregroundStyle(.red)
+                            Spacer()
+                            if isGeneratingAI {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                        }
+                    }
+                    .disabled(isGeneratingAI)
+                }
+            }
+            .navigationTitle("Lägg till uppdrag")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Avbryt") {
+                        showingAddModal = false
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Spara") {
+                        saveNewStep()
+                        showingAddModal = false
+                    }
+                    .fontWeight(.bold)
+                    .disabled(newStepTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 
     private var manualImportSheetView: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Klistra in kapitel eller uppdrag (en per rad). Rader som börjar med '#' eller slutar med ':' tolkar appen som aktnamn.")
+                Text("Klistra in kapitel eller uppdrag (en per rad). Rader som börjar med '#' eller slutar med ':' tolkas som akt-/gruppnamn.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -547,17 +494,17 @@ struct GameWalkthroughSectionView: View {
     private func autoLoadWalkthroughIfNeeded() async {
         guard !hasCheckedSupabase else { return }
         hasCheckedSupabase = true
-        guard walkthroughItems.isEmpty else { return }
+        guard totalCount == 0 else { return }
 
         isCheckingSupabase = true
         defer { isCheckingSupabase = false }
 
-        let igdbID = game.igdbID ?? remoteIGDBID
-        if let template = try? await SupabaseSyncService.shared.fetchWalkthroughTemplate(igdbId: igdbID, title: game.title),
+        let targetId = game.igdbID ?? remoteIGDBID ?? abs(game.title.hashValue)
+        if let template = try? await SupabaseSyncService.shared.fetchWalkthroughTemplate(igdbId: targetId, title: game.title),
            !template.items.isEmpty {
             var copy = game
             let generated = template.toTodoItems()
-            copy.todos = generated + personalTodoItems
+            copy.todos = generated + personalGoals
             onUpdateGame(copy)
         }
     }
@@ -567,11 +514,11 @@ struct GameWalkthroughSectionView: View {
         guard let idx = copy.todos.firstIndex(where: { $0.id == item.id }) else { return }
         copy.todos[idx].isDone.toggle()
 
-        // Synka "Var är du i spelet?" automatiskt baserat på kapitelprocent (utan att någonsin sätta .completed under Spelar nu)
-        let wt = copy.todos.filter { $0.chapterGroup != nil || $0.order != nil }
-        if !wt.isEmpty && copy.status == .playing {
-            let doneCount = wt.filter(\.isDone).count
-            let ratio = Double(doneCount) / Double(wt.count)
+        // Synka milstolpe och framsteg
+        let all = copy.todos
+        if !all.isEmpty && copy.status == .playing {
+            let done = all.filter(\.isDone).count
+            let ratio = Double(done) / Double(all.count)
             if ratio < 0.25 {
                 copy.storyProgress = .justStarted
             } else if ratio < 0.75 {
@@ -579,8 +526,7 @@ struct GameWalkthroughSectionView: View {
             } else {
                 copy.storyProgress = .nearEnd
             }
-            // Sätt även aktuell akt/kapitel som progressNote om fältet är tomt
-            if let next = wt.sorted(by: { ($0.order ?? 9999) < ($1.order ?? 9999) }).first(where: { !$0.isDone }) {
+            if let next = all.first(where: { !$0.isDone }) {
                 copy.progressNote = next.title
                 copy.noteUpdatedAt = Date()
             }
@@ -590,29 +536,42 @@ struct GameWalkthroughSectionView: View {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
-    private func deleteStep(_ item: GameTodoItem) {
-        var copy = game
-        copy.todos.removeAll(where: { $0.id == item.id })
-        onUpdateGame(copy)
-    }
-
-    private func addCustomStep() {
+    private func saveNewStep() {
         let trimmedTitle = newStepTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else { return }
-        let trimmedGroup = newStepGroup.trimmingCharacters(in: .whitespacesAndNewlines)
-        let fallbackGroup = actSections.last?.name ?? "Huvudberättelsen"
-        let group = trimmedGroup.isEmpty ? fallbackGroup : trimmedGroup
-        let nextOrder = (walkthroughItems.compactMap(\.order).max() ?? walkthroughItems.count) + 1
 
         var copy = game
-        copy.todos.append(
-            GameTodoItem(
+        let nextOrder = (copy.todos.compactMap(\.order).max() ?? copy.todos.count) + 1
+
+        let newItem: GameTodoItem
+        switch selectedCategory {
+        case .main:
+            newItem = GameTodoItem(
                 title: trimmedTitle,
                 isDone: false,
                 order: nextOrder,
-                chapterGroup: group
+                chapterGroup: "Huvudberättelsen",
+                isOptional: false
             )
-        )
+        case .side:
+            newItem = GameTodoItem(
+                title: trimmedTitle,
+                isDone: false,
+                order: nextOrder,
+                chapterGroup: "Sidouppdrag",
+                isOptional: true
+            )
+        case .goal:
+            newItem = GameTodoItem(
+                title: trimmedTitle,
+                isDone: false,
+                order: nil,
+                chapterGroup: "Egna mål",
+                isOptional: false
+            )
+        }
+
+        copy.todos.append(newItem)
         onUpdateGame(copy)
         newStepTitle = ""
     }
@@ -667,7 +626,7 @@ struct GameWalkthroughSectionView: View {
         )
 
         var copy = game
-        copy.todos = template.toTodoItems() + personalTodoItems
+        copy.todos = template.toTodoItems() + personalGoals
         onUpdateGame(copy)
 
         Task {
@@ -774,7 +733,7 @@ struct GameWalkthroughSectionView: View {
             )
 
             var copy = game
-            copy.todos = template.toTodoItems() + personalTodoItems
+            copy.todos = template.toTodoItems() + personalGoals
             onUpdateGame(copy)
 
             _ = try? await SupabaseSyncService.shared.upsertWalkthroughTemplate(template)

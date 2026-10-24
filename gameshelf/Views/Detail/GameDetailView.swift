@@ -1405,7 +1405,7 @@ struct GameDetailView: View {
 
     @ViewBuilder
     private func myPlayTabContent(_ g: Game) -> some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             if g.status == .completed {
                 completedCelebrationCard(g)
             }
@@ -1414,6 +1414,16 @@ struct GameDetailView: View {
             } else {
                 multiplayerPlaytimeCard(g)
             }
+
+            // Kapitel & uppdrag (Eget kort enligt mockup)
+            GameWalkthroughSectionView(
+                game: g,
+                remoteIGDBID: remote?.id,
+                onUpdateGame: { updated in
+                    updateLocal(updated)
+                }
+            )
+
             notesCard(g)
             collectionsCard(g)
         }
@@ -1612,30 +1622,30 @@ struct GameDetailView: View {
             return .justStarted
         }()
 
-        return detailCard(title: "Spelframsteg") {
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Spelframsteg")
+                .font(.title3.weight(.bold))
+                .foregroundStyle(.primary)
+
             VStack(alignment: .leading, spacing: 16) {
-                // 1. Loggad tid + snabbknappar
+                // 1. Loggad tid + röd "+ Logga tid"-knapp
                 playtimeHoursSection(g, hours: hours, hoursDisplay: hoursDisplay)
 
-                // 2. EN sammanslagen tidslinje med markeringar vid Main / Extra / 100%
+                // 2. EN sammanslagen tidslinje med markeringar vid Main / Extra / 100% (37 tim / 72 tim / 123 tim)
                 if hasHLTB {
                     unifiedHLTBTimelineSection(hours: hours, mainHours: mainHours, extraHours: extraHours, compHours: compHours)
                 }
 
                 // 3. "Var är du i spelet?" visas BARA när status är Spelar nu
                 if g.status == .playing {
+                    Divider()
+                        .padding(.top, 2)
                     playtimeMilestonesSection(g, currentMilestone: activeMilestone)
                 }
-
-                // 4. 1:1 Kapitellista & Story är tillgänglig för alla spel i biblioteket
-                GameWalkthroughSectionView(
-                    game: g,
-                    remoteIGDBID: remote?.id,
-                    onUpdateGame: { updated in
-                        updateLocal(updated)
-                    }
-                )
             }
+            .padding(16)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
     }
 
@@ -1679,209 +1689,141 @@ struct GameDetailView: View {
                 .foregroundStyle(.secondary)
                 .buttonStyle(.plain)
             }
-        } else if hours == 0 {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Speltid")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Text("Ingen tid loggad")
-                        .font(.subheadline)
-                        .foregroundStyle(.tertiary)
-                }
-
-                Spacer()
-
-                Button {
-                    manualHoursInput = ""
-                    isEditingHours = true
-                } label: {
-                    Label("Logga tid", systemImage: "plus")
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(Color.red)
-                        .foregroundStyle(.white)
-                        .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-            }
         } else {
             HStack(alignment: .center) {
-                Button {
-                    manualHoursInput = hours.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(hours))" : String(format: "%.1f", hours)
-                    isEditingHours = true
-                } label: {
-                    HStack(alignment: .firstTextBaseline, spacing: 5) {
-                        Text("\(hoursDisplay) spelade")
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color.primary)
-                        Image(systemName: "pencil")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                if hours == 0 {
+                    Text("Ingen tid loggad")
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.secondary)
+                } else {
+                    Button {
+                        manualHoursInput = hours.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(hours))" : String(format: "%.1f", hours)
+                        isEditingHours = true
+                    } label: {
+                        HStack(alignment: .firstTextBaseline, spacing: 5) {
+                            Text("\(hoursDisplay) spelade")
+                                .font(.headline.weight(.bold))
+                                .foregroundStyle(Color.primary)
+                            Image(systemName: "pencil")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
                     }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
 
                 Spacer()
 
-                HStack(spacing: 6) {
-                    Button("-1h") {
-                        adjustPlaytime(by: -1.0, for: g)
+                Button {
+                    manualHoursInput = hours > 0 ? (hours.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(hours))" : String(format: "%.1f", hours)) : ""
+                    isEditingHours = true
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 13, weight: .bold))
+                        Text("Logga tid")
+                            .font(.subheadline.weight(.bold))
                     }
-                    .font(.system(size: 12, weight: .bold))
-                    .lineLimit(1)
-                    .fixedSize()
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background(Color(.tertiarySystemFill))
-                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.red)
+                    .foregroundStyle(.white)
                     .clipShape(Capsule())
-                    .buttonStyle(.plain)
-
-                    Button("+1h") {
-                        adjustPlaytime(by: 1.0, for: g)
-                    }
-                    .font(.system(size: 12, weight: .bold))
-                    .lineLimit(1)
-                    .fixedSize()
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background(Color(.tertiarySystemFill))
-                    .foregroundStyle(.primary)
-                    .clipShape(Capsule())
-                    .buttonStyle(.plain)
-
-                    Button("+5h") {
-                        adjustPlaytime(by: 5.0, for: g)
-                    }
-                    .font(.system(size: 12, weight: .bold))
-                    .lineLimit(1)
-                    .fixedSize()
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background(Color.red.opacity(0.15))
-                    .foregroundStyle(.red)
-                    .clipShape(Capsule())
-                    .buttonStyle(.plain)
                 }
+                .buttonStyle(.plain)
             }
         }
     }
 
-    // MARK: - Enhetlig HLTB-tidslinje (En enda tidslinje med markeringar vid Main / Extra / 100%)
+    // MARK: - Enhetlig HLTB-tidslinje (1:1 mockup)
     @ViewBuilder
     private func unifiedHLTBTimelineSection(hours: Double, mainHours: Int, extraHours: Int, compHours: Int) -> some View {
         let maxTarget = max(compHours, max(extraHours, mainHours))
         let fillRatio = maxTarget > 0 ? min(1.0, hours / Double(maxTarget)) : 0.0
 
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("TIDSLINJE · HOWLONGTOBEAT")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.tertiary)
-                    .tracking(0.5)
-                Spacer()
-                let parts: [String] = [
-                    mainHours > 0 ? "\(mainHours)" : nil,
-                    extraHours > 0 ? "\(extraHours)" : nil,
-                    compHours > 0 ? "\(compHours)" : nil
-                ].compactMap { $0 }
-                if !parts.isEmpty {
-                    Text("\(parts.joined(separator: " / ")) tim")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            // Själva tidslinjen med markeringar
+        VStack(spacing: 6) {
+            // Tidslinje med vertikala streck
             GeometryReader { geo in
                 let width = geo.size.width
+                let safeMax = maxTarget > 0 ? Double(maxTarget) : 1.0
+
                 ZStack(alignment: .leading) {
                     // Bakgrundsspår
                     Capsule()
                         .fill(Color(.tertiarySystemFill))
-                        .frame(height: 8)
+                        .frame(height: 7)
 
                     // Fyllnad när tid loggas
                     if fillRatio > 0 {
                         Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color.red, Color.orange],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(width: max(8, width * CGFloat(fillRatio)), height: 8)
+                            .fill(Color.red)
+                            .frame(width: max(7, width * CGFloat(fillRatio)), height: 7)
                     }
 
-                    // Markör för Main Story
-                    if mainHours > 0 && maxTarget > 0 {
-                        let pos = width * CGFloat(Double(mainHours) / Double(maxTarget))
+                    // Vertikalt streck vid Main Story
+                    if mainHours > 0 {
+                        let pos = width * CGFloat(Double(mainHours) / safeMax)
                         Rectangle()
-                            .fill(hours >= Double(mainHours) ? Color.white : Color.secondary.opacity(0.6))
-                            .frame(width: 2, height: 14)
+                            .fill(Color.secondary.opacity(0.85))
+                            .frame(width: 2, height: 16)
                             .offset(x: min(width - 2, max(0, pos - 1)))
                     }
 
-                    // Markör för Main + Extra
-                    if extraHours > 0 && maxTarget > 0 {
-                        let pos = width * CGFloat(Double(extraHours) / Double(maxTarget))
+                    // Vertikalt streck vid Main + Extra
+                    if extraHours > 0 {
+                        let pos = width * CGFloat(Double(extraHours) / safeMax)
                         Rectangle()
-                            .fill(hours >= Double(extraHours) ? Color.white : Color.secondary.opacity(0.6))
-                            .frame(width: 2, height: 14)
+                            .fill(Color.secondary.opacity(0.85))
+                            .frame(width: 2, height: 16)
                             .offset(x: min(width - 2, max(0, pos - 1)))
                     }
 
-                    // Markör för 100% (Completionist)
-                    if compHours > 0 && maxTarget > 0 {
+                    // Vertikalt streck vid 100% (Completionist)
+                    if compHours > 0 {
+                        let pos = width * CGFloat(Double(compHours) / safeMax)
                         Rectangle()
-                            .fill(hours >= Double(compHours) ? Color.green : Color.secondary.opacity(0.6))
-                            .frame(width: 2, height: 14)
-                            .offset(x: max(0, width - 2))
+                            .fill(Color.secondary.opacity(0.85))
+                            .frame(width: 2, height: 16)
+                            .offset(x: min(width - 2, max(0, pos - 1)))
+                    }
+                }
+            }
+            .frame(height: 16)
+            .padding(.top, 4)
+
+            // Etiketter under strecken (t.ex. "37 tim", "72 tim", "123 tim")
+            GeometryReader { geo in
+                let width = geo.size.width
+                let safeMax = maxTarget > 0 ? Double(maxTarget) : 1.0
+
+                ZStack(alignment: .leading) {
+                    if mainHours > 0 {
+                        let pos = width * CGFloat(Double(mainHours) / safeMax)
+                        Text("\(mainHours) tim")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .offset(x: max(0, min(width - 45, pos - 18)))
+                    }
+
+                    if extraHours > 0 {
+                        let pos = width * CGFloat(Double(extraHours) / safeMax)
+                        Text("\(extraHours) tim")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .offset(x: max(0, min(width - 45, pos - 18)))
+                    }
+
+                    if compHours > 0 {
+                        let pos = width * CGFloat(Double(compHours) / safeMax)
+                        Text("\(compHours) tim")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .offset(x: max(0, width - 45))
                     }
                 }
             }
             .frame(height: 14)
-
-            // Etiketter under tidslinjen
-            HStack {
-                if mainHours > 0 {
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(hours >= Double(mainHours) ? Color.red : Color.secondary.opacity(0.4))
-                            .frame(width: 6, height: 6)
-                        Text("Main \(mainHours)h")
-                            .font(.caption2.weight(hours >= Double(mainHours) ? .bold : .medium))
-                            .foregroundStyle(hours >= Double(mainHours) ? .primary : .secondary)
-                    }
-                }
-                Spacer()
-                if extraHours > 0 {
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(hours >= Double(extraHours) ? Color.orange : Color.secondary.opacity(0.4))
-                            .frame(width: 6, height: 6)
-                        Text("+Extra \(extraHours)h")
-                            .font(.caption2.weight(hours >= Double(extraHours) ? .bold : .medium))
-                            .foregroundStyle(hours >= Double(extraHours) ? .primary : .secondary)
-                    }
-                }
-                Spacer()
-                if compHours > 0 {
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(hours >= Double(compHours) ? Color.green : Color.secondary.opacity(0.4))
-                            .frame(width: 6, height: 6)
-                        Text("100% \(compHours)h")
-                            .font(.caption2.weight(hours >= Double(compHours) ? .bold : .medium))
-                            .foregroundStyle(hours >= Double(compHours) ? .primary : .secondary)
-                    }
-                }
-            }
         }
-        .padding(.top, 2)
     }
 
     @ViewBuilder
@@ -2474,9 +2416,7 @@ struct GameDetailView: View {
     // MARK: - Sammanslagen Anteckningsruta ("Var jag är" + "Mina anteckningar" med automatisk höjd)
 
     private func notesCard(_ g: Game) -> some View {
-        let personalTodos = g.todos.filter { $0.chapterGroup == nil && $0.order == nil }
-
-        return detailCard(title: "Anteckningar") {
+        detailCard(title: "Anteckningar") {
             VStack(alignment: .leading, spacing: 14) {
                 // 1. Kort fält för "Var jag är" (progressNote)
                 VStack(alignment: .leading, spacing: 6) {
@@ -2513,7 +2453,7 @@ struct GameDetailView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
 
-                // 2. Fritextfält för "Mina anteckningar" med placeholder och automatisk höjd (inte en stor tom ruta)
+                // 2. Fritextfält för "Mina anteckningar" med placeholder och automatisk höjd
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Mina anteckningar")
                         .font(.caption.bold())
@@ -2538,55 +2478,6 @@ struct GameDetailView: View {
                     .padding(.vertical, 10)
                     .background(Color(.tertiarySystemGroupedBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
-
-                // 3. Eventuella egna delmål (som inte tillhör 1:1-walkthroughn)
-                if !personalTodos.isEmpty {
-                    Divider()
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Egna mål")
-                            .font(.caption.bold())
-                            .foregroundStyle(.secondary)
-
-                        ForEach(personalTodos) { item in
-                            HStack(spacing: 10) {
-                                Button {
-                                    var copy = g
-                                    if let idx = copy.todos.firstIndex(where: { $0.id == item.id }) {
-                                        copy.todos[idx].isDone.toggle()
-                                        updateLocal(copy)
-                                    }
-                                } label: {
-                                    Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
-                                        .font(.subheadline)
-                                        .foregroundStyle(item.isDone ? .green : .secondary)
-                                }
-                                .buttonStyle(.plain)
-
-                                Text(item.title)
-                                    .font(.subheadline)
-                                    .foregroundStyle(item.isDone ? .secondary : .primary)
-                                    .strikethrough(item.isDone, color: .secondary)
-
-                                Spacer()
-
-                                Button {
-                                    var copy = g
-                                    copy.todos.removeAll(where: { $0.id == item.id })
-                                    updateLocal(copy)
-                                } label: {
-                                    Image(systemName: "trash")
-                                        .font(.caption)
-                                        .foregroundStyle(.tertiary)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
-                            .background(Color(.tertiarySystemGroupedBackground).opacity(0.6))
-                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        }
-                    }
                 }
             }
         }

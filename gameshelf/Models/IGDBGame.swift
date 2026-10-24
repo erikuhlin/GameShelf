@@ -319,6 +319,12 @@ struct IGDBRelatedGame: Decodable, Identifiable, Sendable {
         if let r = rating, r > 0 { return Int(round(r)) }
         return nil
     }
+
+    var ratingOutOfTen: Double? {
+        if let tr = totalRating, tr > 0 { return tr / 10.0 }
+        if let r = rating, r > 0 { return r / 10.0 }
+        return nil
+    }
 }
 
 struct IGDBVideo: Decodable, Identifiable, Sendable {

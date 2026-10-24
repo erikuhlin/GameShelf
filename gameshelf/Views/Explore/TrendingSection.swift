@@ -10,25 +10,30 @@ import SwiftUI
 struct TrendingSection: View {
     let items: [TrendingItem]
     var isLoading: Bool = false
+    var showHeader: Bool = true
     var onSelect: (Int) -> Void = { _ in }
     var onSeeAll: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Trendar just nu")
-                    .font(.title3.bold())
-                Spacer()
-                if isLoading {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                } else if !items.isEmpty {
-                    Button("Visa alla", action: onSeeAll)
-                        .font(.callout)
-                        .foregroundStyle(.red)
+            if showHeader {
+                HStack {
+                    Text("Trendar just nu")
+                        .font(.headline.bold())
+                        .foregroundStyle(Color.textPrimary)
+                    Spacer()
+                    if isLoading {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    } else if !items.isEmpty {
+                        Button(action: onSeeAll) {
+                            Text("Visa alla ›")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(Color.brandRed)
+                        }
+                    }
                 }
             }
-            .padding(.horizontal)
 
             if isLoading && items.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -37,14 +42,13 @@ struct TrendingSection: View {
                             skeletonCard
                         }
                     }
-                    .padding(.horizontal)
                 }
             } else if items.isEmpty {
                 HStack {
                     Spacer()
                     Text("Inga trendande titlar just nu.")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textSecondary)
                         .padding(.vertical, 24)
                     Spacer()
                 }
@@ -53,38 +57,41 @@ struct TrendingSection: View {
                     HStack(spacing: 12) {
                         ForEach(items.prefix(12)) { g in
                             Button { onSelect(g.id) } label: {
-                                RecCard(
-                                    title: g.title,
-                                    subtitle: g.platformText,
-                                    rating: g.rating / 2,
-                                    imageURL: g.image,
-                                    badge: g.badgeText
+                                GameCard(
+                                    trendingItem: g,
+                                    width: 136,
+                                    coverHeight: 176
                                 )
                             }
                             .buttonStyle(.plain)
                         }
                     }
-                    .padding(.horizontal)
+                    .padding(.bottom, 2)
                 }
             }
         }
     }
 
     private var skeletonCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            RoundedRectangle(cornerRadius: 14)
-                .fill(Color(.secondarySystemGroupedBackground))
-                .frame(width: 160, height: 100)
-                .overlay(ProgressView().scaleEffect(0.7))
+        VStack(alignment: .leading, spacing: 0) {
+            RoundedRectangle(cornerRadius: 0)
+                .fill(Color(hex: "#2C2C2E"))
+                .frame(width: 136, height: 176)
+                .overlay(ProgressView().tint(Color.brandRed))
 
             VStack(alignment: .leading, spacing: 6) {
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(Color(.quaternarySystemFill))
-                    .frame(width: 120, height: 14)
+                    .fill(Color.white.opacity(0.1))
+                    .frame(width: 100, height: 14)
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(Color(.quaternarySystemFill))
-                    .frame(width: 80, height: 12)
+                    .fill(Color.white.opacity(0.06))
+                    .frame(width: 60, height: 12)
             }
+            .padding(10)
+            .frame(width: 136, height: 92, alignment: .topLeading)
         }
+        .frame(width: 136, height: 268)
+        .background(Color.neutralSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }

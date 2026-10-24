@@ -132,11 +132,11 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
             }
         } else {
             switch self {
-            case .notStarted: return "Inte påbörjat"
+            case .notStarted: return "Vill spela"
             case .playing: return "Spelar nu"
             case .paused: return "Pausat"
-            case .completed: return "Genomspelat"
-            case .abandoned: return "Avslutat"
+            case .completed: return "Klarat"
+            case .abandoned: return "Slutat"
             }
         }
     }
@@ -158,7 +158,7 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
             }
         } else {
             switch self {
-            case .notStarted: return "circle"
+            case .notStarted: return "bookmark.fill"
             case .playing: return "play.fill"
             case .paused: return "pause.fill"
             case .completed: return "checkmark.seal.fill"
@@ -175,7 +175,7 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
     // Color theme
     var color: Color {
         switch self {
-        case .notStarted: return Color(.systemGray)
+        case .notStarted: return .blue
         case .playing: return .green
         case .paused: return .orange
         case .completed: return .teal
@@ -189,20 +189,20 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
         let value = try container.decode(String.self)
 
         switch value.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) {
-        case "notstarted", "not_started", "ej påbörjat", "ej spelat", "inte påbörjat", "inte spelat", "unplayed":
+        case "notstarted", "not_started", "ej påbörjat", "ej spelat", "inte påbörjat", "inte spelat", "unplayed", "vill spela":
             self = .notStarted
         case "playing", "spelar", "spelar nu", "inprogress", "in_progress", "pågående", "aktiv":
             self = .playing
         case "paused", "pausat", "paus", "tar paus":
             self = .paused
-        case "completed", "klar", "klart", "genomspelat", "hundredpercent", "100 %", "100%":
+        case "completed", "klar", "klart", "klarat", "genomspelat", "hundredpercent", "100 %", "100%":
             self = .completed
         case "inte aktiv längre", "arkiverad", "archived", "arkiv":
             self = .completed
-        case "abandoned", "avslutat", "avbruten", "avbrutet", "droppat", "dropped":
+        case "abandoned", "avslutat", "slutat", "avbruten", "avbrutet", "droppat", "dropped":
             self = .abandoned
         case "slutat spela":
-            self = .completed
+            self = .abandoned
         case "backlog":
             self = .notStarted
         case "wishlist", "önskelista":

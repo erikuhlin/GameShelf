@@ -508,15 +508,16 @@ struct TrendingGameResult: Sendable {
     }
 
     /// Hämtar de officiellt liknande spelen för ett visst spel baserat på IGDBs similar_games med kvalitetsfilter
-    func fetchSimilarGames(forGameID id: Int, limit: Int = 12) async throws -> [IGDBGame] {
+    func fetchSimilarGames(forGameID id: Int, limit: Int = 16) async throws -> [IGDBGame] {
         let detail = try await fetchGameDetails(id: id)
         guard let similar = detail.similarGames, !similar.isEmpty else { return [] }
-        let ids = similar.prefix(limit * 2).map { String($0.id) }.joined(separator: ",")
+        let fetchCount = max(limit * 2, 24)
+        let ids = similar.prefix(fetchCount).map { String($0.id) }.joined(separator: ",")
         let token = try await IGDBAuthManager.shared.getValidToken()
         guard let url = URL(string: "https://api.igdb.com/v4/games") else { throw URLError(.badURL) }
         let body = """
-        fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, total_rating, total_rating_count;
-        where id = (\(ids)) & cover != null & (total_rating = null | total_rating >= 70);
+        fields name, summary, first_release_date, cover.image_id, platforms.id, platforms.name, genres.name, total_rating, total_rating_count;
+        where id = (\(ids)) & cover != null & (total_rating = null | total_rating >= 68);
         sort total_rating desc;
         limit \(limit);
         """

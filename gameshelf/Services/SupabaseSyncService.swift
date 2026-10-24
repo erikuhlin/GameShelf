@@ -253,7 +253,7 @@ actor SupabaseSyncService {
                 developers: developers ?? [],
                 status: playStatus,
                 rating: intRating,
-                igdbRating: igdb_rating,
+                igdbRating: Game.normalizeIgdbRating(igdb_rating),
                 coverURL: cover_url.flatMap { URL(string: $0) },
                 igdbID: igdb_id,
                 firstReleaseDate: first_release_date,
@@ -586,6 +586,84 @@ actor SupabaseSyncService {
             let err = String(data: respData, encoding: .utf8) ?? "Kunde inte spara profil"
             print("❌ upsertProfile error (\(statusCode)): \(err)")
             return
+        }
+    }
+
+    // MARK: - Walkthrough Templates (public.game_walkthroughs)
+    private var walkthroughCacheByIgdbId: [Int: GameWalkthroughTemplate] = [:]
+    private var walkthroughCacheByTitle: [String: GameWalkthroughTemplate] = [:]
+
+    /// Hämtar en 1:1 walkthrough-mall från Supabase (först via igdb_id, sedan via normalized_title)
+    func fetchWalkthroughTemplate(igdbId: Int?, title: String) async throws -> GameWalkthroughTemplate? {
+        if let igdbId = igdbId, let cached = walkthroughCacheByIgdbId[igdbId] {
+            return cached
+        }
+        let normTitle = GameWalkthroughTemplate.normalizeTitle(title)
+        if !normTitle.isEmpty, let cached = walkthroughCacheByTitle[normTitle] {
+            return cached
+        }
+
+        // 1. Slå upp via igdb_id om det finns
+        if let igdbId = igdbId, igdbId > 0 {
+            if let request = await makeRequest(
+                endpoint: "game_walkthroughs?igdb_id=eq.\(igdbId)&select=*&limit=1",
+                method: "GET"
+            ) {
+                let (data, response) = try await session.data(for: request)
+                if let httpResp = response as? HTTPURLResponse, (200...299).contains(httpResp.statusCode),
+                   let templates = try? JSONDecoder().decode([GameWalkthroughTemplate].self, from: data),
+                   let first = templates.first {
+                    walkthroughCacheByIgdbId[igdbId] = first
+                    walkthroughCacheByTitle[first.normalizedTitle] = first
+                    return first
+                }
+            }
+        }
+
+        // 2. Fallback: Slå upp via normalized_title (hanterar olika utgåvor/remasters)
+        if !normTitle.isEmpty,
+           let encodedTitle = normTitle.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+           let request = await makeRequest(
+               endpoint: "game_walkthroughs?normalized_title=eq.\(encodedTitle)&select=*&limit=1",
+               method: "GET"
+           ) {
+            let (data, response) = try await session.data(for: request)
+            if let httpResp = response as? HTTPURLResponse, (200...299).contains(httpResp.statusCode),
+               let templates = try? JSONDecoder().decode([GameWalkthroughTemplate].self, from: data),
+               let first = templates.first {
+                walkthroughCacheByTitle[normTitle] = first
+                if let igdbId = igdbId {
+                    walkthroughCacheByIgdbId[igdbId] = first
+                }
+                return first
+            }
+        }
+
+        return nil
+    }
+
+    /// Sparar eller uppdaterar en walkthrough-mall i public.game_walkthroughs (t.ex. efter AI-generering eller inklistring)
+    func upsertWalkthroughTemplate(_ template: GameWalkthroughTemplate) async throws {
+        walkthroughCacheByIgdbId[template.igdbId] = template
+        walkthroughCacheByTitle[template.normalizedTitle] = template
+
+        guard SupabaseConfig.isSyncEnabled else { return }
+        let body = try JSONEncoder().encode([template])
+        guard let request = await makeRequest(
+            endpoint: "game_walkthroughs?on_conflict=igdb_id",
+            method: "POST",
+            body: body,
+            prefer: "resolution=merge-duplicates,return=minimal"
+        ) else {
+            throw URLError(.badURL)
+        }
+
+        let (respData, response) = try await session.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 500
+        guard (200...299).contains(statusCode) else {
+            let err = String(data: respData, encoding: .utf8) ?? "Kunde inte spara walkthrough-mall"
+            print("❌ upsertWalkthroughTemplate error (\(statusCode)): \(err)")
+            throw NSError(domain: "SyncError", code: statusCode, userInfo: [NSLocalizedDescriptionKey: err])
         }
     }
 }

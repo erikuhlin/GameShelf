@@ -437,8 +437,8 @@ struct LibraryView: View {
             return g1.title.localizedCaseInsensitiveCompare(g2.title) == .orderedAscending
 
         case .rating:
-            let r1 = g1.rating ?? 0
-            let r2 = g2.rating ?? 0
+            let r1 = g1.rating.map { Double($0) } ?? Game.normalizeIgdbRating(g1.igdbRating) ?? 0
+            let r2 = g2.rating.map { Double($0) } ?? Game.normalizeIgdbRating(g2.igdbRating) ?? 0
             if r1 != r2 {
                 return r1 > r2
             }
@@ -560,7 +560,7 @@ struct LibraryView: View {
                     }
                 }
                 .padding(.top, 8)
-                .padding(.bottom, 110) // Extra marginal så sista raden scrollas helt ovanför flytande tab-baren
+                .padding(.bottom, 120) // Extra marginal så sista raden scrollas helt ovanför flytande tab-baren
             }
             .refreshable {
                 await profile.syncWithRemote()
@@ -986,7 +986,7 @@ struct LibraryView: View {
                                         LazyVGrid(columns: posterGridColumns, spacing: 14) {
                                             ForEach(group.games) { game in
                                                 NavigationLink(destination: GameDetailView(game: game)) {
-                                                    LibraryPosterCard(game: game, showYearBadge: false)
+                                                    GameCard(game: game, style: .libraryGrid)
                                                 }
                                                 .buttonStyle(.plain)
                                                 .contextMenu {
@@ -1004,7 +1004,7 @@ struct LibraryView: View {
                         LazyVGrid(columns: posterGridColumns, spacing: 14) {
                             ForEach(ownedGames) { game in
                                 NavigationLink(destination: GameDetailView(game: game)) {
-                                    LibraryPosterCard(game: game, showYearBadge: false)
+                                    GameCard(game: game, style: .libraryGrid)
                                 }
                                 .buttonStyle(.plain)
                                 .contextMenu {
@@ -1119,7 +1119,7 @@ struct LibraryView: View {
                                     LazyVGrid(columns: posterGridColumns, spacing: 14) {
                                         ForEach(group.games) { game in
                                             NavigationLink(destination: GameDetailView(game: game)) {
-                                                LibraryPosterCard(game: game, showWishlistInfo: true, showYearBadge: false)
+                                                GameCard(game: game, style: .libraryGrid, showWishlistInfo: true)
                                             }
                                             .buttonStyle(.plain)
                                             .contextMenu {
@@ -1136,7 +1136,7 @@ struct LibraryView: View {
                     LazyVGrid(columns: posterGridColumns, spacing: 14) {
                         ForEach(wishlistGames) { game in
                             NavigationLink(destination: GameDetailView(game: game)) {
-                                LibraryPosterCard(game: game, showWishlistInfo: true, showYearBadge: false)
+                                GameCard(game: game, style: .libraryGrid, showWishlistInfo: true)
                             }
                             .buttonStyle(.plain)
                             .contextMenu {
@@ -1446,92 +1446,15 @@ struct LibraryView: View {
 
 // MARK: - Poster Card med adaptiv höjd för iPad/iPhone
 struct LibraryPosterCard: View {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     let game: Game
     var showWishlistInfo: Bool = false
     var showYearBadge: Bool = false
 
-    private var posterHeight: CGFloat {
-        horizontalSizeClass == .regular ? 205 : 155
-    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ZStack(alignment: .top) {
-                CoverView(title: game.title, url: game.coverURL, corner: 10, height: posterHeight, fullWidth: true)
-                    .shadow(color: .black.opacity(0.12), radius: 4, x: 0, y: 2)
-
-                // Badges Overlay
-                HStack(alignment: .top) {
-                    // Vänster badge: Årtal (döljs som standard så omslagen hålls rena)
-                    if showYearBadge && game.releaseYear > 0 {
-                        Text(String(game.releaseYear))
-                            .font(.system(size: 8, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.85))
-                            .padding(.horizontal, 4.5)
-                            .padding(.vertical, 2)
-                            .background(Color.black.opacity(0.38), in: Capsule())
-                            .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 0.5))
-                    }
-
-                    Spacer(minLength: 4)
-
-                    // Höger badge: Rea (om på rea och i önskelista), Betyg eller Kommande
-                    if showWishlistInfo, let deal = PriceWatcherService.shared.deal(for: game), deal.isOnSale {
-                        HStack(spacing: 2) {
-                            Text("🔥")
-                                .font(.system(size: 7.5))
-                            Text(deal.savingsFormatted)
-                                .font(.system(size: 8.5, weight: .heavy))
-                                .foregroundStyle(.white)
-                        }
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2.5)
-                        .background(
-                            LinearGradient(
-                                colors: [Color.red, Color.orange],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            in: Capsule()
-                        )
-                        .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
-                        .shadow(color: .red.opacity(0.4), radius: 3, x: 0, y: 1)
-                    } else if let rating = game.rating, rating > 0 {
-                        HStack(spacing: 2) {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 7))
-                                .foregroundStyle(.yellow)
-                            Text("\(rating)")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(.white)
-                        }
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2.5)
-                        .background(Color.black.opacity(0.8), in: Capsule())
-                        .overlay(Capsule().stroke(Color.yellow.opacity(0.3), lineWidth: 0.5))
-                    } else if showWishlistInfo && game.isUnreleased {
-                        Text("Kommande")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2.5)
-                            .background(Color.purple.opacity(0.85), in: Capsule())
-                    }
-                }
-                .padding(5)
-            }
-
-            // Speltitel under omslaget - Fast minHeight så 1- och 2-rads titlar linjerar perfekt
-            Text(game.title)
-                .font(.caption.weight(.semibold))
-                .lineLimit(2)
-                .minimumScaleFactor(0.85)
-                .multilineTextAlignment(.leading)
-                .foregroundStyle(.primary)
-                .frame(maxWidth: .infinity, minHeight: 32, alignment: .topLeading)
-        }
+        GameCard(game: game, style: .libraryGrid, showWishlistInfo: showWishlistInfo)
     }
+
 }
 
 
@@ -1565,11 +1488,19 @@ struct LibraryGameCardRow: View {
 
                     Spacer()
 
-                    if let rating = game.rating, rating > 0 {
+                    let ratingFormatted: String? = {
+                        if let r = game.rating, r > 0 { return "\(r)" }
+                        if let ir = Game.normalizeIgdbRating(game.igdbRating), ir > 0 {
+                            return ir.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(ir))" : String(format: "%.1f", ir)
+                        }
+                        return nil
+                    }()
+
+                    if let rating = ratingFormatted {
                         HStack(spacing: 3) {
                             Image(systemName: "star.fill")
                                 .foregroundStyle(.yellow)
-                            Text("\(rating)")
+                            Text(rating)
                         }
                         .font(.subheadline.bold())
                     }
@@ -1603,11 +1534,19 @@ struct LibraryGameGridCard: View {
 
                     Spacer()
 
-                    if let rating = game.rating, rating > 0 {
+                    let gridRatingFormatted: String? = {
+                        if let r = game.rating, r > 0 { return "\(r)" }
+                        if let ir = Game.normalizeIgdbRating(game.igdbRating), ir > 0 {
+                            return ir.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(ir))" : String(format: "%.1f", ir)
+                        }
+                        return nil
+                    }()
+
+                    if let rating = gridRatingFormatted {
                         HStack(spacing: 2) {
                             Image(systemName: "star.fill")
                                 .foregroundStyle(.yellow)
-                            Text("\(rating)")
+                            Text(rating)
                         }
                         .font(.caption.bold())
                     }

@@ -719,11 +719,12 @@ struct ForYouHubView: View {
                         .shadow(color: .black.opacity(0.18), radius: 5, x: 0, y: 3)
 
                     if let rating = game.totalRating, rating > 0 {
+                        let score = rating / 10.0
                         HStack(spacing: 2) {
                             Image(systemName: "star.fill")
                                 .font(.system(size: 7))
                                 .foregroundStyle(.yellow)
-                            Text(String(format: "%.0f", rating))
+                            Text(score.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(score))" : String(format: "%.1f", score))
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundStyle(.white)
                         }

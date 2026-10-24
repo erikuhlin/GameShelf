@@ -11,6 +11,116 @@ struct GameTodoItem: Identifiable, Hashable, Codable, Sendable {
     var id = UUID()
     var title: String
     var isDone: Bool = false
+    var order: Int? = nil
+    var chapterGroup: String? = nil
+    var description: String? = nil
+    var isOptional: Bool = false
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, isDone, order, chapterGroup, description, isOptional
+    }
+
+    nonisolated init(
+        id: UUID = UUID(),
+        title: String,
+        isDone: Bool = false,
+        order: Int? = nil,
+        chapterGroup: String? = nil,
+        description: String? = nil,
+        isOptional: Bool = false
+    ) {
+        self.id = id
+        self.title = title
+        self.isDone = isDone
+        self.order = order
+        self.chapterGroup = chapterGroup
+        self.description = description
+        self.isOptional = isOptional
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let uuid = try? container.decode(UUID.self, forKey: .id) {
+            self.id = uuid
+        } else {
+            self.id = UUID()
+        }
+        self.title = try container.decode(String.self, forKey: .title)
+        self.isDone = (try? container.decodeIfPresent(Bool.self, forKey: .isDone)) ?? false
+        self.order = try? container.decodeIfPresent(Int.self, forKey: .order)
+        self.chapterGroup = try? container.decodeIfPresent(String.self, forKey: .chapterGroup)
+        self.description = try? container.decodeIfPresent(String.self, forKey: .description)
+        self.isOptional = (try? container.decodeIfPresent(Bool.self, forKey: .isOptional)) ?? false
+    }
+}
+
+struct GameWalkthroughTemplateItem: Codable, Hashable, Sendable {
+    var id: String
+    var title: String
+    var order: Int
+    var chapterGroup: String?
+    var description: String?
+    var isOptional: Bool?
+}
+
+struct GameWalkthroughTemplate: Codable, Hashable, Sendable {
+    var igdbId: Int
+    var title: String
+    var normalizedTitle: String
+    var alternateIgdbIds: [Int]?
+    var hasLinearProgression: Bool
+    var progressionType: String
+    var summary: String
+    var items: [GameWalkthroughTemplateItem]
+    var source: String
+    var sourceUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case igdbId = "igdb_id"
+        case title
+        case normalizedTitle = "normalized_title"
+        case alternateIgdbIds = "alternate_igdb_ids"
+        case hasLinearProgression = "has_linear_progression"
+        case progressionType = "progression_type"
+        case summary
+        case items
+        case source
+        case sourceUrl = "source_url"
+    }
+
+    nonisolated func toTodoItems() -> [GameTodoItem] {
+        items.enumerated().map { idx, item in
+            GameTodoItem(
+                id: UUID(),
+                title: item.title,
+                isDone: false,
+                order: item.order > 0 ? item.order : (idx + 1),
+                chapterGroup: item.chapterGroup,
+                description: item.description,
+                isOptional: item.isOptional ?? false
+            )
+        }
+    }
+
+    nonisolated static func normalizeTitle(_ rawTitle: String) -> String {
+        let folded = rawTitle
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+            .lowercased()
+        let withoutEditions = folded.replacingOccurrences(
+            of: #"\b(remake|remastered|definitive edition|gold edition|nintendo switch 2 edition|shadow of the erdtree edition)\b"#,
+            with: "",
+            options: .regularExpression
+        )
+        let cleaned = withoutEditions.replacingOccurrences(
+            of: #"[:\-–—'’()]"#,
+            with: " ",
+            options: .regularExpression
+        )
+        return cleaned
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
 }
 
 enum GameStoryProgress: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -122,6 +232,22 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
             return true
         }
         return false
+    }
+
+    // MARK: - Rating Normalization
+    nonisolated static func normalizeIgdbRating(_ val: Double?) -> Double? {
+        guard let num = val, num > 0 else { return nil }
+        // Om värdet är > 10 har det sparats på en 0-100 skala (t.ex. 84.5 -> 8.5)
+        if num > 10.0 {
+            return (num / 10.0 * 10).rounded() / 10.0
+        }
+        // Om värdet är <= 5.0 beror det på den tidigare iOS-buggen där totalRating (0-100) delades med 20.0
+        // (t.ex. 88 / 20 = 4.4 -> ska vara 8.8 på en 0-10 skala, 4.0 -> 8.0, 3.3 -> 6.6)
+        if num <= 5.0 {
+            return (num * 2.0 * 10).rounded() / 10.0
+        }
+        // Redan på en 0-10 skala (t.ex. 8.4)
+        return (num * 10).rounded() / 10.0
     }
 
     // MARK: - Play Type Inferens
@@ -242,7 +368,7 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         self.developers = developers
         self.status = status
         self.rating = rating
-        self.igdbRating = igdbRating
+        self.igdbRating = Game.normalizeIgdbRating(igdbRating)
         self.coverURL = coverURL
         self.igdbID = igdbID
         self.firstReleaseDate = firstReleaseDate
@@ -297,8 +423,9 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         status = decodedStatus
 
         rating = try container.decodeIfPresent(Int.self, forKey: .rating)
-        igdbRating = try container.decodeIfPresent(Double.self, forKey: .igdbRating)
+        let rawIgdbRating = try container.decodeIfPresent(Double.self, forKey: .igdbRating)
             ?? container.decodeIfPresent(Double.self, forKey: .rawgRating)
+        igdbRating = Game.normalizeIgdbRating(rawIgdbRating)
         coverURL = try container.decodeIfPresent(URL.self, forKey: .coverURL)
         igdbID = try container.decodeIfPresent(Int.self, forKey: .igdbID)
         firstReleaseDate = try container.decodeIfPresent(Int.self, forKey: .firstReleaseDate)

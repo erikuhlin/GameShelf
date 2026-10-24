@@ -171,7 +171,7 @@ final class PriceWatcherService: ObservableObject {
 
         // Kolla PlayStation
         let hasPlayStation = platformsLower.contains(where: {
-            $0.contains("playstation") || $0.contains("ps4") || $0.contains("ps5") || $0.contains("ps3")
+            $0.contains("playstation") || $0.contains("ps4") || $0.contains("ps5") || $0.contains("ps3") || $0.contains("ps2") || $0 == "ps"
         })
         if hasPlayStation {
             if let url = URL(string: "https://store.playstation.com/sv-se/search/\(titleEncoded)") {
@@ -181,6 +181,22 @@ final class PriceWatcherService: ObservableObject {
                     iconSystemName: "playstation.logo",
                     url: url,
                     accentColor: .blue
+                ))
+            }
+        }
+
+        // Kolla Xbox
+        let hasXbox = platformsLower.contains(where: {
+            $0.contains("xbox") || $0.contains("series x") || $0.contains("series s") || $0.contains("series x|s") || $0.contains("xsx") || $0.contains("xss") || $0.contains("xone")
+        })
+        if hasXbox {
+            if let url = URL(string: "https://www.xbox.com/sv-SE/games/store/search?q=\(titleEncoded)") {
+                links.append(StoreQuickLink(
+                    name: "Xbox Store",
+                    platformCategory: "Xbox",
+                    iconSystemName: "xbox.logo",
+                    url: url,
+                    accentColor: .green
                 ))
             }
         }
@@ -201,25 +217,9 @@ final class PriceWatcherService: ObservableObject {
             }
         }
 
-        // Kolla Xbox
-        let hasXbox = platformsLower.contains(where: {
-            $0.contains("xbox") || $0.contains("series x") || $0.contains("series s") || $0.contains("one")
-        })
-        if hasXbox {
-            if let url = URL(string: "https://www.xbox.com/sv-SE/games/store/search?q=\(titleEncoded)") {
-                links.append(StoreQuickLink(
-                    name: "Xbox Store",
-                    platformCategory: "Xbox",
-                    iconSystemName: "x.circle.fill",
-                    url: url,
-                    accentColor: .green
-                ))
-            }
-        }
-
         // Kolla PC / Steam
         let hasPC = platformsLower.contains(where: {
-            $0.contains("pc") || $0.contains("windows") || $0.contains("steam") || $0.contains("mac")
+            $0.contains("pc") || $0.contains("windows") || $0.contains("steam") || $0.contains("mac") || $0.contains("linux")
         }) || platformsLower.isEmpty // Fallback till Steam om plattform ej specad
         if hasPC {
             let steamURLString: String

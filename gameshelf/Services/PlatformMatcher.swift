@@ -16,6 +16,62 @@ struct PlatformMatcher {
         return ProfileStore.defaultPlatforms
     }
 
+    /// Mappar en uppsättning användarplattformar (från ProfileStore / biblioteket) till IGDB-plattforms-ID:n
+    static func igdbPlatformIDs(for platforms: Set<String>) -> [Int] {
+        var ids: [Int] = []
+        for p in platforms {
+            let lower = p.lowercased()
+            if lower.contains("playstation 5") || lower == "ps5" { ids.append(167) }
+            else if lower.contains("playstation 4") || lower == "ps4" { ids.append(48) }
+            else if lower.contains("playstation 3") || lower == "ps3" { ids.append(9) }
+            else if lower.contains("playstation 2") || lower == "ps2" { ids.append(8) }
+            else if lower.contains("xbox series") || lower.contains("series x") || lower.contains("series s") { ids.append(169) }
+            else if lower.contains("xbox one") { ids.append(49) }
+            else if lower.contains("xbox 360") { ids.append(12) }
+            else if lower.contains("switch") { ids.append(130) }
+            else if lower.contains("3ds") { ids.append(37) }
+            else if lower.contains("gamecube") { ids.append(21) }
+            else if lower.contains("mac") { ids.append(14) }
+            else if lower.contains("pc") || lower.contains("windows") || lower.contains("steam") || lower.contains("handheld pc") { ids.append(6) }
+            else if lower.contains("vr") || lower.contains("quest") { ids.append(contentsOf: [386, 384, 165]) }
+            else if lower.contains("ios") || lower.contains("iphone") || lower.contains("ipad") { ids.append(39) }
+            else if lower.contains("android") { ids.append(34) }
+        }
+        return Array(Set(ids))
+    }
+
+    /// Kontrollerar om spelets plattformar matchar någon av användarens profilplattformar
+    static func matchesAny(availableIGDBPlatforms: [String], userPlatforms: Set<String>) -> Bool {
+        guard !userPlatforms.isEmpty else { return true }
+        for igdbName in availableIGDBPlatforms {
+            let lowerIGDB = igdbName.lowercased()
+            for userPlat in userPlatforms {
+                if isMatch(igdb: lowerIGDB, user: userPlat.lowercased()) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    /// Avgör om ett IGDBGame kan spelas på minst en av användarens plattformar
+    static func isPlayableOnUserPlatforms(game: IGDBGame, userPlatforms: Set<String>, userPlatformIDs: Set<Int> = []) -> Bool {
+        guard !userPlatforms.isEmpty else { return true }
+
+        // 1. Kontrollera via IGDB plattforms-ID:n om de finns
+        if !userPlatformIDs.isEmpty, let gps = game.platforms, !gps.isEmpty {
+            for gp in gps {
+                if userPlatformIDs.contains(gp.id) {
+                    return true
+                }
+            }
+        }
+
+        // 2. Kontrollera via plattformsnamn
+        let names = game.platforms?.map(\.name) ?? []
+        return matchesAny(availableIGDBPlatforms: names, userPlatforms: userPlatforms)
+    }
+
     /// Matchar spelets tillgängliga IGDB-plattformar mot användarens valda profilplattformar.
     /// Om en eller flera matchningar finns returneras dessa så att spelet automatiskt får rätt konsol/plattform.
     /// Om ingen matchning finns (t.ex. för äldre retrospel) returneras en lämplig fallback (spelets primära plattform).
@@ -136,7 +192,7 @@ struct PlatformMatcher {
         }
 
         // Breda grupper från ProfileView (t.ex. "Nintendo (NES/SNES/64/Switch)")
-        if user.contains("nintendo") {
+        if user == "nintendo" || user.contains("nes/snes") || user.contains("nintendo (") {
             if igdb.contains("nintendo") || igdb.contains("switch") || igdb.contains("game boy") ||
                igdb.contains("nes") || igdb.contains("snes") || igdb.contains("n64") ||
                igdb.contains("gamecube") || igdb.contains("wii") || igdb.contains("ds") {
@@ -144,7 +200,7 @@ struct PlatformMatcher {
             }
         }
 
-        if user.contains("playstation") {
+        if user == "playstation" || user.contains("ps1/ps2") || user.contains("playstation (") {
             if igdb.contains("playstation") || igdb.contains("ps1") || igdb.contains("ps2") ||
                igdb.contains("ps3") || igdb.contains("ps4") || igdb.contains("ps5") ||
                igdb.contains("psp") || igdb.contains("vita") {
@@ -152,7 +208,7 @@ struct PlatformMatcher {
             }
         }
 
-        if user.contains("xbox") {
+        if user == "xbox" || user.contains("xbox (") {
             if igdb.contains("xbox") {
                 return true
             }

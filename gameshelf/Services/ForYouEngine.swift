@@ -191,6 +191,7 @@ final class ForYouEngine: ObservableObject {
     @Published var isLoadingHomeRecommendations = false
     private var lastHomeFetched: Date? = nil
     private var lastHomeGameCount: Int = 0
+    private var lastHomePlatforms: Set<String> = []
 
     // Interaktiva valbara alternativ för första sidan
     @Published var selectedReferenceGame1: Game? = nil
@@ -715,7 +716,7 @@ final class ForYouEngine: ObservableObject {
         return "sparkles"
     }
 
-    // MARK: - 4b. Startsida: Kurerade rekommendationer för 'För dig' med 24h cache
+    // MARK: - 4b. Startsida: Kurerade rekommendationer för 'För dig' med 24h cache (fokus nyare spel & användarens konsoler)
     func loadHomeCuratedRecommendations(
         games: [Game],
         profile: ProfileStore,
@@ -723,19 +724,76 @@ final class ForYouEngine: ObservableObject {
     ) async {
         let oneDay: TimeInterval = 86400 // 24 timmar
         let libraryCount = games.count
+        let currentPlatforms = profile.platforms
 
-        // Om vi redan har rekommendationer och det gått under 24 timmar samt biblioteksstorleken inte ändrats kraftigt
+        // Om vi redan har rekommendationer och det gått under 24 timmar samt biblioteksstorlek och plattformar inte ändrats
         if !forceReload,
            !homeCuratedRecommendations.isEmpty,
            let last = lastHomeFetched,
            Date().timeIntervalSince(last) < oneDay,
-           abs(libraryCount - lastHomeGameCount) < 2 {
+           abs(libraryCount - lastHomeGameCount) < 2,
+           currentPlatforms == lastHomePlatforms {
             return
         }
 
         isLoadingHomeRecommendations = true
-        let libraryTitles = Set(games.map { $0.title.lowercased() })
+        let libraryTitles = Set(games.map { $0.title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) })
         let libraryIDs = Set(games.compactMap { $0.igdbID })
+
+        // Bestäm användarens aktiva plattformar
+        let rawUserPlatforms = profile.platforms.isEmpty ? PlatformMatcher.currentProfilePlatforms() : profile.platforms
+        var effectivePlatforms = rawUserPlatforms
+        if effectivePlatforms.isEmpty {
+            let libraryPlats = Set(games.flatMap(\.platforms).filter { !$0.isEmpty })
+            if !libraryPlats.isEmpty {
+                effectivePlatforms = libraryPlats
+            } else {
+                effectivePlatforms = ["PlayStation 5", "Xbox Series X|S", "Nintendo Switch", "PC / Windows"]
+            }
+        }
+
+        let userPlatformIDs = Set(PlatformMatcher.igdbPlatformIDs(for: effectivePlatforms))
+
+        // Kontrollera om användaren spelar på moderna plattformar (PS5, XSX, Switch, PC, PS4 etc.)
+        let hasModernPlatform = effectivePlatforms.contains { p in
+            let lower = p.lowercased()
+            return lower.contains("playstation 5") || lower.contains("ps5") ||
+                   lower.contains("playstation 4") || lower.contains("ps4") ||
+                   lower.contains("xbox series") || lower.contains("xbox one") ||
+                   lower.contains("switch") || lower.contains("pc") ||
+                   lower.contains("windows") || lower.contains("steam") ||
+                   lower.contains("mac") || lower.contains("vr") ||
+                   lower.contains("mobil") || lower.contains("ipad")
+        }
+        // Senaste konsollgenerationen lanserades 2020: fokusera på spel släppta från och med 2020
+        let minReleaseYear = hasModernPlatform ? 2020 : 1970
+
+        var allCurated: [CuratedRecommendation] = []
+        var seenIDs = Set<Int>()
+
+        func isEligibleGame(_ game: IGDBGame) -> Bool {
+            if game.isDLC { return false }
+            let trimmedTitle = game.name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            if libraryIDs.contains(game.id) || libraryTitles.contains(trimmedTitle) {
+                return false
+            }
+            if seenIDs.contains(game.id) { return false }
+
+            // Fokus på nyare spel (senaste konsollgenerationen: >= 2020)
+            if let year = game.releaseYear {
+                if year < minReleaseYear { return false }
+            } else if minReleaseYear >= 2020 {
+                // Om inget release date finns alls och vi kräver nyare spel, exkludera
+                if game.firstReleaseDate == nil { return false }
+            }
+
+            // Måste finnas tillgängligt på minst en av konsolerna användaren äger/spelar på
+            return PlatformMatcher.isPlayableOnUserPlatforms(
+                game: game,
+                userPlatforms: effectivePlatforms,
+                userPlatformIDs: userPlatformIDs
+            )
+        }
 
         // 1. Primär signal: Användarens Favoritspel från profilen
         let favoriteGames: [Game] = profile.favoriteGameIDs.compactMap { favID in
@@ -772,39 +830,53 @@ final class ForYouEngine: ObservableObject {
             }
         }
 
-        var allCurated: [CuratedRecommendation] = []
-        var seenIDs = Set<Int>()
+        let platformIDList = Array(userPlatformIDs)
 
         // Kurerar rekommendationer för varje referensspel
         for ref in referenceItems {
             let refGame = ref.game
-            var refResults: [IGDBGame] = []
+            var candidateResults: [IGDBGame] = []
+
+            // A. Hämta officiellt liknande spel från IGDB
             if let igdbID = refGame.igdbID {
-                refResults = (try? await IGDBService.shared.fetchSimilarGames(forGameID: igdbID, limit: 8)) ?? []
-            }
-            if refResults.isEmpty {
-                let genres = refGame.genres.filter { !$0.isEmpty }
-                if !genres.isEmpty {
-                    refResults = (try? await IGDBService.shared.fetchRecommendations(forGenres: genres, limit: 8)) ?? []
+                if let similar = try? await IGDBService.shared.fetchSimilarGames(forGameID: igdbID, limit: 16) {
+                    for g in similar where isEligibleGame(g) {
+                        candidateResults.append(g)
+                    }
                 }
             }
 
-            // Filtrera bort biblioteksspel och redan tillagda
-            refResults.removeAll { game in
-                libraryIDs.contains(game.id) || libraryTitles.contains(game.name.lowercased()) || seenIDs.contains(game.id)
+            // B. Om för få liknande spel fanns från senaste generationen på användarens konsoler:
+            // Sök via discoverGames med samma genre och krav på minReleaseYear + användarens konsoler
+            if candidateResults.count < 3 {
+                let genres = refGame.genres.filter { !$0.isEmpty }
+                if !genres.isEmpty {
+                    if let discovered = try? await IGDBService.shared.discoverGames(
+                        startYear: minReleaseYear,
+                        platformIDs: platformIDList,
+                        genres: Array(genres.prefix(2)),
+                        minRating: 75,
+                        sortOption: .rating,
+                        limit: 12
+                    ) {
+                        for g in discovered where isEligibleGame(g) {
+                            candidateResults.append(g)
+                        }
+                    }
+                }
             }
 
             let shortTitle = refGame.title.components(separatedBy: ":").first?.trimmingCharacters(in: .whitespaces) ?? refGame.title
             let badgeText = "\(ref.badgePrefix): \(shortTitle)"
 
-            for g in refResults {
+            for g in candidateResults.prefix(4) {
                 seenIDs.insert(g.id)
                 allCurated.append(CuratedRecommendation(game: g, matchedReason: badgeText))
             }
         }
 
-        // Fallback om för få hittades - prioritera profilens favoritgenrer först!
-        if allCurated.count < 6 {
+        // Fallback om för få hittades - prioritera profilens favoritgenrer och topprankade nyare spel på användarens konsoler
+        if allCurated.count < 8 {
             let profileGenres = Array(profile.favoriteGenres)
             var counts: [String: Int] = [:]
             for game in games {
@@ -814,10 +886,19 @@ final class ForYouEngine: ObservableObject {
             }
             let userTopGenres = counts.sorted { $0.value > $1.value }.map(\.key)
             let fallbackGenres = !profileGenres.isEmpty ? profileGenres : (userTopGenres.isEmpty ? ["Action", "Role-playing (RPG)", "Adventure"] : userTopGenres)
-            if let fallback = try? await IGDBService.shared.fetchRecommendations(forGenres: fallbackGenres, limit: 10) {
-                for g in fallback where !libraryIDs.contains(g.id) && !seenIDs.contains(g.id) {
+
+            if let fallback = try? await IGDBService.shared.discoverGames(
+                startYear: minReleaseYear,
+                platformIDs: platformIDList,
+                genres: Array(fallbackGenres.prefix(3)),
+                minRating: 75,
+                sortOption: .popularity,
+                limit: 16
+            ) {
+                for g in fallback where isEligibleGame(g) {
                     seenIDs.insert(g.id)
                     allCurated.append(CuratedRecommendation(game: g, matchedReason: "Toppval i din smak"))
+                    if allCurated.count >= 16 { break }
                 }
             }
         }
@@ -825,6 +906,7 @@ final class ForYouEngine: ObservableObject {
         self.homeCuratedRecommendations = Array(allCurated.prefix(16))
         self.lastHomeFetched = Date()
         self.lastHomeGameCount = libraryCount
+        self.lastHomePlatforms = currentPlatforms
         self.isLoadingHomeRecommendations = false
     }
 

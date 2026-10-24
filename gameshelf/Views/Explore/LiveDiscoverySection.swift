@@ -159,36 +159,38 @@ struct LiveDiscoverySection: View {
                 } else {
                     horizontalCuratedList(items: curatedRecommendations)
 
-                    NavigationLink(destination: ForYouHubView()) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "safari.fill")
-                                .font(.title3)
-                                .foregroundStyle(Color.ds.brandRed)
-                                .padding(8)
-                                .background(Color.ds.brandRed.opacity(0.12), in: Circle())
+                    if mode != .forYouOnly {
+                        NavigationLink(destination: ForYouHubView()) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "safari.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.ds.brandRed)
+                                    .padding(8)
+                                    .background(Color.ds.brandRed.opacity(0.12), in: Circle())
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Personlig spelupptäckt & Spelminnen")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(.primary)
-                                Text("Hitta nya favoriter med Spelkompassen eller återupptäck klassiker du glömt.")
-                                    .font(.caption2)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Personlig spelupptäckt & Spelminnen")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.primary)
+                                    Text("Hitta nya favoriter med Spelkompassen eller återupptäck klassiker du glömt.")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2.bold())
                                     .foregroundStyle(.secondary)
-                                    .lineLimit(1)
                             }
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.caption2.bold())
-                                .foregroundStyle(.secondary)
+                            .padding(10)
+                            .background(Color.neutralSurface)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
-                        .padding(10)
-                        .background(Color(.secondarySystemGroupedBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .buttonStyle(.plain)
+                        .padding(.top, 4)
                     }
-                    .buttonStyle(.plain)
-                    .padding(.top, 4)
                 }
             }
         }
@@ -374,11 +376,12 @@ struct LiveDiscoverySection: View {
                                             .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
 
                                         if let rating = game.totalRating, rating > 0 {
+                                            let score = rating / 10.0
                                             HStack(spacing: 2) {
                                                 Image(systemName: "star.fill")
                                                     .font(.system(size: 8))
                                                     .foregroundStyle(.yellow)
-                                                Text(String(format: "%.0f", rating))
+                                                Text(score.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(score))" : String(format: "%.1f", score))
                                                     .font(.system(size: 10, weight: .bold))
                                                     .foregroundStyle(.white)
                                             }
@@ -464,56 +467,21 @@ struct LiveDiscoverySection: View {
 
     private func horizontalCuratedList(items: [CuratedRecommendation]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 14) {
+            HStack(spacing: 12) {
                 ForEach(items) { item in
                     let game = item.game
                     NavigationLink(destination: GameDetailView(igdbID: game.id)) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            ZStack(alignment: .bottomTrailing) {
-                                CoverView(title: game.name, url: game.coverURL, corner: 12, height: 140)
-                                    .frame(width: 105, height: 140)
-                                    .shadow(color: .black.opacity(0.18), radius: 5, x: 0, y: 3)
-
-                                if let rating = game.totalRating, rating > 0 {
-                                    HStack(spacing: 2) {
-                                        Image(systemName: "star.fill")
-                                            .font(.system(size: 7))
-                                            .foregroundStyle(.yellow)
-                                        Text(String(format: "%.0f", rating))
-                                            .font(.system(size: 9, weight: .bold))
-                                            .foregroundStyle(.white)
-                                    }
-                                    .padding(.horizontal, 4)
-                                    .padding(.vertical, 2)
-                                    .background(.black.opacity(0.75), in: Capsule())
-                                    .padding(4)
-                                }
-                            }
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(game.name)
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(.primary)
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.leading)
-                                    .minimumScaleFactor(0.75)
-                                    .frame(height: 34, alignment: .topLeading)
-
-                                if let platform = resolvedPlatform(for: game) {
-                                    Text(PlatformMatcher.shortName(platform))
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.85)
-                                }
-                            }
-                            .frame(width: 105, alignment: .leading)
-                        }
+                        GameCard(
+                            igdbGame: game,
+                            metric: game.totalRating.map { .rating($0 / 10.0) } ?? (game.hypes.map { .hype($0) }),
+                            width: 136,
+                            coverHeight: 176
+                        )
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.vertical, 2)
+            .padding(.bottom, 2)
         }
     }
 
@@ -548,6 +516,7 @@ struct LiveDiscoverySection: View {
                                 }
 
                                 if let rating = game.totalRating, rating > 0 {
+                                    let score = rating / 10.0
                                     VStack {
                                         Spacer()
                                         HStack {
@@ -556,7 +525,7 @@ struct LiveDiscoverySection: View {
                                                 Image(systemName: "star.fill")
                                                     .font(.system(size: 7))
                                                     .foregroundStyle(.yellow)
-                                                Text(String(format: "%.0f", rating))
+                                                Text(score.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(score))" : String(format: "%.1f", score))
                                                     .font(.system(size: 9, weight: .bold))
                                                     .foregroundStyle(.white)
                                             }
@@ -614,15 +583,20 @@ struct LiveDiscoverySection: View {
                                         }
                                         .buttonStyle(.plain)
                                     }
+                                    .frame(height: 16)
                                 } else if let platform = resolvedPlatform(for: game) {
                                     Text(PlatformMatcher.shortName(platform))
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
                                         .minimumScaleFactor(0.85)
+                                        .frame(height: 16)
+                                } else {
+                                    Color.clear
+                                        .frame(height: 16)
                                 }
                             }
-                            .frame(width: 105, alignment: .leading)
+                            .frame(width: 105, height: 54, alignment: .topLeading)
                         }
                     }
                     .buttonStyle(.plain)

@@ -22,6 +22,8 @@ struct AddGameView: View {
     // Avancerade filter
     @State private var filterConfig = SearchFilterConfig()
     @State private var showingFilterSheet = false
+    @FocusState private var isSearchFocused: Bool
+    @State private var searchScopeIndex: Int = 0
 
     // Förslag & Rekommendationer
     @State private var recommendedGames: [IGDBGame] = []
@@ -111,6 +113,11 @@ struct AddGameView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                // IMDb-stil Segmenterad Top Bar (Recent / Advanced Search) när söket är aktivt
+                if isSearchFocused || isSearchingOrFiltering {
+                    topSearchSegmentedBar
+                }
+
                 // Varning om användaren söker fritext med aktiva filter
                 filterWarningBanner
 
@@ -141,24 +148,21 @@ struct AddGameView: View {
                             description: Text("Inga resultat matchar din sökning och dina filter. Prova att ändra filtren eller sökorden.")
                         )
                         .padding(.top, 40)
+                    } else if isSearchFocused {
+                        recentSearchesListView
                     } else {
                         discoveryView
                     }
                 }
+            }
+            .safeAreaInset(edge: .bottom) {
+                bottomSearchBar
             }
             .background(Color.ds.background.ignoresSafeArea())
             .navigationTitle(isModal ? "Lägg till spel" : "Sök")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: Int.self) { gameID in
                 GameDetailView(igdbID: gameID)
-            }
-            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Sök och lägg till spel...")
-            .onSubmit(of: .search) {
-                let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty {
-                    saveSearchTerm(trimmed)
-                }
-                performSearch()
             }
             .onChange(of: searchText) { _, newValue in
                 searchDebounceTask?.cancel()
@@ -386,6 +390,254 @@ struct AddGameView: View {
         case 6: return "PC"
         default: return "Plattform"
         }
+    }
+
+    // MARK: - IMDb-stil Segmenterad Top Bar (Recent / Advanced Search)
+    private var topSearchSegmentedBar: some View {
+        HStack(spacing: 0) {
+            Picker("Sökläge", selection: $searchScopeIndex) {
+                Text(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Senaste" : "Resultat").tag(0)
+                HStack(spacing: 4) {
+                    Text("Avancerat filter")
+                    if filterConfig.isActive {
+                        Text("(\(filterConfig.activeFilterCount))")
+                            .bold()
+                    }
+                }
+                .tag(1)
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: searchScopeIndex) { _, newIndex in
+                if newIndex == 1 {
+                    showingFilterSheet = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        searchScopeIndex = 0
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
+        .background(Color.ds.background)
+    }
+
+    // MARK: - Senaste sökningar i sökläge (IMDb-stil)
+    private var recentSearchesListView: some View {
+        List {
+            if !recentSearches.isEmpty {
+                Section {
+                    ForEach(recentSearches, id: \.self) { term in
+                        HStack(spacing: 12) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.system(size: 15))
+                                .foregroundStyle(.secondary)
+
+                            Text(term)
+                                .font(.body)
+                                .foregroundStyle(.primary)
+
+                            Spacer()
+
+                            Button {
+                                withAnimation {
+                                    removeSearchTerm(term)
+                                }
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 28, height: 28)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            searchText = term
+                            saveSearchTerm(term)
+                            isSearchFocused = false
+                            performSearch()
+                        }
+                    }
+                } header: {
+                    HStack {
+                        Text("Senaste sökningar")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Rensa alla") {
+                            withAnimation {
+                                recentSearchesRaw = ""
+                            }
+                        }
+                        .font(.caption.bold())
+                        .foregroundStyle(.red)
+                    }
+                }
+            }
+
+            // Smarta förslag direkt under när man fokuserar sökfältet
+            Section {
+                ForEach(smartSuggestions.prefix(5)) { suggestion in
+                    Button {
+                        filterConfig = suggestion.config
+                        isSearchFocused = false
+                        Task { await performSearchAsync() }
+                    } label: {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(suggestion.accentColor.opacity(0.15))
+                                    .frame(width: 32, height: 32)
+                                Image(systemName: suggestion.iconName)
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(suggestion.accentColor)
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(suggestion.title)
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.primary)
+                                Text(suggestion.subtitle)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "arrow.up.left")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary.opacity(0.6))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            } header: {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(.yellow)
+                    Text("Smarta sökförslag")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .scrollDismissesKeyboard(.interactively)
+    }
+
+    // MARK: - IMDb-inspirerad flytande sökbar i botten
+    private var bottomSearchBar: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                // Sökkapsel
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(isSearchFocused ? Color.red : Color.secondary)
+
+                    TextField("Sök spel, genrer, utvecklare...", text: $searchText)
+                        .font(.system(size: 15))
+                        .foregroundStyle(.primary)
+                        .tint(.red)
+                        .focused($isSearchFocused)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .submitLabel(.search)
+                        .onSubmit {
+                            let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !trimmed.isEmpty {
+                                saveSearchTerm(trimmed)
+                            }
+                            performSearch()
+                            isSearchFocused = false
+                        }
+
+                    if isLoading {
+                        ProgressView()
+                            .tint(.red)
+                            .controlSize(.small)
+                    } else if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                            searchResults = []
+                            hasMoreResults = false
+                            currentOffset = 0
+                            errorMessage = nil
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 16))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .frame(height: 50)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(isSearchFocused ? Color.red.opacity(0.4) : Color.white.opacity(0.12), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.25), radius: 8, x: 0, y: 3)
+                .contentShape(Capsule())
+                .onTapGesture {
+                    isSearchFocused = true
+                }
+
+                // Cirkulär Avbryt/Stäng-knapp (X) när söket är fokuserat (som i IMDb-appen)
+                if isSearchFocused {
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            isSearchFocused = false
+                            if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                searchResults = []
+                            }
+                        }
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 50, height: 50)
+                            .background(Color(.secondarySystemBackground))
+                            .clipShape(Circle())
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                            )
+                            .shadow(color: .black.opacity(0.25), radius: 6, x: 0, y: 2)
+                    }
+                    .buttonStyle(.plain)
+                    .transition(
+                        .asymmetric(
+                            insertion: .scale(scale: 0.7).combined(with: .opacity),
+                            removal: .scale(scale: 0.7).combined(with: .opacity)
+                        )
+                    )
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, isSearchFocused ? 10 : 8)
+        }
+        .background(
+            LinearGradient(
+                colors: [
+                    Color.ds.background.opacity(0.0),
+                    Color.ds.background.opacity(0.85),
+                    Color.ds.background
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea(edges: .bottom)
+        )
+        .animation(.spring(response: 0.32, dampingFraction: 0.82), value: isSearchFocused)
     }
 
     // MARK: - Error view
@@ -691,6 +943,7 @@ struct AddGameView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .scrollDismissesKeyboard(.interactively)
     }
 
     // MARK: - Utforska-vy (När man inte söker)
@@ -966,6 +1219,7 @@ struct AddGameView: View {
             .frame(maxWidth: 900)
             .frame(maxWidth: .infinity, alignment: .center)
         }
+        .scrollDismissesKeyboard(.interactively)
     }
 
     // MARK: - Snabb-lägg till i biblioteket

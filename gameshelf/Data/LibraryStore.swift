@@ -92,6 +92,27 @@ final class LibraryStore: ObservableObject {
                 try? saveGames()
                 UserDefaults.standard.set(true, forKey: statusCleanupKey)
             }
+
+            // Engångsmigrering för att rätta till tidigare halverade IGDB-betyg (0-5 -> 0-10)
+            let ratingCleanupKey = "has_migrated_legacy_half_igdb_ratings_v1"
+            if !UserDefaults.standard.bool(forKey: ratingCleanupKey) {
+                var modified = false
+                self.games = self.games.map { g in
+                    var copy = g
+                    if let ir = copy.igdbRating, ir > 0 {
+                        let normalized = Game.normalizeIgdbRating(ir)
+                        if normalized != ir {
+                            copy.igdbRating = normalized
+                            modified = true
+                        }
+                    }
+                    return copy
+                }
+                if modified {
+                    try? saveGames()
+                }
+                UserDefaults.standard.set(true, forKey: ratingCleanupKey)
+            }
         } catch {
             self.games = []
             self.collections = []

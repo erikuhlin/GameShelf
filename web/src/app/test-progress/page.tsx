@@ -549,7 +549,15 @@ Rules:
     return idx === -1 ? todos.length : idx;
   }, [todos]);
 
-  // Grupperade delmål per Akt / Zon / Tråd
+  // Hjälpfunktion för att plocka ut den överordnade Huvudakten (t.ex. "Akt 2 (Panam)" -> "Akt 2")
+  const getMajorAct = (chapterGroup?: string): string => {
+    if (!chapterGroup) return 'Huvudstory';
+    const match = chapterGroup.match(/^(Akt\s*\d+|Prolog|Epilog|Final|Byn|Slottet|Ön|Sommar|Höst|Vinter|Vår)/i);
+    if (match) return match[1].trim();
+    return chapterGroup.split('(')[0].trim() || 'Huvudstory';
+  };
+
+  // Grupperade delmål per Akt / Zon / Tråd (undergrupper)
   const groups = useMemo(() => {
     const map = new Map<string, ActiveTodo[]>();
     todos.forEach((todo) => {
@@ -561,28 +569,57 @@ Rules:
       const done = items.filter((i) => i.isDone).length;
       const total = items.length;
       const isCompleted = done === total && total > 0;
-      return { name, items, done, total, isCompleted };
+      const majorAct = getMajorAct(name);
+      return { name, items, done, total, isCompleted, majorAct };
     });
   }, [todos]);
 
-  // Index för den aktiva fasen (första gruppen med oklara uppdrag)
-  const activeGroupIndex = useMemo(() => {
-    const idx = groups.findIndex((g) => !g.isCompleted);
-    return idx === -1 ? groups.length : idx;
-  }, [groups]);
+  // Lista över alla unika Huvudakter i ordning (t.ex. ['Prolog', 'Akt 1', 'Akt 2', 'Akt 3', 'Final'])
+  const majorActs = useMemo(() => {
+    const list: { name: string; isCompleted: boolean; done: number; total: number }[] = [];
+    todos.forEach((todo) => {
+      const actName = getMajorAct(todo.chapterGroup);
+      let entry = list.find((a) => a.name.toLowerCase() === actName.toLowerCase());
+      if (!entry) {
+        entry = { name: actName, isCompleted: false, done: 0, total: 0 };
+        list.push(entry);
+      }
+      entry.total++;
+      if (todo.isDone) entry.done++;
+    });
+    list.forEach((a) => {
+      a.isCompleted = a.done === a.total && a.total > 0;
+    });
+    return list;
+  }, [todos]);
 
-  // Smart Spoilerskydd per Fas (RPG-anpassat):
-  // Alla quests i nuvarande akt/fas (samt avklarade akter) är synliga så du kan välja fritt bland dem.
-  // Endast framtida akter döljs bakom spoilerskydd!
+  // Index för den aktiva HUVUDAKTEN (den första huvudakten med oklara uppdrag)
+  const activeMajorActIndex = useMemo(() => {
+    const idx = majorActs.findIndex((a) => !a.isCompleted);
+    return idx === -1 ? majorActs.length : idx;
+  }, [majorActs]);
+
+  const activeMajorActName = useMemo(() => {
+    return activeMajorActIndex < majorActs.length ? majorActs[activeMajorActIndex]?.name : null;
+  }, [majorActs, activeMajorActIndex]);
+
+  // Smart Spoilerskydd per Huvudakt (precis som användaren föreslog):
+  // Om du har klarat Akt 1 visas ALLA uppdrag i hela Akt 2 (både Evelyn, Panam, Takemura och Voodoo Boys)!
+  // Först Akt 3 och Finalen hålls dolda bakom spoilerskydd tills du är klar med hela Akt 2.
   const isItemHiddenBySpoiler = (item: ActiveTodo, indexInFlatList: number) => {
     if (!spoilerProtection) return false;
     if (item.isDone) return false;
     if (revealedIds.has(item.id)) return false;
 
-    const groupIdx = groups.findIndex((g) => g.name === (item.chapterGroup || 'Huvudstory'));
-    if (groupIdx !== -1 && activeGroupIndex !== -1) {
-      if (groupIdx <= activeGroupIndex) return false; // Nuvarande eller tidigare akt: Synlig!
-      return true; // Framtida akt: Dold av spoilerskydd!
+    if (majorActs.length > 0 && activeMajorActIndex !== -1) {
+      const itemMajorAct = getMajorAct(item.chapterGroup);
+      const actIdx = majorActs.findIndex((a) => a.name.toLowerCase() === itemMajorAct.toLowerCase());
+      if (actIdx !== -1) {
+        // Om uppdraget tillhör nuvarande huvudakt eller en tidigare huvudakt: SYNLIGT!
+        if (actIdx <= activeMajorActIndex) return false;
+        // Om uppdraget tillhör en framtida huvudakt: DOLD AV SPOILERSKYDD!
+        return true;
+      }
     }
 
     return indexInFlatList > currentChapterIndex;
@@ -1181,11 +1218,11 @@ Rules:
                     </div>
                   </div>
 
-                  {/* Förklaringsruta om parallella RPG-uppdrag */}
-                  <div className="flex items-center gap-2 p-2.5 rounded-xl bg-gray-950/80 border border-blue-500/20 text-xs text-blue-300">
-                    <Sparkles className="w-4 h-4 text-blue-400 shrink-0" />
+                  {/* Förklaringsruta om spoilerskydd per akt */}
+                  <div className="flex items-center gap-2.5 p-3 rounded-xl bg-gray-950/80 border border-blue-500/20 text-xs text-blue-300">
+                    <Shield className="w-4 h-4 text-blue-400 shrink-0" />
                     <span>
-                      <strong>Parallella RPG-uppdrag:</strong> Du kan bocka av uppdragen i vilken ordning du vill! Spoilerskyddet håller hela den aktiva fasen öppen så du ser dina valmöjligheter, medan framtida akter hålls skyddade.
+                      <strong>Spoilerskydd per Akt:</strong> Alla uppdrag i <strong>{activeMajorActName || 'nuvarande akt'}</strong> visas samtidigt så att du kan spela dem i valfri ordning (t.ex. Panam, Judy eller Takemura). Framtida akter hålls dolda tills hela denna akt är klar!
                     </span>
                   </div>
 
@@ -1266,9 +1303,9 @@ Rules:
                     <div className="space-y-3 mt-4">
                       {groups
                         .filter((g) => selectedGroupFilter === 'all' || selectedGroupFilter === g.name)
-                        .map((group, groupIdx) => {
+                        .map((group) => {
                           const isCollapsed = collapsedGroups.has(group.name);
-                          const isCurrentPhase = groupIdx === activeGroupIndex;
+                          const isCurrentPhase = group.majorAct.toLowerCase() === (activeMajorActName || '').toLowerCase() && !group.isCompleted;
 
                           return (
                             <div
@@ -1440,11 +1477,15 @@ Rules:
                                                 </span>
                                               )}
 
-                                              {flatIndex === currentChapterIndex && !item.isDone && (
+                                              {flatIndex === currentChapterIndex && !item.isDone ? (
                                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-semibold uppercase">
-                                                  Aktuellt mål
+                                                  Nästa i listan
                                                 </span>
-                                              )}
+                                              ) : !item.isDone && group.majorAct.toLowerCase() === (activeMajorActName || "").toLowerCase() ? (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 font-medium border border-blue-500/20">
+                                                  Öppen
+                                                </span>
+                                              ) : null}
 
                                               {/* Knapp för frivillig / obligatorisk */}
                                               <button
@@ -1552,7 +1593,7 @@ Rules:
                               {isHiddenBySpoiler ? (
                                 <div className="flex items-center gap-2 text-xs text-gray-500 italic">
                                   <Shield className="w-3.5 h-3.5 text-amber-500/70" />
-                                  <span>Delmål {flatIndex + 1} (Titel dold av spoilerskydd)</span>
+                                  <span>Delmål {flatIndex + 1} (Dold av spoilerskydd - Framtida akt)</span>
                                   <button
                                     onClick={() => toggleReveal(item.id)}
                                     className="text-[11px] not-italic text-amber-400 hover:underline flex items-center gap-1 ml-1"
@@ -1617,11 +1658,15 @@ Rules:
                                     </>
                                   )}
 
-                                  {flatIndex === currentChapterIndex && !item.isDone && (
+                                  {flatIndex === currentChapterIndex && !item.isDone ? (
                                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-semibold uppercase">
-                                      Aktuellt mål
+                                      Nästa i listan
                                     </span>
-                                  )}
+                                  ) : !item.isDone && getMajorAct(item.chapterGroup).toLowerCase() === (activeMajorActName || "").toLowerCase() ? (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 font-medium border border-blue-500/20">
+                                      Öppen
+                                    </span>
+                                  ) : null}
 
                                   {/* Knapp för frivillig / obligatorisk */}
                                   <button

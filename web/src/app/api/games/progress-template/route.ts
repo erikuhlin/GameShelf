@@ -576,6 +576,258 @@ function findCuratedTemplate(gameTitle: string): GameProgressTemplate | null {
   return null;
 }
 
+export interface IgnWalkthroughLookup {
+  found: boolean;
+  ignUrl: string;
+  gameSlug?: string;
+  extractedText: string;
+}
+
+function generateIgnSlugs(gameTitle: string): string[] {
+  const base = gameTitle
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\(remake\)|\bremake\b/gi, '')
+    .replace(/['’]/g, '')
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  const slugs = new Set<string>();
+  if (base) slugs.add(base);
+
+  const withRemake = gameTitle
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/['’]/g, '')
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (withRemake) slugs.add(withRemake);
+
+  const romanMap: Array<[RegExp, string]> = [
+    [/\bii\b/g, '2'],
+    [/\b2\b/g, 'ii'],
+    [/\biii\b/g, '3'],
+    [/\b3\b/g, 'iii'],
+    [/\biv\b/g, '4'],
+    [/\b4\b/g, 'iv'],
+    [/\bvii\b/g, '7'],
+    [/\b7\b/g, 'vii'],
+    [/\bviii\b/g, '8'],
+    [/\b8\b/g, 'viii'],
+  ];
+
+  for (const [regex, repl] of romanMap) {
+    if (regex.test(base)) {
+      slugs.add(base.replace(regex, repl));
+    }
+  }
+
+  return Array.from(slugs);
+}
+
+function extractIgnWalkthroughText(html: string, url: string): string {
+  const sections: string[] = [];
+  sections.push(`IGN Walkthrough Source URL: ${url}`);
+
+  // 1. Försök extrahera strukturerad wiki-navigering ur __NEXT_DATA__
+  const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+  if (nextDataMatch) {
+    try {
+      const nextData = JSON.parse(nextDataMatch[1]);
+      const navLines: string[] = [];
+
+      const walkNav = (node: any, depth = 0) => {
+        if (!node || depth > 8) return;
+        if (Array.isArray(node)) {
+          for (const item of node) walkNav(item, depth);
+          return;
+        }
+        if (typeof node === 'object') {
+          const label = node.label || node.title || node.name || node.text;
+          const linkUrl = node.url || node.slug || node.href;
+          const children = node.children || node.items || node.pages || node.subItems || node.navigation;
+
+          if (typeof label === 'string' && label.trim().length > 0 && label.length < 120) {
+            const indent = '  '.repeat(Math.max(0, depth - 1));
+            navLines.push(`${indent}- ${label.trim()}${typeof linkUrl === 'string' ? ` (${linkUrl})` : ''}`);
+          }
+
+          if (children) {
+            walkNav(children, depth + 1);
+          } else {
+            for (const key of Object.keys(node)) {
+              if (['navigation', 'wikiNavigation', 'toc', 'sections', 'page', 'wiki', 'pageProps', 'props'].includes(key)) {
+                walkNav(node[key], depth);
+              }
+            }
+          }
+        }
+      };
+
+      walkNav(nextData.props?.pageProps);
+      if (navLines.length > 0) {
+        sections.push('--- IGN WIKI NAVIGATION / TABLE OF CONTENTS ---');
+        sections.push(navLines.slice(0, 400).join('\n'));
+      }
+    } catch {}
+  }
+
+  // 2. Rensa bort <head>, <style>, <script>, <svg> från HTML för att få ren brödtext och alla wiki-länkar
+  const bodyOnly = html
+    .replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, ' ')
+    .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ');
+
+  // 3. Plocka ut alla interna /wikis/ länkar i ordning
+  const linkRegex = /<a\b[^>]*href=["']((?:https?:\/\/www\.ign\.com)?\/wikis\/[^"'#?]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  const wikiLinks: string[] = [];
+  const seenLinks = new Set<string>();
+  let match: RegExpExecArray | null;
+  while ((match = linkRegex.exec(bodyOnly)) !== null) {
+    const href = match[1].trim();
+    const text = match[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (text && text.length >= 2 && text.length <= 100) {
+      const key = `${href}|${text.toLowerCase()}`;
+      if (!seenLinks.has(key)) {
+        seenLinks.add(key);
+        wikiLinks.push(`- ${text} [${href}]`);
+      }
+    }
+  }
+
+  if (wikiLinks.length > 0) {
+    sections.push('--- IGN WALKTHROUGH LINKS IN ORDER ---');
+    sections.push(wikiLinks.slice(0, 350).join('\n'));
+  }
+
+  // 4. Plocka ut rubriker och listpunkter från själva artikeln
+  const cleanedText = bodyOnly
+    .replace(/<h([1-4])[^>]*>([\s\S]*?)<\/h\1>/gi, '\n### $2\n')
+    .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '\n- $1\n')
+    .replace(/<tr[^>]*>([\s\S]*?)<\/tr>/gi, '\n$1\n')
+    .replace(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi, ' | $1 ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n\s*\n/g, '\n')
+    .trim();
+
+  if (cleanedText.length > 100) {
+    sections.push('--- IGN WALKTHROUGH PAGE CONTENT ---');
+    sections.push(cleanedText.substring(0, 25000));
+  }
+
+  return sections.join('\n\n');
+}
+
+async function fetchIgnWalkthroughForGame(
+  gameTitle: string,
+  customUrl?: string
+): Promise<IgnWalkthroughLookup> {
+  const headers = {
+    'User-Agent':
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+  };
+
+  const candidateUrls: string[] = [];
+  if (customUrl && customUrl.startsWith('http')) {
+    candidateUrls.push(customUrl);
+  } else {
+    const slugs = generateIgnSlugs(gameTitle);
+    for (const slug of slugs) {
+      candidateUrls.push(`https://www.ign.com/wikis/${slug}/Walkthrough`);
+    }
+    for (const slug of slugs.slice(0, 2)) {
+      candidateUrls.push(`https://www.ign.com/wikis/${slug}`);
+    }
+  }
+
+  // 1. Prova direkta IGN-länkar
+  for (const url of candidateUrls) {
+    try {
+      const res = await fetch(url, {
+        headers,
+        signal: AbortSignal.timeout(4500),
+        redirect: 'follow',
+      });
+      if (res.ok) {
+        const html = await res.text();
+        if (html.length > 1000 && !html.includes('404 - Page Not Found')) {
+          const extracted = extractIgnWalkthroughText(html, res.url || url);
+          if (extracted.length > 200) {
+            return {
+              found: true,
+              ignUrl: res.url || url,
+              extractedText: extracted,
+            };
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // 2. Om direkt-slug inte träffade, sök efter rätt IGN-wiki via DuckDuckGo HTML
+  try {
+    const query = `site:ign.com/wikis ${gameTitle} Walkthrough`;
+    const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const searchRes = await fetch(ddgUrl, {
+      headers,
+      signal: AbortSignal.timeout(4000),
+    });
+    if (searchRes.ok) {
+      const searchHtml = await searchRes.text();
+      const ignMatch = searchHtml.match(/https?:\/\/www\.ign\.com\/wikis\/([a-z0-9-_]+)(?:\/[^"&\s<>]*)?/i);
+      if (ignMatch) {
+        const discoveredSlug = ignMatch[1];
+        const discoveredWalkthroughUrl = `https://www.ign.com/wikis/${discoveredSlug}/Walkthrough`;
+        const discoveredFullUrl = ignMatch[0];
+        const urlsToTry = Array.from(new Set([discoveredWalkthroughUrl, discoveredFullUrl]));
+
+        for (const u of urlsToTry) {
+          try {
+            const pageRes = await fetch(u, {
+              headers,
+              signal: AbortSignal.timeout(4500),
+              redirect: 'follow',
+            });
+            if (pageRes.ok) {
+              const html = await pageRes.text();
+              const extracted = extractIgnWalkthroughText(html, pageRes.url || u);
+              if (extracted.length > 200) {
+                return {
+                  found: true,
+                  ignUrl: pageRes.url || u,
+                  gameSlug: discoveredSlug,
+                  extractedText: extracted,
+                };
+              }
+            }
+          } catch {}
+        }
+      }
+    }
+  } catch {}
+
+  const fallbackSlug = generateIgnSlugs(gameTitle)[0] || 'game';
+  return {
+    found: false,
+    ignUrl: customUrl || `https://www.ign.com/wikis/${fallbackSlug}/Walkthrough`,
+    extractedText: '',
+  };
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -584,12 +836,27 @@ export async function POST(req: NextRequest) {
     const geminiKey: string = (body.geminiApiKey || process.env.GEMINI_API_KEY || '').trim();
     const granularity: Granularity = body.granularity || 'standard';
     const forceAI: boolean = Boolean(body.forceAI) || Boolean(guideUrl);
+    const fetchIgnOnly: boolean = Boolean(body.fetchIgnOnly);
 
     if (!gameTitle && !guideUrl) {
       return NextResponse.json({ error: 'gameTitle eller guideUrl krävs' }, { status: 400 });
     }
 
-    // 0. Om en specifik guide-URL angetts (Alternativ 2: Scraping + AI)
+    // 1. Kolla kurerade mallar först (om inte forceAI är aktiverat)
+    if (!forceAI && !guideUrl) {
+      const curated = findCuratedTemplate(gameTitle);
+      if (curated) {
+        return NextResponse.json(curated);
+      }
+    }
+
+    // 2. Om klienten ber servern hämta IGN Walkthrough-underlaget i bakgrunden:
+    if (fetchIgnOnly) {
+      const ignLookup = await fetchIgnWalkthroughForGame(gameTitle, guideUrl || undefined);
+      return NextResponse.json({ ignLookup });
+    }
+
+    // 3. Om en specifik guide-URL angetts (och vi har en server-nyckel)
     if (guideUrl) {
       if (!geminiKey) {
         return NextResponse.json(
@@ -611,14 +878,6 @@ export async function POST(req: NextRequest) {
           { error: `Kunde inte hämta eller tolka guiden: ${err.message || 'Okänt fel'}` },
           { status: 500 }
         );
-      }
-    }
-
-    // 1. Kolla kurerade mallar (om inte forceAI är aktiverat)
-    if (!forceAI) {
-      const curated = findCuratedTemplate(gameTitle);
-      if (curated) {
-        return NextResponse.json(curated);
       }
     }
 
@@ -658,19 +917,45 @@ async function fetchWithGemini(
   granularity: Granularity
 ): Promise<GameProgressTemplate> {
   const cleanKey = apiKey.trim();
-  const targetCount =
-    granularity === 'compact'
-      ? 'ca 8 till 12'
-      : granularity === 'detailed'
-      ? 'ca 20 till 30'
-      : 'ca 14 till 22';
+  const ignLookup = await fetchIgnWalkthroughForGame(gameTitle);
 
-  const prompt = `Task: Provide the official main story chapter and quest progression list for the game "${gameTitle}" based on IGN walkthroughs and guides.
-Desired granularity: ${granularity} (target ${targetCount} items).
+  const prompt = ignLookup.found
+    ? `You are a game walkthrough parser.
+Extract the COMPLETE 1:1 main story walkthrough list (chapters / main quests / main sections) for "${gameTitle}" strictly from the IGN Walkthrough data provided below.
+
+IGN Source URL: ${ignLookup.ignUrl}
+
+STRICT RULES:
+1. 1:1 EXTRACTION (NO LUMPING): Every individual chapter, main quest, or walkthrough step in IGN's Walkthrough section must be its own separate item. NEVER combine two chapters or quests into one line!
+2. ONLY WALKTHROUGH STEPS: Exclude non-walkthrough wiki sections like "Weapons", "Collectibles", "Cheats", "Trophies", "Side Quests", "Characters", "Tips and Tricks".
+3. OFFICIAL ENGLISH TITLES: Keep the exact English chapter/quest titles from IGN.
+4. ACT / REGION GROUPING: If IGN groups the walkthrough into Acts, Regions, or Characters (e.g. "Act 1", "The Village", "Saga Anderson"), set that as "chapterGroup" and the specific chapter/quest as "title".
+5. Output valid JSON matching this schema:
+{
+  "gameTitle": "${gameTitle}",
+  "hasLinearProgression": true,
+  "progressionType": "chapters" | "acts" | "main_quests" | "bosses" | "worlds" | "none",
+  "summary": "Kort svensk sammanfattning baserad på IGN:s walkthrough",
+  "items": [
+    {
+      "id": "1",
+      "title": "Exact English Chapter / Quest Title from IGN",
+      "order": 1,
+      "chapterGroup": "Act or Area",
+      "description": "Kort info",
+      "isOptional": false
+    }
+  ]
+}
+
+--- IGN WALKTHROUGH DATA ---
+${ignLookup.extractedText}
+--- END IGN WALKTHROUGH DATA ---`
+    : `Task: Provide the complete 1:1 official main story walkthrough chapter/quest list for the game "${gameTitle}" exactly as structured on IGN's Wiki Walkthrough (${ignLookup.ignUrl}).
 
 Rules:
-1. Chronological main story order. Exclude minor side quests.
-2. Keep official ENGLISH titles for all items (e.g. "R.P.D. - Central Hall", "The Sewers", "NEST Laboratory"). Do not translate quest titles to Swedish!
+1. 1:1 chronological main story order (every single chapter or main quest as its own item, NEVER combine two chapters/quests on one row). Exclude side quests and collectibles.
+2. Keep official ENGLISH titles for all items. Do not translate quest titles to Swedish!
 3. Output valid JSON matching this schema:
 {
   "gameTitle": "${gameTitle}",
@@ -815,7 +1100,14 @@ Rules:
         continue;
       }
 
-      return parseGeminiOutput(textContent, gameTitle, granularity, modelName);
+      const parsedOut = parseGeminiOutput(textContent, gameTitle, granularity, modelName);
+      if (ignLookup.found) {
+        parsedOut.source = 'scraped_guide';
+        parsedOut.sourceUrl = ignLookup.ignUrl;
+      } else {
+        parsedOut.sourceUrl = ignLookup.ignUrl;
+      }
+      return parsedOut;
     } catch (err: any) {
       attemptErrors.push(`${modelName}: ${err.message || 'Okänt fel'}`);
     }

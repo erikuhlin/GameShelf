@@ -273,30 +273,69 @@ Initiation 9: Gone`
     }
   };
 
-  // Anropa Google Gemini direkt från webbläsaren (eliminerar Vercels 10s serverless timeout helt)
+  const [loadingStatus, setLoadingStatus] = useState<string>('');
+
+  // Anropa Google Gemini direkt från webbläsaren med IGN Walkthrough som enda källa
   const generateDirectlyWithGemini = async (
     title: string,
     key: string,
-    gran: Granularity
+    gran: Granularity,
+    ignLookup?: { found: boolean; ignUrl: string; extractedText: string }
   ): Promise<LoadedTemplate> => {
     const cleanKey = key.trim();
-    const targetCount = gran === 'compact' ? 'ca 8 till 12' : gran === 'detailed' ? 'ca 20 till 30' : 'ca 14 till 22';
-    const prompt = `Task: Provide the official main story chapter and quest progression list for the video game "${title}" based on IGN walkthroughs and guides.
-Target granularity: ${gran} (approximately ${targetCount} story milestones).
+    const hasIgnText = Boolean(ignLookup?.found && ignLookup?.extractedText);
+    const ignSourceUrl = ignLookup?.ignUrl || `https://www.ign.com/wikis/${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/Walkthrough`;
 
-Rules:
-1. Chronological main story order. Exclude minor side quests.
-2. Keep official ENGLISH titles for all items (e.g. "R.P.D. - Central Hall", "The Sewers", "NEST Laboratory"). Do not translate quest titles to Swedish!
-3. Output valid JSON matching this schema:
+    const prompt = hasIgnText
+      ? `You are a strict IGN Walkthrough parser.
+Your ONLY task is to extract the chronological 1:1 main story walkthrough list (chapters / main quests / main sections) for the video game "${title}" from the IGN Walkthrough page provided below.
+
+IGN Walkthrough URL: ${ignSourceUrl}
+
+STRICT EXTRACTION RULES:
+1. 1:1 RULE (NEVER LUMP ITEMS): Every single chapter, main quest, or main story step in IGN's Walkthrough list must be its own separate item. NEVER combine two chapters or quests into one item (e.g. never write "Chapter 1 & 2" or "Quest A / Quest B").
+2. ONLY THE WALKTHROUGH LIST: Extract ONLY the main story walkthrough steps. Ignore non-walkthrough wiki pages such as "Weapons", "Armor", "Collectibles", "Side Quests", "Cheats", "Trophies", "Characters", "Tips and Tricks", "Bosses" (unless the walkthrough itself is structured by bosses).
+3. OFFICIAL ENGLISH TITLES: Keep the exact English chapter/quest titles from IGN's walkthrough. Do not translate quest/chapter titles to Swedish.
+4. ACT / REGION GROUPING: If IGN divides the walkthrough into Acts, Regions, or Characters (e.g., "Act 1", "Act 2", "The Village", "Saga Anderson"), set that as "chapterGroup" and the specific chapter/quest as "title".
+5. Output ONLY valid JSON matching this schema:
 {
   "gameTitle": "${title}",
   "hasLinearProgression": true,
   "progressionType": "chapters" | "acts" | "main_quests" | "bosses" | "worlds" | "none",
-  "summary": "Kort svensk sammanfattning av handlingen baserat på IGN:s guide",
+  "summary": "Kort svensk sammanfattning baserad på IGN:s walkthrough",
   "items": [
     {
       "id": "1",
-      "title": "Exact English Quest / Chapter Title",
+      "title": "Exact English Chapter / Quest Title from IGN",
+      "order": 1,
+      "chapterGroup": "Act or Area",
+      "description": "Kort info",
+      "isOptional": false
+    }
+  ]
+}
+
+--- IGN WALKTHROUGH DATA ---
+${ignLookup!.extractedText}
+--- END IGN WALKTHROUGH DATA ---`
+      : `Search IGN's official walkthrough guide (site:ign.com/wikis "${title}" Walkthrough) and extract the COMPLETE 1:1 main story walkthrough list for the video game "${title}".
+
+STRICT EXTRACTION RULES:
+1. SINGLE SOURCE (IGN WALKTHROUGH): Follow the exact structure of IGN's Wiki Walkthrough for "${title}".
+2. 1:1 RULE (NEVER LUMP ITEMS): Every single chapter, main quest, or walkthrough section on IGN must be its own separate item. NEVER combine multiple chapters or quests into one item.
+3. ONLY THE WALKTHROUGH LIST: Exclude side quests, collectibles, weapons, trophies, and general tips.
+4. OFFICIAL ENGLISH TITLES: Keep exact English titles from IGN.
+5. ACT / REGION GROUPING: Put the Act, Region, or Character arc in "chapterGroup" and the chapter/quest name in "title".
+6. Output ONLY valid JSON matching this schema:
+{
+  "gameTitle": "${title}",
+  "hasLinearProgression": true,
+  "progressionType": "chapters" | "acts" | "main_quests" | "bosses" | "worlds" | "none",
+  "summary": "Kort svensk sammanfattning baserad på IGN:s walkthrough",
+  "items": [
+    {
+      "id": "1",
+      "title": "Exact English Chapter / Quest Title from IGN",
       "order": 1,
       "chapterGroup": "Area or Act",
       "description": "Kort info",
@@ -306,7 +345,7 @@ Rules:
 }`;
 
     // 1. Fråga Google efter aktiva modeller för denna API-nyckel
-    let candidateModels = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-2.5-flash'];
+    let candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-3.8-flash'];
     try {
       const listRes = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(cleanKey)}`
@@ -340,18 +379,51 @@ Rules:
     for (const modelName of candidateModels) {
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.1,
-              responseMimeType: 'application/json',
-              maxOutputTokens: 2048,
-            },
-          }),
-        });
+        let response: Response;
+
+        // Om servern inte fick tag i IGN-sidan direkt, be Gemini söka på ign.com/wikis med Google Search
+        if (!hasIgnText) {
+          response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              tools: [{ google_search: {} }],
+              generationConfig: {
+                temperature: 0.0,
+                maxOutputTokens: 8192,
+              },
+            }),
+          });
+
+          if (!response.ok) {
+            response = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                  temperature: 0.0,
+                  responseMimeType: 'application/json',
+                  maxOutputTokens: 8192,
+                },
+              }),
+            });
+          }
+        } else {
+          response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: {
+                temperature: 0.0,
+                responseMimeType: 'application/json',
+                maxOutputTokens: 8192,
+              },
+            }),
+          });
+        }
 
         if (!response.ok) {
           const errJson = await response.json().catch(() => null);
@@ -359,12 +431,32 @@ Rules:
         }
 
         const data = await response.json();
-        const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const parts = data.candidates?.[0]?.content?.parts || [];
+        const textContent = parts.map((p: any) => p.text || '').join('\n').trim();
         if (!textContent) throw new Error(`Modell ${modelName} returnerade tomt svar.`);
+
+        // Kolla om Google Search Grounding returnerade en exakt ign.com/wikis-länk
+        let groundedIgnUrl = ignSourceUrl;
+        const chunks = data.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+        for (const chunk of chunks) {
+          const uri = chunk?.web?.uri;
+          if (typeof uri === 'string' && uri.includes('ign.com/wikis/')) {
+            groundedIgnUrl = uri;
+            break;
+          }
+        }
 
         let cleaned = textContent.trim();
         const codeBlock = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-        if (codeBlock) cleaned = codeBlock[1].trim();
+        if (codeBlock) {
+          cleaned = codeBlock[1].trim();
+        } else {
+          const firstBrace = cleaned.indexOf('{');
+          const lastBrace = cleaned.lastIndexOf('}');
+          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            cleaned = cleaned.substring(firstBrace, lastBrace + 1).trim();
+          }
+        }
 
         const parsed = JSON.parse(cleaned);
         const items = Array.isArray(parsed.items) ? parsed.items : [];
@@ -383,7 +475,8 @@ Rules:
             description: it.description,
             isOptional: Boolean(it.isOptional),
           })),
-          source: 'ai',
+          source: 'scraped_guide',
+          sourceUrl: groundedIgnUrl,
           modelUsed: modelName,
         };
       } catch (err: any) {
@@ -391,10 +484,10 @@ Rules:
       }
     }
 
-    throw lastError || new Error('Kunde inte generera progression med Gemini.');
+    throw lastError || new Error('Kunde inte generera progression från IGN med Gemini.');
   };
 
-  // Hämta mall för ett spel
+  // Hämta mall för ett spel (Verifierad mall -> annars IGN Walkthrough + AI)
   const loadGameTemplate = async (
     title: string,
     currentGranularity: Granularity = granularity,
@@ -402,50 +495,70 @@ Rules:
     customGuideUrl?: string
   ) => {
     setIsLoading(true);
+    setLoadingStatus(`Söker i verifierade mallar eller på IGN Walkthrough för "${title}"...`);
     setErrorMsg(null);
     setRevealedIds(new Set());
 
     const activeUrl = customGuideUrl !== undefined ? customGuideUrl : guideUrlInput;
 
     try {
-      // 1. Försök först med kurerade mallar från servern (svarar på ~20ms)
-      if (!shouldForceAI && !activeUrl.trim()) {
-        const res = await fetch('/api/games/progress-template', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            gameTitle: title,
-            granularity: currentGranularity,
-            forceAI: false,
-          }),
-        });
+      // 1. Fråga servern:
+      // - Om spelet finns som verifierad mall (och forceAI är false): returneras direkt på ~20ms.
+      // - Annars: går servern in på IGN:s Walkthrough-sida i bakgrunden och hämtar kapitellistan!
+      setLoadingStatus(`Steg 1/2: Går in på IGN:s Walkthrough-sida för "${title}"...`);
+      const res = await fetch('/api/games/progress-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gameTitle: title,
+          guideUrl: activeUrl.trim() || undefined,
+          granularity: currentGranularity,
+          forceAI: shouldForceAI,
+          fetchIgnOnly: true,
+        }),
+      });
 
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.items && data.items.length > 0) {
-            applyTemplate(data, title);
-            return;
-          }
+      let ignLookup: { found: boolean; ignUrl: string; extractedText: string } | undefined;
+
+      if (res.ok) {
+        const data = await res.json();
+        // Om det var en kurerad mall:
+        if (data && data.items && data.items.length > 0) {
+          applyTemplate(data, title);
+          return;
+        }
+        // Om servern returnerade IGN Walkthrough-data:
+        if (data && data.ignLookup) {
+          ignLookup = data.ignLookup;
         }
       }
 
-      // 2. Om AI ska användas och användaren har angett en API-nyckel:
-      // Anropa Google Gemini direkt från webbläsaren!
-      // Detta eliminerar Vercels serverless tidsgräns (10s) helt och hållet.
+      // 2. Använd Gemini AI för att omvandla IGN:s walkthrough-lista till steg i appen
       if (geminiApiKey.trim()) {
-        const aiTemplate = await generateDirectlyWithGemini(title, geminiApiKey.trim(), currentGranularity);
+        if (ignLookup?.found) {
+          setLoadingStatus(`Steg 2/2: Hämtade ${ignLookup.ignUrl} – extraherar kapitellistan med AI...`);
+        } else {
+          setLoadingStatus(`Steg 2/2: Söker upp IGN Walkthrough för "${title}" med Gemini AI...`);
+        }
+        const aiTemplate = await generateDirectlyWithGemini(
+          title,
+          geminiApiKey.trim(),
+          currentGranularity,
+          ignLookup
+        );
         applyTemplate(aiTemplate, title);
         return;
       }
 
       // 3. Om ingen mall finns och ingen API-nyckel angetts:
       setErrorMsg(
-        `Ingen förberedd mall hittades för "${title}". Ange din Gemini API-nyckel under knappen "Gemini AI-nyckel" för att generera kapitel i realtid, eller klistra in en lista direkt i textfliken.`
+        `Ingen förberedd mall hittades för "${title}". Ange din Gemini API-nyckel under knappen "Konfigurera Gemini AI-nyckel" så hämtar vi automatiskt kapitellistan från IGN:s Walkthrough (${ignLookup?.ignUrl || 'ign.com/wikis'})!`
       );
     } catch (err: any) {
       setErrorMsg(err.message || 'Kunde inte hämta progression.');
     } finally {
       setIsLoading(false);
+      setLoadingStatus('');
     }
   };
 
@@ -773,7 +886,7 @@ Rules:
                 }`}
               >
                 <Search className="w-3.5 h-3.5" />
-                <span>Sök / Gemini AI</span>
+                <span>Sök (IGN + AI)</span>
               </button>
             </div>
           </div>
@@ -907,12 +1020,12 @@ Rules:
             </div>
           )}
 
-          {/* FLIK 3: Sök & Gemini AI */}
+          {/* FLIK 3: Sök & Gemini AI (IGN Walkthrough) */}
           {activeStep1Tab === 'search' && (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs text-gray-400">
-                  Sök efter valfritt spel på IGN eller använd Google Gemini AI för att analysera spelet.
+                  Skriv in spelet så går vi automatiskt in på <strong>IGN:s Walkthrough-sida</strong>, hämtar endast kapitellistan (1:1) och gör om den till steg i appen.
                 </span>
                 <button
                   onClick={() => setShowApiKeyInput(!showApiKeyInput)}
@@ -927,10 +1040,10 @@ Rules:
                 <div className="bg-gray-950/80 border border-amber-500/30 rounded-xl p-4 text-xs space-y-2">
                   <div className="flex items-center gap-2 text-amber-300 font-medium">
                     <Key className="w-4 h-4" />
-                    Google Gemini API-inställning (Körs direkt i webbläsaren)
+                    Google Gemini API-inställning (IGN Walkthrough + AI)
                   </div>
                   <p className="text-gray-400">
-                    Genom att anropa Gemini direkt från webbläsaren elimineras Vercels 10s serverless timeout helt.
+                    Servern hämtar först IGN:s Walkthrough-sida i bakgrunden (~1s) och låter sedan Gemini i webbläsaren omvandla listan till 1:1-steg utan spoilers.
                   </p>
                   <input
                     type="password"
@@ -946,7 +1059,7 @@ Rules:
                       onChange={(e) => setForceAI(e.target.checked)}
                       className="rounded border-gray-700 bg-gray-900 text-red-600 focus:ring-0"
                     />
-                    <span>Tvinga AI-generering (hoppa över förberedda mallar)</span>
+                    <span>Tvinga IGN + AI-hämtning (även för redan verifierade mallar)</span>
                   </label>
                 </div>
               )}
@@ -966,7 +1079,7 @@ Rules:
                   <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    placeholder="Skriv in valfritt spel (t.ex. Halo, Dead Space, Zelda...)"
+                    placeholder="Skriv in valfritt spel (t.ex. Dark Souls, Alan Wake 2, Dead Space, God of War Ragnarök...)"
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
                     className="w-full bg-gray-950 border border-gray-800 rounded-xl pl-9 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
@@ -977,17 +1090,25 @@ Rules:
                   disabled={isLoading || !searchInput.trim()}
                   className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-1.5 shadow-md shadow-purple-500/10"
                 >
-                  {isLoading ? 'Söker...' : 'Hämta'}
+                  {isLoading ? 'Hämtar från IGN...' : 'Hämta från IGN'}
                 </button>
               </form>
 
+              {/* Live status under IGN + AI hämtning */}
+              {isLoading && loadingStatus && (
+                <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/30 text-purple-200 text-xs flex items-center gap-2.5 animate-pulse">
+                  <Globe className="w-4 h-4 text-purple-400 shrink-0" />
+                  <span>{loadingStatus}</span>
+                </div>
+              )}
+
               {/* Guide URL */}
               <div className="pt-2 border-t border-gray-800">
-                <span className="text-xs text-gray-400 block mb-1.5">Eller ange en direkt guide-URL (från t.ex. PowerPyx eller IGN):</span>
+                <span className="text-xs text-gray-400 block mb-1.5">Eller klistra in en specifik IGN Walkthrough-länk direkt:</span>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="url"
-                    placeholder="https://www.powerpyx.com/... eller https://www.ign.com/wikis/..."
+                    placeholder="https://www.ign.com/wikis/dark-souls/Walkthrough"
                     value={guideUrlInput}
                     onChange={(e) => setGuideUrlInput(e.target.value)}
                     className="flex-1 bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 font-mono"
@@ -1002,7 +1123,7 @@ Rules:
                     disabled={isLoading || !guideUrlInput.trim()}
                     className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap"
                   >
-                    {isLoading ? 'Läser guide...' : 'Extrahera från URL'}
+                    {isLoading ? 'Läser IGN...' : 'Extrahera från URL'}
                   </button>
                 </div>
               </div>
@@ -1040,8 +1161,8 @@ Rules:
                     </span>
                   )}
                   {template.source === 'scraped_guide' && (
-                    <span className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1">
-                      <Globe className="w-3 h-3" /> Hämtad från källguide ({template.modelUsed || 'Gemini'})
+                    <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                      <Globe className="w-3 h-3 text-purple-400" /> IGN Walkthrough + AI ({template.modelUsed || 'Gemini'})
                     </span>
                   )}
                 </h2>

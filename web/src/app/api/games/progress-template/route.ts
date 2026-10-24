@@ -633,45 +633,100 @@ function extractIgnWalkthroughText(html: string, url: string): string {
   const sections: string[] = [];
   sections.push(`IGN Walkthrough Source URL: ${url}`);
 
-  // 1. Försök extrahera strukturerad wiki-navigering ur __NEXT_DATA__
+  // 1. Försök extrahera ALL strukturerad wiki-navigering och artikel-HTML ur __NEXT_DATA__
   const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
   if (nextDataMatch) {
     try {
-      const nextData = JSON.parse(nextDataMatch[1]);
+      const rawJson = nextDataMatch[1];
+      const nextData = JSON.parse(rawJson);
       const navLines: string[] = [];
+      const seenNav = new Set<string>();
+      const embeddedHtmlChunks: string[] = [];
 
-      const walkNav = (node: any, depth = 0) => {
-        if (!node || depth > 8) return;
+      const walkAll = (node: any, depth = 0) => {
+        if (!node || depth > 14) return;
         if (Array.isArray(node)) {
-          for (const item of node) walkNav(item, depth);
+          for (const item of node) walkAll(item, depth);
           return;
         }
         if (typeof node === 'object') {
-          const label = node.label || node.title || node.name || node.text;
-          const linkUrl = node.url || node.slug || node.href;
-          const children = node.children || node.items || node.pages || node.subItems || node.navigation;
+          const label =
+            node.label ||
+            node.title ||
+            node.name ||
+            node.displayTitle ||
+            node.pageTitle ||
+            node.navigationLabel;
+          const linkUrl = node.url || node.slug || node.href || node.path;
 
-          if (typeof label === 'string' && label.trim().length > 0 && label.length < 120) {
-            const indent = '  '.repeat(Math.max(0, depth - 1));
-            navLines.push(`${indent}- ${label.trim()}${typeof linkUrl === 'string' ? ` (${linkUrl})` : ''}`);
+          if (
+            typeof label === 'string' &&
+            label.trim().length >= 2 &&
+            label.length < 120 &&
+            (typeof linkUrl === 'string' ||
+              Array.isArray(node.children) ||
+              Array.isArray(node.items) ||
+              Array.isArray(node.pages) ||
+              Array.isArray(node.subItems) ||
+              String(node.__typename || '').toLowerCase().includes('wiki') ||
+              String(node.__typename || '').toLowerCase().includes('nav'))
+          ) {
+            const cleanLabel = label.trim();
+            const cleanUrl = typeof linkUrl === 'string' ? linkUrl.trim() : '';
+            const dedupKey = `${cleanLabel.toLowerCase()}|${cleanUrl}`;
+            if (!seenNav.has(dedupKey)) {
+              seenNav.add(dedupKey);
+              navLines.push(`- ${cleanLabel}${cleanUrl ? ` [${cleanUrl}]` : ''}`);
+            }
           }
 
-          if (children) {
-            walkNav(children, depth + 1);
-          } else {
-            for (const key of Object.keys(node)) {
-              if (['navigation', 'wikiNavigation', 'toc', 'sections', 'page', 'wiki', 'pageProps', 'props'].includes(key)) {
-                walkNav(node[key], depth);
-              }
+          // Fånga även upp inbäddad artikel-HTML i JSON-strukturen
+          for (const [k, v] of Object.entries(node)) {
+            if (
+              typeof v === 'string' &&
+              v.length > 150 &&
+              (k === 'html' || k === 'content' || k === 'body' || k === 'wikiHtml' || v.includes('<h2') || v.includes('<li') || v.includes('/wikis/'))
+            ) {
+              embeddedHtmlChunks.push(v);
+            } else if (typeof v === 'object' && v !== null) {
+              walkAll(v, depth + 1);
             }
           }
         }
       };
 
-      walkNav(nextData.props?.pageProps);
+      walkAll(nextData.props || nextData);
+
+      // Plocka även ut alla "/wikis/<slug>/<subpage>" direkt ur rå-JSON ifall Apollo-state lagrar dem som strängar
+      const rawWikiPaths = [...rawJson.matchAll(/\/wikis\/([a-z0-9-_]+)\/([A-Za-z0-9-_%'().]+)/g)];
+      for (const m of rawWikiPaths) {
+        const pageSlug = decodeURIComponent(m[2]).replace(/_/g, ' ').trim();
+        const fullPath = m[0];
+        const dedupKey = `${pageSlug.toLowerCase()}|${fullPath}`;
+        if (pageSlug.length >= 2 && !seenNav.has(dedupKey)) {
+          seenNav.add(dedupKey);
+          navLines.push(`- ${pageSlug} [${fullPath}]`);
+        }
+      }
+
       if (navLines.length > 0) {
         sections.push('--- IGN WIKI NAVIGATION / TABLE OF CONTENTS ---');
-        sections.push(navLines.slice(0, 400).join('\n'));
+        sections.push(navLines.slice(0, 500).join('\n'));
+      }
+
+      if (embeddedHtmlChunks.length > 0) {
+        const combinedEmbedded = embeddedHtmlChunks
+          .join('\n')
+          .replace(/<h([1-4])[^>]*>([\s\S]*?)<\/h\1>/gi, '\n### $2\n')
+          .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '\n- $1\n')
+          .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, ' $2 [$1] ')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s{2,}/g, ' ')
+          .trim();
+        if (combinedEmbedded.length > 50) {
+          sections.push('--- IGN EMBEDDED ARTICLE CONTENT ---');
+          sections.push(combinedEmbedded.substring(0, 20000));
+        }
       }
     } catch {}
   }
@@ -704,7 +759,7 @@ function extractIgnWalkthroughText(html: string, url: string): string {
 
   if (wikiLinks.length > 0) {
     sections.push('--- IGN WALKTHROUGH LINKS IN ORDER ---');
-    sections.push(wikiLinks.slice(0, 350).join('\n'));
+    sections.push(wikiLinks.slice(0, 400).join('\n'));
   }
 
   // 4. Plocka ut rubriker och listpunkter från själva artikeln

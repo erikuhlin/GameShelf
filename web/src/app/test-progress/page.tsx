@@ -251,6 +251,8 @@ Initiation 9: Gone`
   const applyTemplate = (data: LoadedTemplate, title: string) => {
     setTemplate(data);
     setSelectedGameName(data.gameTitle || title);
+    setSelectedGroupFilter('all');
+    setCollapsedGroups(new Set());
 
     const initialTodos: ActiveTodo[] = (data.items || []).map((item: TemplateItem, index: number) => ({
       id: item.id || `todo-${index}`,
@@ -275,7 +277,7 @@ Initiation 9: Gone`
 
   const [loadingStatus, setLoadingStatus] = useState<string>('');
 
-  // Anropa Google Gemini direkt från webbläsaren med IGN Walkthrough som enda källa
+  // Anropa Google Gemini direkt från webbläsaren med IGN Walkthrough som källa
   const generateDirectlyWithGemini = async (
     title: string,
     key: string,
@@ -286,17 +288,23 @@ Initiation 9: Gone`
     const hasIgnText = Boolean(ignLookup?.found && ignLookup?.extractedText);
     const ignSourceUrl = ignLookup?.ignUrl || `https://www.ign.com/wikis/${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}/Walkthrough`;
 
-    const prompt = hasIgnText
-      ? `You are a strict IGN Walkthrough parser.
-Your ONLY task is to extract the chronological 1:1 main story walkthrough list (chapters / main quests / main sections) for the video game "${title}" from the IGN Walkthrough page provided below.
+    const buildPrompt = (includeScrapedText: boolean) =>
+      includeScrapedText && hasIgnText
+        ? `You are building the complete 1:1 progression checklist for the video game "${title}" based on IGN's official Walkthrough (${ignSourceUrl}).
 
-IGN Walkthrough URL: ${ignSourceUrl}
+Below is the extracted data from IGN's Walkthrough page.
 
 STRICT EXTRACTION RULES:
-1. 1:1 RULE (NEVER LUMP ITEMS): Every single chapter, main quest, or main story step in IGN's Walkthrough list must be its own separate item. NEVER combine two chapters or quests into one item (e.g. never write "Chapter 1 & 2" or "Quest A / Quest B").
-2. ONLY THE WALKTHROUGH LIST: Extract ONLY the main story walkthrough steps. Ignore non-walkthrough wiki pages such as "Weapons", "Armor", "Collectibles", "Side Quests", "Cheats", "Trophies", "Characters", "Tips and Tricks", "Bosses" (unless the walkthrough itself is structured by bosses).
-3. OFFICIAL ENGLISH TITLES: Keep the exact English chapter/quest titles from IGN's walkthrough. Do not translate quest/chapter titles to Swedish.
-4. ACT / REGION GROUPING: If IGN divides the walkthrough into Acts, Regions, or Characters (e.g., "Act 1", "Act 2", "The Village", "Saga Anderson"), set that as "chapterGroup" and the specific chapter/quest as "title".
+1. COMPLETE 1:1 WALKTHROUGH LIST (NEVER EMPTY):
+   - Extract every single chapter, main quest, or walkthrough area in chronological order (1:1).
+   - NEVER combine two chapters, areas, or quests into one item.
+   - CRITICAL: If the extracted IGN page snippet below only contains the overview/intro text (because IGN's sidebar menu was collapsed), you MUST still output the COMPLETE 1:1 list of all chapters / main quests / areas from IGN's "${title}" Walkthrough from start to finish (e.g., for Dark Souls: every walkthrough area from Northern Undead Asylum to Kiln of the First Flame). The "items" array MUST NOT be empty!
+2. ONLY WALKTHROUGH STEPS:
+   - Exclude non-walkthrough wiki sections such as "Weapons", "Armor", "Collectibles", "Side Quests", "Cheats", "Trophies", "Characters", "Tips and Tricks".
+3. OFFICIAL ENGLISH TITLES:
+   - Keep the exact English chapter/quest/area titles from IGN's walkthrough. Do not translate them to Swedish.
+4. ACT / REGION GROUPING:
+   - Put the overarching Act, Phase, or Region in "chapterGroup" (e.g. "Act 1", "Act 2", "Early Game", "Lordvessel Areas") and the specific chapter/quest/area in "title".
 5. Output ONLY valid JSON matching this schema:
 {
   "gameTitle": "${title}",
@@ -306,9 +314,9 @@ STRICT EXTRACTION RULES:
   "items": [
     {
       "id": "1",
-      "title": "Exact English Chapter / Quest Title from IGN",
+      "title": "Exact English Chapter / Quest / Area Title from IGN",
       "order": 1,
-      "chapterGroup": "Act or Area",
+      "chapterGroup": "Act or Phase",
       "description": "Kort info",
       "isOptional": false
     }
@@ -318,15 +326,14 @@ STRICT EXTRACTION RULES:
 --- IGN WALKTHROUGH DATA ---
 ${ignLookup!.extractedText}
 --- END IGN WALKTHROUGH DATA ---`
-      : `Search IGN's official walkthrough guide (site:ign.com/wikis "${title}" Walkthrough) and extract the COMPLETE 1:1 main story walkthrough list for the video game "${title}".
+        : `Provide the COMPLETE 1:1 main story walkthrough list (all chapters / main quests / walkthrough areas in chronological order) for the video game "${title}" following IGN's official Wiki Walkthrough (${ignSourceUrl}).
 
-STRICT EXTRACTION RULES:
-1. SINGLE SOURCE (IGN WALKTHROUGH): Follow the exact structure of IGN's Wiki Walkthrough for "${title}".
-2. 1:1 RULE (NEVER LUMP ITEMS): Every single chapter, main quest, or walkthrough section on IGN must be its own separate item. NEVER combine multiple chapters or quests into one item.
-3. ONLY THE WALKTHROUGH LIST: Exclude side quests, collectibles, weapons, trophies, and general tips.
-4. OFFICIAL ENGLISH TITLES: Keep exact English titles from IGN.
-5. ACT / REGION GROUPING: Put the Act, Region, or Character arc in "chapterGroup" and the chapter/quest name in "title".
-6. Output ONLY valid JSON matching this schema:
+STRICT RULES:
+1. COMPLETE 1:1 LIST (NEVER EMPTY): Every single chapter, main quest, or walkthrough area on IGN's Walkthrough for "${title}" must be its own separate item in "items". NEVER combine multiple chapters or quests into one item, and NEVER return an empty "items" array for a story/progression game.
+2. ONLY WALKTHROUGH STEPS: Exclude side quests, collectibles, weapons, trophies, and general tips.
+3. OFFICIAL ENGLISH TITLES: Keep exact English titles from IGN.
+4. ACT / REGION GROUPING: Put the Act, Phase, or Character arc in "chapterGroup" and the specific chapter/quest/area name in "title".
+5. Output ONLY valid JSON matching this schema:
 {
   "gameTitle": "${title}",
   "hasLinearProgression": true,
@@ -335,9 +342,9 @@ STRICT EXTRACTION RULES:
   "items": [
     {
       "id": "1",
-      "title": "Exact English Chapter / Quest Title from IGN",
+      "title": "Exact English Chapter / Quest / Area Title from IGN",
       "order": 1,
-      "chapterGroup": "Area or Act",
+      "chapterGroup": "Act or Phase",
       "description": "Kort info",
       "isOptional": false
     }
@@ -375,103 +382,101 @@ STRICT EXTRACTION RULES:
       if (listErr.message?.includes('API key')) throw listErr;
     }
 
+    const callModelAndParse = async (modelName: string, promptText: string, useGoogleSearch: boolean) => {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
+      const bodyPayload: any = {
+        contents: [{ parts: [{ text: promptText }] }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 8192,
+        },
+      };
+      if (useGoogleSearch) {
+        bodyPayload.tools = [{ google_search: {} }];
+      } else {
+        bodyPayload.generationConfig.responseMimeType = 'application/json';
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyPayload),
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => null);
+        throw new Error(errJson?.error?.message || `Modell ${modelName} (${response.status})`);
+      }
+
+      const data = await response.json();
+      const parts = data.candidates?.[0]?.content?.parts || [];
+      const textContent = parts.map((p: any) => p.text || '').join('\n').trim();
+      if (!textContent) throw new Error(`Modell ${modelName} returnerade tomt svar.`);
+
+      let groundedIgnUrl = ignSourceUrl;
+      const chunks = data.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      for (const chunk of chunks) {
+        const uri = chunk?.web?.uri;
+        if (typeof uri === 'string' && uri.includes('ign.com/wikis/')) {
+          groundedIgnUrl = uri;
+          break;
+        }
+      }
+
+      let cleaned = textContent.trim();
+      const codeBlock = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      if (codeBlock) {
+        cleaned = codeBlock[1].trim();
+      } else {
+        const firstBrace = cleaned.indexOf('{');
+        const lastBrace = cleaned.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          cleaned = cleaned.substring(firstBrace, lastBrace + 1).trim();
+        }
+      }
+
+      const parsed = JSON.parse(cleaned);
+      const rawItems = Array.isArray(parsed.items)
+        ? parsed.items
+        : Array.isArray(parsed.chapters)
+        ? parsed.chapters
+        : Array.isArray(parsed.walkthrough)
+        ? parsed.walkthrough
+        : [];
+
+      return { parsed, rawItems, groundedIgnUrl };
+    };
+
     let lastError: Error | null = null;
     for (const modelName of candidateModels) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(cleanKey)}`;
-        let response: Response;
+        // Försök 1: Med hämtad IGN-data (eller Google Search om IGN-data saknades)
+        let result = await callModelAndParse(modelName, buildPrompt(true), !hasIgnText).catch(() => null);
 
-        // Om servern inte fick tag i IGN-sidan direkt, be Gemini söka på ign.com/wikis med Google Search
-        if (!hasIgnText) {
-          response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              tools: [{ google_search: {} }],
-              generationConfig: {
-                temperature: 0.0,
-                maxOutputTokens: 8192,
-              },
-            }),
-          });
-
-          if (!response.ok) {
-            response = await fetch(url, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: {
-                  temperature: 0.0,
-                  responseMimeType: 'application/json',
-                  maxOutputTokens: 8192,
-                },
-              }),
-            });
-          }
-        } else {
-          response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: {
-                temperature: 0.0,
-                responseMimeType: 'application/json',
-                maxOutputTokens: 8192,
-              },
-            }),
-          });
+        // Försök 2: Om IGN-sidans råtext bara innehöll en intro-sammanfattning och items blev tom,
+        // hämta hela IGN Walkthrough-listan med Google Search / direkt IGN-struktur!
+        if (!result || (result.rawItems.length === 0 && result.parsed?.hasLinearProgression !== false)) {
+          result = await callModelAndParse(modelName, buildPrompt(false), true).catch(() => null);
         }
 
-        if (!response.ok) {
-          const errJson = await response.json().catch(() => null);
-          throw new Error(errJson?.error?.message || `Modell ${modelName} (${response.status})`);
+        // Försök 3: Utan google_search-tool ifall modellen inte stöder search-grounding i JSON-läge
+        if (!result || (result.rawItems.length === 0 && result.parsed?.hasLinearProgression !== false)) {
+          result = await callModelAndParse(modelName, buildPrompt(false), false);
         }
 
-        const data = await response.json();
-        const parts = data.candidates?.[0]?.content?.parts || [];
-        const textContent = parts.map((p: any) => p.text || '').join('\n').trim();
-        if (!textContent) throw new Error(`Modell ${modelName} returnerade tomt svar.`);
-
-        // Kolla om Google Search Grounding returnerade en exakt ign.com/wikis-länk
-        let groundedIgnUrl = ignSourceUrl;
-        const chunks = data.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-        for (const chunk of chunks) {
-          const uri = chunk?.web?.uri;
-          if (typeof uri === 'string' && uri.includes('ign.com/wikis/')) {
-            groundedIgnUrl = uri;
-            break;
-          }
-        }
-
-        let cleaned = textContent.trim();
-        const codeBlock = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-        if (codeBlock) {
-          cleaned = codeBlock[1].trim();
-        } else {
-          const firstBrace = cleaned.indexOf('{');
-          const lastBrace = cleaned.lastIndexOf('}');
-          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-            cleaned = cleaned.substring(firstBrace, lastBrace + 1).trim();
-          }
-        }
-
-        const parsed = JSON.parse(cleaned);
-        const items = Array.isArray(parsed.items) ? parsed.items : [];
+        const { parsed, rawItems, groundedIgnUrl } = result;
 
         return {
           gameTitle: parsed.gameTitle || title,
-          hasLinearProgression: parsed.hasLinearProgression !== undefined ? Boolean(parsed.hasLinearProgression) : items.length > 0,
-          progressionType: parsed.progressionType || (items.length > 0 ? 'chapters' : 'none'),
+          hasLinearProgression: parsed.hasLinearProgression !== undefined ? Boolean(parsed.hasLinearProgression) : rawItems.length > 0,
+          progressionType: parsed.progressionType || (rawItems.length > 0 ? 'chapters' : 'none'),
           granularity: gran,
           summary: parsed.summary || '',
-          items: items.map((it: any, idx: number) => ({
+          items: rawItems.map((it: any, idx: number) => ({
             id: String(it.id || idx + 1),
-            title: String(it.title || `Delmål ${idx + 1}`),
+            title: String(it.title || it.name || `Delmål ${idx + 1}`),
             order: Number(it.order || idx + 1),
-            chapterGroup: it.chapterGroup,
+            chapterGroup: it.chapterGroup || it.act || it.region,
             description: it.description,
             isOptional: Boolean(it.isOptional),
           })),

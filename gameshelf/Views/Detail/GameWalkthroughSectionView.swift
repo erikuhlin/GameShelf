@@ -618,7 +618,7 @@ struct GameWalkthroughSectionView: View {
     }
 
     private func importManualLines() {
-        guard let targetIgdbId = game.igdbID ?? remoteIGDBID else { return }
+        let targetIgdbId = game.igdbID ?? remoteIGDBID ?? abs(game.title.hashValue)
         let lines = manualImportText.components(separatedBy: .newlines)
         var currentGroup = "Huvudberättelsen"
         var items: [GameWalkthroughTemplateItem] = []
@@ -676,7 +676,7 @@ struct GameWalkthroughSectionView: View {
     }
 
     private func generateWithGeminiAI() async {
-        guard let targetIgdbId = game.igdbID ?? remoteIGDBID else { return }
+        let targetIgdbId = game.igdbID ?? remoteIGDBID ?? abs(game.title.hashValue)
         let key = geminiApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { return }
 

@@ -130,7 +130,7 @@ struct ForYouHubView: View {
             .pickerStyle(.segmented)
             .padding(.horizontal)
             .padding(.top, 6)
-            .onChange(of: selectedTab) { _ in
+            .onChange(of: selectedTab) { _, _ in
                 Task {
                     await reloadCurrentTab(force: false)
                 }

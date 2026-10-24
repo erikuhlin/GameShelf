@@ -266,7 +266,7 @@ public final class SupabaseAuthManager: ObservableObject {
 
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-            if let (data, response) = try? await urlSession.data(for: request),
+            if let (_, response) = try? await urlSession.data(for: request),
                let httpRes = response as? HTTPURLResponse,
                (200...299).contains(httpRes.statusCode) {
                 var updatedUser = currentSession.user

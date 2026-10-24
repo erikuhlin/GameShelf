@@ -251,7 +251,7 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
     }
 
     // MARK: - Play Type Inferens
-    static func inferPlayTypes(genres: [String], title: String, gameModes: [String]? = nil) -> [GamePlayType] {
+    nonisolated static func inferPlayTypes(genres: [String], title: String, gameModes: [String]? = nil) -> [GamePlayType] {
         var types: Set<GamePlayType> = []
 
         let allModes = (gameModes ?? []).map { $0.lowercased() }

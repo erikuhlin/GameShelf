@@ -194,7 +194,6 @@ struct GameDiaryView: View {
 
     // Group active games by Month-Year (e.g. "September 2026")
     private var groupedByMonth: [(monthTitle: String, games: [Game])] {
-        let calendar = Calendar.current
         let dateFormatter = DateFormatter()
         dateFormatter.locale = Locale(identifier: "sv_SE")
         dateFormatter.dateFormat = "LLLL yyyy"

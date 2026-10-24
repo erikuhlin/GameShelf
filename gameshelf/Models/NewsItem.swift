@@ -70,7 +70,7 @@ struct NewsItem: Identifiable, Hashable, Sendable, Codable {
     var matchedGameCoverURL: URL? = nil
     var matchedGameStatus: String? = nil
 
-    init(
+    nonisolated init(
         id: String? = nil,
         title: String,
         source: String,

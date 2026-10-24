@@ -85,7 +85,6 @@ enum SpelDNACalculator {
                    text.contains("bloodborne") || text.contains("sekiro") || text.contains("nioh") ||
                    text.contains("lies of p") || text.contains("hollow knight") || text.contains("roguelike")
         }.count
-        let soulsShare = Double(soulsCount) / Double(totalOwned)
 
         let openWorldCount = ownedGames.filter { game in
             let text = (game.title + " " + game.genres.joined(separator: " ")).lowercased()

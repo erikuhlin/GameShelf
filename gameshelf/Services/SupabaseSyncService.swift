@@ -8,29 +8,29 @@
 import Foundation
 
 // MARK: - Supabase Date Parser & Formatter
-enum SupabaseDateParser: Sendable {
-    private static let isoWithFractional: ISO8601DateFormatter = {
+nonisolated enum SupabaseDateParser: Sendable {
+    private nonisolated(unsafe) static let isoWithFractional: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
     }()
 
-    private static let isoStandard: ISO8601DateFormatter = {
+    private nonisolated(unsafe) static let isoStandard: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter
     }()
 
-    private static let fallbackDateFormatter: DateFormatter = {
+    private nonisolated(unsafe) static let fallbackDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         return formatter
     }()
 
-    private static let lock = NSLock()
+    private nonisolated(unsafe) static let lock = NSLock()
 
-    static func parse(_ string: String?) -> Date? {
+    nonisolated static func parse(_ string: String?) -> Date? {
         guard let raw = string?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
             return nil
         }
@@ -65,7 +65,7 @@ enum SupabaseDateParser: Sendable {
         return nil
     }
 
-    static func string(from date: Date) -> String {
+    nonisolated static func string(from date: Date) -> String {
         isoStandard.string(from: date)
     }
 }

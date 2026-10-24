@@ -1622,18 +1622,19 @@ struct GameDetailView: View {
                     unifiedHLTBTimelineSection(hours: hours, mainHours: mainHours, extraHours: extraHours, compHours: compHours)
                 }
 
-                // 3. "Var är du i spelet?" + 1:1 Kapitellista visas BARA när status är Spelar nu
+                // 3. "Var är du i spelet?" visas BARA när status är Spelar nu
                 if g.status == .playing {
                     playtimeMilestonesSection(g, currentMilestone: activeMilestone)
-
-                    GameWalkthroughSectionView(
-                        game: g,
-                        remoteIGDBID: remote?.id,
-                        onUpdateGame: { updated in
-                            updateLocal(updated)
-                        }
-                    )
                 }
+
+                // 4. 1:1 Kapitellista & Story är tillgänglig för alla spel i biblioteket
+                GameWalkthroughSectionView(
+                    game: g,
+                    remoteIGDBID: remote?.id,
+                    onUpdateGame: { updated in
+                        updateLocal(updated)
+                    }
+                )
             }
         }
     }
@@ -2002,6 +2003,15 @@ struct GameDetailView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
                 }
+
+                // Story / Uppdragslista även för pågående eller kampanjer i multiplayer-spel
+                GameWalkthroughSectionView(
+                    game: g,
+                    remoteIGDBID: remote?.id,
+                    onUpdateGame: { updated in
+                        updateLocal(updated)
+                    }
+                )
             }
         }
     }

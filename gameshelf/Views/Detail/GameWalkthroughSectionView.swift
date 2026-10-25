@@ -24,7 +24,7 @@ struct GameWalkthroughSectionView: View {
     @State private var isSideQuestsExpanded = false
     @State private var isPersonalGoalsExpanded = false
 
-    // Sheets
+    // Sheets & Editing
     @State private var showingAddModal = false
     @State private var newStepTitle = ""
     @State private var selectedCategory: TaskCategory = .main
@@ -32,6 +32,12 @@ struct GameWalkthroughSectionView: View {
     @State private var manualImportText = ""
     @State private var showingAPIKeyPrompt = false
     @State private var apiKeyDraft = ""
+    @State private var showingManageSheet = false
+    @State private var showingEditSingleSheet = false
+    @State private var showingClearConfirmation = false
+    @State private var itemToEdit: GameTodoItem? = nil
+    @State private var editDraftTitle = ""
+    @State private var editDraftCategory: TaskCategory = .main
 
     enum TaskCategory: String, CaseIterable, Identifiable {
         case main = "Huvuduppdrag"
@@ -102,6 +108,46 @@ struct GameWalkthroughSectionView: View {
                 }
 
                 Spacer()
+
+                if totalCount > 0 {
+                    Menu {
+                        Button {
+                            showingManageSheet = true
+                        } label: {
+                            Label("Hantera lista...", systemImage: "list.bullet.rectangle")
+                        }
+
+                        Button {
+                            manualImportText = ""
+                            showingManualImportSheet = true
+                        } label: {
+                            Label("Klistra in ny lista", systemImage: "doc.on.clipboard")
+                        }
+
+                        Button {
+                            if geminiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                apiKeyDraft = ""
+                                showingAPIKeyPrompt = true
+                            } else {
+                                Task { await generateWithGeminiAI() }
+                            }
+                        } label: {
+                            Label("Hämta med AI", systemImage: "sparkles")
+                        }
+
+                        Divider()
+
+                        Button(role: .destructive) {
+                            showingClearConfirmation = true
+                        } label: {
+                            Label("Börja om från början", systemImage: "arrow.counterclockwise")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.system(size: 18))
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
 
             // Huvudkort
@@ -220,6 +266,25 @@ struct GameWalkthroughSectionView: View {
         .sheet(isPresented: $showingManualImportSheet) {
             manualImportSheetView
         }
+        .sheet(isPresented: $showingManageSheet) {
+            manageListSheet
+        }
+        .sheet(isPresented: $showingEditSingleSheet) {
+            editSingleItemSheet
+        }
+        .confirmationDialog(
+            "Börja om från början?",
+            isPresented: $showingClearConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Rensa alla kapitel och börja om", role: .destructive) {
+                clearAllTodos()
+                showingManageSheet = false
+            }
+            Button("Avbryt", role: .cancel) {}
+        } message: {
+            Text("Detta tar bort alla kapitel och uppdrag för \(game.title). Du kan sedan klistra in en ny lista eller hämta med AI.")
+        }
         .alert("Ange Gemini API-nyckel", isPresented: $showingAPIKeyPrompt) {
             TextField("AIzaSy...", text: $apiKeyDraft)
             Button("Spara & Hämta") {
@@ -293,8 +358,49 @@ struct GameWalkthroughSectionView: View {
                             .lineLimit(2)
 
                         Spacer()
+
+                        Menu {
+                            Button {
+                                itemToEdit = item
+                                editDraftTitle = item.title
+                                editDraftCategory = category(for: item)
+                                showingEditSingleSheet = true
+                            } label: {
+                                Label("Redigera", systemImage: "pencil")
+                            }
+
+                            Button(role: .destructive) {
+                                deleteStep(item)
+                            } label: {
+                                Label("Ta bort", systemImage: "trash")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(Color.secondary.opacity(0.6))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 4)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
                     .padding(.vertical, 7)
+                    .contextMenu {
+                        Button {
+                            itemToEdit = item
+                            editDraftTitle = item.title
+                            editDraftCategory = category(for: item)
+                            showingEditSingleSheet = true
+                        } label: {
+                            Label("Redigera", systemImage: "pencil")
+                        }
+
+                        Button(role: .destructive) {
+                            deleteStep(item)
+                        } label: {
+                            Label("Ta bort", systemImage: "trash")
+                        }
+                    }
                 }
             }
 
@@ -427,7 +533,17 @@ struct GameWalkthroughSectionView: View {
                             }
                         }
                     }
-                    .disabled(isGeneratingAI)
+                    if totalCount > 0 {
+                        Button(role: .destructive) {
+                            showingAddModal = false
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                showingClearConfirmation = true
+                            }
+                        } label: {
+                            Label("Börja om från början (Rensa)", systemImage: "arrow.counterclockwise")
+                                .foregroundStyle(.red)
+                        }
+                    }
                 }
             }
             .navigationTitle("Lägg till uppdrag")
@@ -489,7 +605,250 @@ struct GameWalkthroughSectionView: View {
         .presentationDetents([.medium, .large])
     }
 
+    private var manageListSheet: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(game.todos) { item in
+                        HStack(spacing: 12) {
+                            Button {
+                                toggleStep(item)
+                            } label: {
+                                Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 18))
+                                    .foregroundStyle(item.isDone ? Color.green : Color.secondary)
+                            }
+                            .buttonStyle(.plain)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.title)
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(item.isDone ? Color.secondary : Color.primary)
+                                    .strikethrough(item.isDone, color: Color.secondary)
+
+                                if let group = item.chapterGroup, !group.isEmpty {
+                                    Text(group)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+
+                            Spacer()
+
+                            Button {
+                                itemToEdit = item
+                                editDraftTitle = item.title
+                                editDraftCategory = category(for: item)
+                                showingEditSingleSheet = true
+                            } label: {
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(Color.secondary)
+                                    .padding(6)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .onDelete { indexSet in
+                        deleteSteps(at: indexSet)
+                    }
+                    .onMove { source, destination in
+                        moveSteps(from: source, to: destination)
+                    }
+                } header: {
+                    Text("Alla kapitel & uppdrag (\(game.todos.count))")
+                } footer: {
+                    Text("Svep åt vänster på en rad för att ta bort den. Tryck på pennan för att ändra texten eller kategorin. Använd Ändra för att dra och byta ordning.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section {
+                    Button(role: .destructive) {
+                        showingClearConfirmation = true
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Label("Börja om från början (Rensa lista)", systemImage: "arrow.counterclockwise")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.red)
+                            Spacer()
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Hantera kapitellista")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    EditButton()
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Klar") {
+                        showingManageSheet = false
+                    }
+                    .fontWeight(.bold)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private var editSingleItemSheet: some View {
+        NavigationStack {
+            Form {
+                Section("Titel") {
+                    TextField("Titel på kapitel/uppdrag...", text: $editDraftTitle)
+                        .font(.body)
+
+                    Picker("Kategori", selection: $editDraftCategory) {
+                        ForEach(TaskCategory.allCases) { cat in
+                            Text(cat.rawValue).tag(cat)
+                        }
+                    }
+                }
+
+                Section {
+                    Button(role: .destructive) {
+                        if let item = itemToEdit {
+                            deleteStep(item)
+                        }
+                        showingEditSingleSheet = false
+                        itemToEdit = nil
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Label("Ta bort detta kapitel", systemImage: "trash")
+                                .foregroundStyle(.red)
+                            Spacer()
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Redigera uppdrag")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Avbryt") {
+                        showingEditSingleSheet = false
+                        itemToEdit = nil
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Spara") {
+                        if let item = itemToEdit {
+                            editStep(item: item, newTitle: editDraftTitle, newCategory: editDraftCategory)
+                        }
+                        showingEditSingleSheet = false
+                        itemToEdit = nil
+                    }
+                    .fontWeight(.bold)
+                    .disabled(editDraftTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
     // MARK: - Actions & Logic
+
+    private func category(for item: GameTodoItem) -> TaskCategory {
+        if item.chapterGroup == "Egna mål" {
+            return .goal
+        }
+        if item.isOptional || item.chapterGroup == "Sidouppdrag" {
+            return .side
+        }
+        return .main
+    }
+
+    private func deleteStep(_ item: GameTodoItem) {
+        var copy = game
+        copy.todos.removeAll(where: { $0.id == item.id })
+        syncProgress(for: &copy)
+        onUpdateGame(copy)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+    }
+
+    private func deleteSteps(at offsets: IndexSet) {
+        var copy = game
+        copy.todos.remove(atOffsets: offsets)
+        for (idx, _) in copy.todos.enumerated() {
+            if copy.todos[idx].order != nil {
+                copy.todos[idx].order = idx + 1
+            }
+        }
+        syncProgress(for: &copy)
+        onUpdateGame(copy)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+    }
+
+    private func moveSteps(from source: IndexSet, to destination: Int) {
+        var copy = game
+        copy.todos.move(fromOffsets: source, toOffset: destination)
+        for (idx, _) in copy.todos.enumerated() {
+            if copy.todos[idx].order != nil {
+                copy.todos[idx].order = idx + 1
+            }
+        }
+        onUpdateGame(copy)
+    }
+
+    private func editStep(item: GameTodoItem, newTitle: String, newCategory: TaskCategory) {
+        let trimmed = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        var copy = game
+        if let idx = copy.todos.firstIndex(where: { $0.id == item.id }) {
+            copy.todos[idx].title = trimmed
+            switch newCategory {
+            case .main:
+                copy.todos[idx].chapterGroup = "Huvudberättelsen"
+                copy.todos[idx].isOptional = false
+            case .side:
+                copy.todos[idx].chapterGroup = "Sidouppdrag"
+                copy.todos[idx].isOptional = true
+            case .goal:
+                copy.todos[idx].chapterGroup = "Egna mål"
+                copy.todos[idx].isOptional = false
+            }
+        }
+        syncProgress(for: &copy)
+        onUpdateGame(copy)
+    }
+
+    private func clearAllTodos() {
+        var copy = game
+        copy.todos = []
+        copy.progressNote = nil
+        onUpdateGame(copy)
+        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+    }
+
+    private func syncProgress(for copy: inout Game) {
+        let all = copy.todos
+        if all.isEmpty {
+            copy.progressNote = nil
+            return
+        }
+        if copy.status == .playing {
+            let done = all.filter(\.isDone).count
+            let ratio = Double(done) / Double(all.count)
+            if ratio < 0.25 {
+                copy.storyProgress = .justStarted
+            } else if ratio < 0.75 {
+                copy.storyProgress = .midway
+            } else {
+                copy.storyProgress = .nearEnd
+            }
+            if let next = all.first(where: { !$0.isDone }) {
+                copy.progressNote = next.title
+                copy.noteUpdatedAt = Date()
+            } else {
+                copy.progressNote = "Alla uppdrag klara"
+            }
+        }
+    }
 
     private func autoLoadWalkthroughIfNeeded() async {
         guard !hasCheckedSupabase else { return }
@@ -513,25 +872,7 @@ struct GameWalkthroughSectionView: View {
         var copy = game
         guard let idx = copy.todos.firstIndex(where: { $0.id == item.id }) else { return }
         copy.todos[idx].isDone.toggle()
-
-        // Synka milstolpe och framsteg
-        let all = copy.todos
-        if !all.isEmpty && copy.status == .playing {
-            let done = all.filter(\.isDone).count
-            let ratio = Double(done) / Double(all.count)
-            if ratio < 0.25 {
-                copy.storyProgress = .justStarted
-            } else if ratio < 0.75 {
-                copy.storyProgress = .midway
-            } else {
-                copy.storyProgress = .nearEnd
-            }
-            if let next = all.first(where: { !$0.isDone }) {
-                copy.progressNote = next.title
-                copy.noteUpdatedAt = Date()
-            }
-        }
-
+        syncProgress(for: &copy)
         onUpdateGame(copy)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }

@@ -44,23 +44,26 @@ struct ReleaseCountdownBanner: View {
                 Text("Spelet släpps idag! 🎉")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(.primary)
+                    .lineLimit(1)
             } else {
-                HStack(spacing: 6) {
+                (
                     Text(days == 1 ? "Om 1 dag" : "Om \(days) dagar")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(.primary)
-
-                    Text("·")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(.secondary)
-
-                    Text(shortDateText(targetDate))
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
+                        .foregroundColor(.primary)
+                        .fontWeight(.bold)
+                    + Text(" · ")
+                        .foregroundColor(.secondary)
+                        .fontWeight(.bold)
+                    + Text(shortDateText(targetDate))
+                        .foregroundColor(.secondary)
+                        .fontWeight(.medium)
+                )
+                .font(.subheadline)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+                .layoutPriority(1)
             }
 
-            Spacer()
+            Spacer(minLength: 4)
 
             Text("KOMMANDE")
                 .font(.system(size: 10, weight: .heavy, design: .rounded))
@@ -69,6 +72,7 @@ struct ReleaseCountdownBanner: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(Color.red.opacity(0.12), in: Capsule())
+                .fixedSize()
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -91,13 +95,17 @@ struct ReleaseCountdownBanner: View {
                 Text("Planerat släpp · \(String(y))")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             } else {
                 Text("Kommande lansering · Datum ej fastställt")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
 
-            Spacer()
+            Spacer(minLength: 4)
 
             Text("KOMMANDE")
                 .font(.system(size: 10, weight: .heavy, design: .rounded))
@@ -106,6 +114,7 @@ struct ReleaseCountdownBanner: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(Color.red.opacity(0.12), in: Capsule())
+                .fixedSize()
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)

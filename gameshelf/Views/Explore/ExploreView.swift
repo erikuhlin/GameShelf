@@ -565,22 +565,39 @@ struct ExploreView: View {
 
                 // Speltid / Framsteg (om tillgängligt)
                 if let progress = heroProgressInfo(for: game) {
-                    HStack(spacing: 3) {
-                        Image(systemName: progress.icon)
-                            .font(.system(size: 8))
-                            .foregroundStyle(Color.textSecondary.opacity(0.85))
-                        Text(progress.text)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(Color.textSecondary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 3.5) {
+                            Image(systemName: progress.icon)
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundStyle(progress.ratio != nil ? Color.brandRed : Color.textSecondary.opacity(0.85))
+                            Text(progress.text)
+                                .font(.system(size: 10, weight: progress.ratio != nil ? .semibold : .medium))
+                                .foregroundStyle(progress.ratio != nil ? Color.textPrimary : Color.textSecondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+
+                        if let ratio = progress.ratio {
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule()
+                                        .fill(Color.white.opacity(0.12))
+                                        .frame(height: 3)
+
+                                    Capsule()
+                                        .fill(Color.brandRed)
+                                        .frame(width: max(3, geo.size.width * CGFloat(min(1.0, max(0.0, ratio)))), height: 3)
+                                }
+                            }
+                            .frame(height: 3)
+                        }
                     }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(9)
-        .frame(width: 265, height: 96)
+        .frame(width: 268, height: 98)
         .background(Color.neutralSurface)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
@@ -633,37 +650,104 @@ struct ExploreView: View {
     private struct HeroProgress {
         let icon: String
         let text: String
+        let ratio: Double?
     }
 
     private func heroProgressInfo(for game: Game) -> HeroProgress? {
-        // 1. Loggad tid mot beräknad speltid
-        if let logged = game.hoursPlayed, logged > 0 {
-            let loggedStr = logged.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(logged))" : String(format: "%.1f", logged)
-            if let est = game.estimatedHours, est > 0 {
-                return HeroProgress(icon: "clock", text: "\(loggedStr) / ~\(est)h")
+        let loggedHours = game.effectiveHoursPlayed
+        let hasLoggedHours = loggedHours > 0
+        let loggedStr: String = {
+            if loggedHours.truncatingRemainder(dividingBy: 1) == 0 {
+                return "\(Int(loggedHours))h"
+            } else {
+                return "\(String(format: "%.1f", loggedHours))h"
             }
-            return HeroProgress(icon: "clock", text: "\(loggedStr)h spelat")
+        }()
+
+        let hasTodos = !game.todos.isEmpty
+        let todosDone = game.todos.filter(\.isDone).count
+        let todosTotal = game.todos.count
+        let todoRatio = hasTodos && todosTotal > 0 ? (Double(todosDone) / Double(todosTotal)) : nil
+
+        let story = game.storyProgress
+        let storyRatio: Double? = {
+            guard let s = story else { return nil }
+            switch s {
+            case .justStarted: return 0.20
+            case .midway: return 0.50
+            case .nearEnd: return 0.80
+            case .completed: return 1.0
+            }
+        }()
+
+        // 1. Kapitel & uppdrag har högsta prioritet för faktisk framsteg
+        if hasTodos {
+            if hasLoggedHours {
+                return HeroProgress(
+                    icon: "checklist",
+                    text: "\(loggedStr) · \(todosDone)/\(todosTotal) kapitel",
+                    ratio: todoRatio
+                )
+            } else {
+                let percent = Int(round((todoRatio ?? 0) * 100))
+                return HeroProgress(
+                    icon: "checklist",
+                    text: "\(todosDone) av \(todosTotal) kapitel (\(percent)%)",
+                    ratio: todoRatio
+                )
+            }
         }
 
-        // 2. Beräknad speltid
+        // 2. Story progress etapp ("Börjat nyss", "Halvvägs", "Nära slutet")
+        if let s = story {
+            if hasLoggedHours {
+                return HeroProgress(
+                    icon: "flag.fill",
+                    text: "\(loggedStr) · \(s.rawValue)",
+                    ratio: storyRatio
+                )
+            } else {
+                return HeroProgress(
+                    icon: "flag.fill",
+                    text: s.rawValue,
+                    ratio: storyRatio
+                )
+            }
+        }
+
+        // 3. Loggad tid mot beräknad speltid
+        if hasLoggedHours {
+            if let est = game.estimatedHours, est > 0 {
+                let ratio = min(1.0, loggedHours / Double(est))
+                return HeroProgress(
+                    icon: "clock.fill",
+                    text: "\(loggedStr) / ~\(est)h",
+                    ratio: ratio
+                )
+            }
+            return HeroProgress(
+                icon: "clock.fill",
+                text: "\(loggedStr) spelat",
+                ratio: nil
+            )
+        }
+
+        // 4. Beräknad speltid från IGDB
         if let est = game.estimatedHours, est > 0 {
-            return HeroProgress(icon: "clock", text: "~\(est)h speltid")
-        }
-
-        // 3. Delmål / Checklistor
-        if !game.todos.isEmpty {
-            let done = game.todos.filter(\.isDone).count
-            return HeroProgress(icon: "checklist", text: "\(done)/\(game.todos.count) delmål")
-        }
-
-        // 4. Story status
-        if let story = game.storyProgress {
-            return HeroProgress(icon: "flag", text: story.rawValue)
+            return HeroProgress(
+                icon: "clock",
+                text: "~\(est)h speltid",
+                ratio: nil
+            )
         }
 
         // 5. Senast spelat
         if let last = game.lastPlayedFormatted {
-            return HeroProgress(icon: "clock.arrow.circlepath", text: last)
+            return HeroProgress(
+                icon: "clock.arrow.circlepath",
+                text: last,
+                ratio: nil
+            )
         }
 
         return nil
@@ -871,6 +955,7 @@ struct ExploreView: View {
         return Text(text)
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(Color(hex: "#FF3B30"))
+            .lineLimit(1)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
             .background(Color(hex: "#FF3B30").opacity(0.10), in: Capsule())

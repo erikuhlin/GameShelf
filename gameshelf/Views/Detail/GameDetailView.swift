@@ -556,25 +556,46 @@ struct GameDetailView: View {
                         .padding(.vertical, 1)
                     }
 
-                    // Släppdatum · Utvecklare
-                    HStack(spacing: 5) {
-                        if let dateText = formattedReleaseDate {
-                            Text(dateText)
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.secondary)
+                    // Släppdatum & Utvecklare (ViewThatFits förhindrar fula radbrytningar när namnet är långt)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 5) {
+                            if let dateText = formattedReleaseDate {
+                                Text(dateText)
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            if formattedReleaseDate != nil && developer != nil && !(developer?.isEmpty ?? true) {
+                                Text("·")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if let dev = developer, !dev.isEmpty {
+                                Text(dev)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                            }
                         }
-                        if formattedReleaseDate != nil && developer != nil && !(developer?.isEmpty ?? true) {
-                            Text("·")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        if let dev = developer, !dev.isEmpty {
-                            Text(dev)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            if let dev = developer, !dev.isEmpty {
+                                Text(dev)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                            if let dateText = formattedReleaseDate {
+                                Text(dateText)
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
                         }
                     }
-                    .lineLimit(1)
 
                     // Genre
                     if let gText = genresText, !gText.isEmpty {

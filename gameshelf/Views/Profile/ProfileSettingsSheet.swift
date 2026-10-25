@@ -135,14 +135,10 @@ struct ProfileSettingsSheet: View {
 
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 8) {
-                        TextField("Klistra in AIzaSy...", text: $apiKeyDraft)
-                            .font(.system(size: 14, weight: .regular, design: .monospaced))
-                            .autocorrectionDisabled(true)
-                            .textInputAutocapitalization(.never)
-                            .textContentType(.none)
-                            .keyboardType(.asciiCapable)
+                        PasteableTextField(placeholder: "Klistra in AIzaSy...", text: $apiKeyDraft)
+                            .frame(height: 24)
                             .padding(.horizontal, 12)
-                            .padding(.vertical, 11)
+                            .padding(.vertical, 10)
                             .background(Color(.secondarySystemGroupedBackground))
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .overlay(

@@ -1092,31 +1092,6 @@ struct GameWalkthroughSectionView: View {
             {"steps":[{"order":1,"title":"...","chapterGroup":"..."}]}
             """
 
-            guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(key)") else {
-                throw URLError(.badURL)
-            }
-
-            let payload: [String: Any] = [
-                "contents": [
-                    ["parts": [["text": prompt]]]
-                ],
-                "generationConfig": [
-                    "temperature": 0.1,
-                    "responseMimeType": "application/json"
-                ]
-            ]
-
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.timeoutInterval = 60
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                throw URLError(.badServerResponse)
-            }
-
             struct GeminiCandidateResponse: Decodable {
                 struct Candidate: Decodable {
                     struct Content: Decodable {
@@ -1138,18 +1113,98 @@ struct GameWalkthroughSectionView: View {
                 let steps: [GeminiStepItem]
             }
 
-            let geminiResp = try JSONDecoder().decode(GeminiCandidateResponse.self, from: data)
-            guard let jsonText = geminiResp.candidates?.first?.content?.parts?.first?.text,
-                  let jsonData = jsonText.data(using: .utf8) else {
+            struct GeminiApiErrorResponse: Decodable {
+                struct ApiError: Decodable {
+                    let code: Int?
+                    let message: String?
+                    let status: String?
+                }
+                let error: ApiError?
+            }
+
+            let models = ["gemini-2.0-flash", "gemini-1.5-flash"]
+            var lastError: Error? = nil
+            var decodedSteps: [GeminiStepItem] = []
+
+            for modelName in models {
+                guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(modelName):generateContent?key=\(key)") else {
+                    continue
+                }
+
+                let payload: [String: Any] = [
+                    "contents": [
+                        ["parts": [["text": prompt]]]
+                    ],
+                    "generationConfig": [
+                        "temperature": 0.1,
+                        "responseMimeType": "application/json"
+                    ]
+                ]
+
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.timeoutInterval = 60
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+                do {
+                    let (data, response) = try await URLSession.shared.data(for: request)
+                    guard let http = response as? HTTPURLResponse else {
+                        throw URLError(.badServerResponse)
+                    }
+
+                    if !(200...299).contains(http.statusCode) {
+                        if let errResp = try? JSONDecoder().decode(GeminiApiErrorResponse.self, from: data),
+                           let msg = errResp.error?.message, !msg.isEmpty {
+                            if msg.localizedCaseInsensitiveContains("API key") {
+                                throw NSError(domain: "Gemini", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Ogiltig API-nyckel. Kontrollera din nyckel från Google AI Studio."])
+                            }
+                            throw NSError(domain: "Gemini", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: msg])
+                        }
+                        throw URLError(.badServerResponse)
+                    }
+
+                    let geminiResp = try JSONDecoder().decode(GeminiCandidateResponse.self, from: data)
+                    guard let rawText = geminiResp.candidates?.first?.content?.parts?.first?.text else {
+                        throw URLError(.cannotParseResponse)
+                    }
+
+                    var cleanJson = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if cleanJson.hasPrefix("```json") {
+                        cleanJson = String(cleanJson.dropFirst(7))
+                    } else if cleanJson.hasPrefix("```") {
+                        cleanJson = String(cleanJson.dropFirst(3))
+                    }
+                    if cleanJson.hasSuffix("```") {
+                        cleanJson = String(cleanJson.dropLast(3))
+                    }
+                    cleanJson = cleanJson.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                    guard let jsonData = cleanJson.data(using: .utf8) else {
+                        throw URLError(.cannotParseResponse)
+                    }
+
+                    let decoded = try JSONDecoder().decode(StepsWrapper.self, from: jsonData)
+                    if !decoded.steps.isEmpty {
+                        decodedSteps = decoded.steps
+                        break
+                    }
+                } catch {
+                    lastError = error
+                    if let nsErr = error as NSError?, nsErr.domain == "Gemini" {
+                        throw error
+                    }
+                }
+            }
+
+            guard !decodedSteps.isEmpty else {
+                if let err = lastError {
+                    throw err
+                }
                 throw URLError(.cannotParseResponse)
             }
 
-            let decoded = try JSONDecoder().decode(StepsWrapper.self, from: jsonData)
-            guard !decoded.steps.isEmpty else {
-                throw URLError(.cannotParseResponse)
-            }
-
-            let templateItems = decoded.steps.map { step in
+            let templateItems = decodedSteps.map { step in
                 GameWalkthroughTemplateItem(
                     id: UUID().uuidString,
                     title: step.title,
@@ -1175,6 +1230,7 @@ struct GameWalkthroughSectionView: View {
 
             var copy = game
             copy.todos = template.toTodoItems() + personalGoals
+            syncProgress(for: &copy)
             onUpdateGame(copy)
 
             _ = try? await SupabaseSyncService.shared.upsertWalkthroughTemplate(template)

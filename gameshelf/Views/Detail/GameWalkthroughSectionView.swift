@@ -285,18 +285,8 @@ struct GameWalkthroughSectionView: View {
         } message: {
             Text("Detta tar bort alla kapitel och uppdrag för \(game.title). Du kan sedan klistra in en ny lista eller hämta med AI.")
         }
-        .alert("Ange Gemini API-nyckel", isPresented: $showingAPIKeyPrompt) {
-            TextField("AIzaSy...", text: $apiKeyDraft)
-            Button("Spara & Hämta") {
-                let trimmed = apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty {
-                    geminiApiKey = trimmed
-                    Task { await generateWithGeminiAI() }
-                }
-            }
-            Button("Avbryt", role: .cancel) {}
-        } message: {
-            Text("För att generera nya 1:1-kapitellistor med AI behövs en Gemini API-nyckel. Den sparas lokalt i appen.")
+        .sheet(isPresented: $showingAPIKeyPrompt) {
+            apiKeySheet
         }
     }
 
@@ -749,6 +739,120 @@ struct GameWalkthroughSectionView: View {
             }
         }
         .presentationDetents([.medium])
+    }
+
+    private var apiKeySheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("För att generera 1:1-kapitellistor med AI behövs en gratis Gemini API-nyckel från Google AI Studio. Den sparas lokalt på din enhet.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        TextField("Klistra in AIzaSy...", text: $apiKeyDraft)
+                            .font(.system(size: 14, weight: .regular, design: .monospaced))
+                            .autocorrectionDisabled(true)
+                            .textInputAutocapitalization(.never)
+                            .textContentType(.none)
+                            .keyboardType(.asciiCapable)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 11)
+                            .background(Color(.secondarySystemGroupedBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                            )
+
+                        Button {
+                            if let clip = UIPasteboard.general.string {
+                                apiKeyDraft = clip.trimmingCharacters(in: .whitespacesAndNewlines)
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "doc.on.clipboard")
+                                    .font(.subheadline.bold())
+                                Text("Klistra in")
+                                    .font(.subheadline.weight(.semibold))
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 11)
+                            .background(Color.red.opacity(0.12))
+                            .foregroundStyle(Color.red)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    if !apiKeyDraft.isEmpty {
+                        HStack {
+                            Button {
+                                apiKeyDraft = ""
+                            } label: {
+                                Text("Rensa text")
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+
+                            Spacer()
+
+                            if !geminiApiKey.isEmpty && apiKeyDraft != geminiApiKey {
+                                Button("Återställ sparad") {
+                                    apiKeyDraft = geminiApiKey
+                                }
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 2)
+                    }
+                }
+
+                Link(destination: URL(string: "https://aistudio.google.com/app/apikey")!) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.up.right.square")
+                            .font(.caption)
+                        Text("Skaffa en gratis Gemini API-nyckel här (Google AI Studio)")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.red)
+                }
+
+                Spacer()
+            }
+            .padding(20)
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .navigationTitle("Gemini API-nyckel")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Avbryt") {
+                        showingAPIKeyPrompt = false
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Spara & Hämta") {
+                        let trimmed = apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !trimmed.isEmpty {
+                            geminiApiKey = trimmed
+                            showingAPIKeyPrompt = false
+                            Task { await generateWithGeminiAI() }
+                        }
+                    }
+                    .fontWeight(.bold)
+                    .foregroundStyle(Color.red)
+                    .disabled(apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .onAppear {
+                apiKeyDraft = geminiApiKey
+            }
+        }
+        .presentationDetents([.height(310), .medium])
     }
 
     // MARK: - Actions & Logic

@@ -13,16 +13,19 @@ struct GameWalkthroughSectionView: View {
     let onUpdateGame: (Game) -> Void
 
     @AppStorage("gemini_api_key") private var geminiApiKey: String = ""
+    @AppStorage("walkthrough_spoiler_protection") private var spoilerProtection: Bool = true
 
     @State private var isCheckingSupabase = false
     @State private var hasCheckedSupabase = false
     @State private var isGeneratingAI = false
     @State private var aiErrorMessage: String? = nil
 
-    // Expansion per group
+    // Expansion per group & Spoiler states
     @State private var isMainQuestsExpanded = false
     @State private var isSideQuestsExpanded = false
     @State private var isPersonalGoalsExpanded = false
+    @State private var revealedItemIds: Set<UUID> = []
+    @State private var collapsedActGroups: Set<String> = []
 
     // Sheets & Editing
     @State private var showingAddModal = false
@@ -47,7 +50,24 @@ struct GameWalkthroughSectionView: View {
         var id: String { rawValue }
     }
 
-    // MARK: - Filtered Categories
+    struct ActGroupInfo: Identifiable {
+        var id: String { name }
+        let name: String
+        let majorAct: String
+        let items: [GameTodoItem]
+        let done: Int
+        let total: Int
+        var isCompleted: Bool { done == total && total > 0 }
+    }
+
+    struct MajorActInfo {
+        let name: String
+        var done: Int
+        var total: Int
+        var isCompleted: Bool { done == total && total > 0 }
+    }
+
+    // MARK: - Filtered Categories & Act Logic
 
     private var mainQuests: [GameTodoItem] {
         game.todos.filter { item in
@@ -91,6 +111,107 @@ struct GameWalkthroughSectionView: View {
         allTodos.filter(\.isDone).count
     }
 
+    /// Extraherar överordnad Huvudakt (t.ex. "Akt 2 (Panam & Hellman)" -> "Akt 2", "Akt 1: Trosky" -> "Akt 1")
+    /// så att alla parallella uppdragsspår inom samma akt låses upp samtidigt.
+    private func majorActName(for chapterGroup: String?) -> String {
+        guard let raw = chapterGroup?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+            return "Huvudberättelsen"
+        }
+        let pattern = "^(Akt\\s*\\d+|Act\\s*\\d+|Del\\s*\\d+|Part\\s*\\d+|Kapitel\\s*\\d+|Chapter\\s*\\d+|Prolog|Prologue|Epilog|Epilogue|Final|Byn|Slottet|Ön|Sommar|Höst|Vinter|Vår)"
+        if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+           let match = regex.firstMatch(in: raw, options: [], range: NSRange(raw.startIndex..., in: raw)),
+           let range = Range(match.range(at: 1), in: raw) {
+            return String(raw[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let beforeParen = raw.components(separatedBy: "(").first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? raw
+        let beforeColon = beforeParen.components(separatedBy: ":").first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? beforeParen
+        return beforeColon.isEmpty ? "Huvudberättelsen" : beforeColon
+    }
+
+    private var actGroups: [ActGroupInfo] {
+        var orderKeys: [String] = []
+        var grouped: [String: [GameTodoItem]] = [:]
+        for item in mainQuests {
+            let g = (item.chapterGroup?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? "Huvudberättelsen"
+            if grouped[g] == nil {
+                orderKeys.append(g)
+                grouped[g] = []
+            }
+            grouped[g]?.append(item)
+        }
+        return orderKeys.compactMap { key in
+            guard let list = grouped[key] else { return nil }
+            let done = list.filter(\.isDone).count
+            return ActGroupInfo(
+                name: key,
+                majorAct: majorActName(for: key),
+                items: list,
+                done: done,
+                total: list.count
+            )
+        }
+    }
+
+    private var majorActs: [MajorActInfo] {
+        var list: [MajorActInfo] = []
+        for item in mainQuests {
+            let mName = majorActName(for: item.chapterGroup)
+            if let idx = list.firstIndex(where: { $0.name.caseInsensitiveCompare(mName) == .orderedSame }) {
+                list[idx].total += 1
+                if item.isDone { list[idx].done += 1 }
+            } else {
+                list.append(MajorActInfo(name: mName, done: item.isDone ? 1 : 0, total: 1))
+            }
+        }
+        return list
+    }
+
+    private var activeMajorActIndex: Int {
+        majorActs.firstIndex(where: { !$0.isCompleted }) ?? majorActs.count
+    }
+
+    private var activeMajorActName: String? {
+        let idx = activeMajorActIndex
+        guard idx < majorActs.count else { return nil }
+        return majorActs[idx].name
+    }
+
+    private var currentMainQuestIndex: Int {
+        mainQuests.firstIndex(where: { !$0.isDone }) ?? mainQuests.count
+    }
+
+    private func isItemHiddenBySpoiler(_ item: GameTodoItem, flatIndex: Int) -> Bool {
+        guard spoilerProtection else { return false }
+        if item.isDone { return false }
+        if revealedItemIds.contains(item.id) { return false }
+
+        if majorActs.count > 1 {
+            let itemMajor = majorActName(for: item.chapterGroup)
+            if let actIdx = majorActs.firstIndex(where: { $0.name.caseInsensitiveCompare(itemMajor) == .orderedSame }) {
+                // Alla uppdrag i den aktiva huvudakten (och tidigare akter) är upplåsta samtidigt
+                return actIdx > activeMajorActIndex
+            }
+        }
+
+        return flatIndex > currentMainQuestIndex
+    }
+
+    private func toggleReveal(_ id: UUID) {
+        if revealedItemIds.contains(id) {
+            revealedItemIds.remove(id)
+        } else {
+            revealedItemIds.insert(id)
+        }
+    }
+
+    private func toggleActGroupCollapse(_ groupName: String) {
+        if collapsedActGroups.contains(groupName) {
+            collapsedActGroups.remove(groupName)
+        } else {
+            collapsedActGroups.insert(groupName)
+        }
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -110,6 +231,29 @@ struct GameWalkthroughSectionView: View {
                 Spacer()
 
                 if totalCount > 0 {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            spoilerProtection.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: spoilerProtection ? "shield.fill" : "shield.slash")
+                                .font(.system(size: 11, weight: .bold))
+                            Text(spoilerProtection ? "Spoilerskydd PÅ" : "Spoilerskydd AV")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            spoilerProtection
+                                ? Color.orange.opacity(0.16)
+                                : Color(.tertiarySystemFill)
+                        )
+                        .foregroundStyle(spoilerProtection ? Color.orange : Color.secondary)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+
                     Menu {
                         Button {
                             showingManageSheet = true
@@ -183,18 +327,9 @@ struct GameWalkthroughSectionView: View {
                 } else if totalCount == 0 {
                     emptyStateView
                 } else {
-                    // Grupp 1: HUVUDUPPDRAG
+                    // Grupp 1: HUVUDUPPDRAG (med akt-hantering & spoilerskydd)
                     if !mainQuests.isEmpty {
-                        questGroupSection(
-                            title: "HUVUDUPPDRAG",
-                            items: mainQuests,
-                            isExpanded: isMainQuestsExpanded,
-                            onToggleExpand: {
-                                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                                    isMainQuestsExpanded.toggle()
-                                }
-                            }
-                        )
+                        mainQuestsSection
                     }
 
                     // Grupp 2: SIDOUUPPDRAG
@@ -287,6 +422,351 @@ struct GameWalkthroughSectionView: View {
         }
         .sheet(isPresented: $showingAPIKeyPrompt) {
             apiKeySheet
+        }
+    }
+
+    // MARK: - Main Quests Section (Act-Aware & Spoiler Protected)
+
+    private var mainQuestsSection: some View {
+        let doneCount = mainQuests.filter(\.isDone).count
+        let total = mainQuests.count
+        let hasMultipleGroups = actGroups.count > 1
+
+        // Kompakt förhandsvisning som tar med nästa uppdrag från VARJE aktivt spår i den aktiva akten (t.ex. Cyberpunk 2077 Akt 2)
+        let compactItems: [GameTodoItem] = {
+            if total <= 4 {
+                return mainQuests
+            }
+            var result: [GameTodoItem] = []
+            let completed = mainQuests.filter(\.isDone)
+            if let lastDone = completed.last {
+                result.append(lastDone)
+            }
+
+            if hasMultipleGroups, let activeAct = activeMajorActName {
+                let activeBranches = actGroups.filter {
+                    $0.majorAct.caseInsensitiveCompare(activeAct) == .orderedSame && !$0.isCompleted
+                }
+                if activeBranches.count > 1 {
+                    // Ta nästa oavklarade uppdrag från varje parallellt spår i akten (t.ex. Judy, Voodoo Boys, Panam, Takemura)
+                    for branch in activeBranches {
+                        if let nextInBranch = branch.items.first(where: { !$0.isDone }),
+                           !result.contains(where: { $0.id == nextInBranch.id }) {
+                            result.append(nextInBranch)
+                        }
+                    }
+                }
+            }
+
+            let uncompleted = mainQuests.filter { !$0.isDone }
+            for item in uncompleted where result.count < 4 {
+                if !result.contains(where: { $0.id == item.id }) {
+                    result.append(item)
+                }
+            }
+            return result
+        }()
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Text("HUVUDUPPDRAG · \(doneCount)/\(total)")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .tracking(0.5)
+
+                if let activeAct = activeMajorActName, majorActs.count > 1 {
+                    Text("· Aktiv: \(activeAct)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.red)
+                }
+
+                Spacer()
+            }
+
+            if spoilerProtection && majorActs.count > 1 && isMainQuestsExpanded {
+                HStack(spacing: 6) {
+                    Image(systemName: "shield.lefthalf.filled")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.orange)
+                    Text("Aktiv akt: **\(activeMajorActName ?? "Klar")** — alla uppdrag i akten är synliga i valfri ordning, medan kommande akter skyddas.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(Color(.tertiarySystemFill).opacity(0.6))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+
+            if isMainQuestsExpanded && hasMultipleGroups {
+                // Grupperad akt-vy (som i webbtestet för Cyberpunk 2077, KCD 2, Witcher 3 m.fl.)
+                VStack(spacing: 10) {
+                    ForEach(actGroups) { group in
+                        let isCollapsed = collapsedActGroups.contains(group.name)
+                        let isCurrentAct = (activeMajorActName != nil)
+                            && group.majorAct.caseInsensitiveCompare(activeMajorActName ?? "") == .orderedSame
+                            && !group.isCompleted
+
+                        VStack(alignment: .leading, spacing: 0) {
+                            Button {
+                                withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                                    toggleActGroupCollapse(group.name)
+                                }
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(.secondary)
+
+                                    Text(group.name)
+                                        .font(.subheadline.weight(.bold))
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+
+                                    if isCurrentAct {
+                                        Text("Aktiv akt")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .textCase(.uppercase)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color.red.opacity(0.16))
+                                            .foregroundStyle(Color.red)
+                                            .clipShape(Capsule())
+                                    } else if group.isCompleted {
+                                        HStack(spacing: 3) {
+                                            Image(systemName: "checkmark")
+                                                .font(.system(size: 8, weight: .bold))
+                                            Text("Klar")
+                                                .font(.system(size: 9, weight: .bold))
+                                        }
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.green.opacity(0.16))
+                                        .foregroundStyle(Color.green)
+                                        .clipShape(Capsule())
+                                    }
+
+                                    Spacer()
+
+                                    Text("\(group.done)/\(group.total)")
+                                        .font(.caption.monospacedDigit().weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(Color(.tertiarySystemFill).opacity(0.55))
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+
+                            if !isCollapsed {
+                                VStack(spacing: 0) {
+                                    ForEach(Array(group.items.enumerated()), id: \.element.id) { idx, item in
+                                        let flatIdx = mainQuests.firstIndex(where: { $0.id == item.id }) ?? idx
+                                        let hiddenBySpoiler = isItemHiddenBySpoiler(item, flatIndex: flatIdx)
+
+                                        if idx > 0 {
+                                            Divider()
+                                                .padding(.leading, 38)
+                                                .opacity(0.35)
+                                        }
+
+                                        questRowView(
+                                            item: item,
+                                            flatIndex: flatIdx,
+                                            isHiddenBySpoiler: hiddenBySpoiler,
+                                            showGroupBadge: false
+                                        )
+                                        .padding(.horizontal, 12)
+                                    }
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        }
+                        .background(Color(.systemBackground).opacity(0.35))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(
+                                    isCurrentAct
+                                        ? Color.red.opacity(0.45)
+                                        : (group.isCompleted ? Color.green.opacity(0.3) : Color.primary.opacity(0.08)),
+                                    lineWidth: 1
+                                )
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                }
+            } else {
+                // Kompakt vy eller enkel kronologisk lista
+                let listToShow = isMainQuestsExpanded ? mainQuests : compactItems
+                VStack(spacing: 0) {
+                    ForEach(Array(listToShow.enumerated()), id: \.element.id) { index, item in
+                        let flatIdx = mainQuests.firstIndex(where: { $0.id == item.id }) ?? index
+                        let hiddenBySpoiler = isItemHiddenBySpoiler(item, flatIndex: flatIdx)
+
+                        if index > 0 {
+                            Divider()
+                                .padding(.leading, 30)
+                                .opacity(0.35)
+                        }
+
+                        questRowView(
+                            item: item,
+                            flatIndex: flatIdx,
+                            isHiddenBySpoiler: hiddenBySpoiler,
+                            showGroupBadge: hasMultipleGroups && !isMainQuestsExpanded
+                        )
+                    }
+                }
+            }
+
+            if total > 4 {
+                Button {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                        isMainQuestsExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(
+                            isMainQuestsExpanded
+                                ? "Visa färre"
+                                : (hasMultipleGroups ? "Visa alla \(total) (\(actGroups.count) akter/delar)" : "Visa alla \(total)")
+                        )
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.red)
+                        Image(systemName: isMainQuestsExpanded ? "chevron.up" : "chevron.right")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Color.red)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func questRowView(
+        item: GameTodoItem,
+        flatIndex: Int,
+        isHiddenBySpoiler: Bool,
+        showGroupBadge: Bool
+    ) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                toggleStep(item)
+            } label: {
+                Image(systemName: item.isDone ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(item.isDone ? Color.secondary : Color.secondary)
+            }
+            .buttonStyle(.plain)
+
+            if isHiddenBySpoiler {
+                HStack(spacing: 6) {
+                    Image(systemName: "shield.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.orange.opacity(0.8))
+                    Text("Delmål \(flatIndex + 1) (Dold av spoilerskydd)")
+                        .font(.subheadline.italic())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            toggleReveal(item.id)
+                        }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "eye")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text("Visa")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.orange.opacity(0.14))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(item.title)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(item.isDone ? Color.secondary : Color.primary)
+                            .strikethrough(item.isDone, color: Color.secondary)
+                            .lineLimit(2)
+
+                        if spoilerProtection && revealedItemIds.contains(item.id) {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    toggleReveal(item.id)
+                                }
+                            } label: {
+                                Image(systemName: "eye.slash")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    if showGroupBadge,
+                       let group = item.chapterGroup?.trimmingCharacters(in: .whitespacesAndNewlines),
+                       !group.isEmpty,
+                       group != "Huvudberättelsen" {
+                        Text(group)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            Spacer()
+
+            Menu {
+                Button {
+                    itemToEdit = item
+                    editDraftTitle = item.title
+                    editDraftCategory = category(for: item)
+                    showingEditSingleSheet = true
+                } label: {
+                    Label("Redigera", systemImage: "pencil")
+                }
+
+                Button(role: .destructive) {
+                    deleteStep(item)
+                } label: {
+                    Label("Ta bort", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.secondary.opacity(0.6))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 7)
+        .contextMenu {
+            Button {
+                itemToEdit = item
+                editDraftTitle = item.title
+                editDraftCategory = category(for: item)
+                showingEditSingleSheet = true
+            } label: {
+                Label("Redigera", systemImage: "pencil")
+            }
+
+            Button(role: .destructive) {
+                deleteStep(item)
+            } label: {
+                Label("Ta bort", systemImage: "trash")
+            }
         }
     }
 
@@ -903,7 +1383,10 @@ struct GameWalkthroughSectionView: View {
             copy.todos[idx].title = trimmed
             switch newCategory {
             case .main:
-                copy.todos[idx].chapterGroup = "Huvudberättelsen"
+                let existingGroup = copy.todos[idx].chapterGroup
+                if existingGroup == nil || existingGroup == "Sidouppdrag" || existingGroup == "Egna mål" {
+                    copy.todos[idx].chapterGroup = activeMajorActName ?? "Huvudberättelsen"
+                }
                 copy.todos[idx].isOptional = false
             case .side:
                 copy.todos[idx].chapterGroup = "Sidouppdrag"

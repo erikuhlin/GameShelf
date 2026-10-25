@@ -308,12 +308,12 @@ struct GameDiaryView: View {
                             label: "Snittbetyg"
                         )
 
-                        let totalHours = filteredActiveGames.reduce(0.0) { $0 + ($1.hoursPlayed ?? Double($1.estimatedHours ?? 0)) }
+                        let reviewedCount = filteredActiveGames.filter { !$0.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
                         statBadge(
-                            icon: "clock.fill",
-                            color: .orange,
-                            value: totalHours > 0 ? "\(Int(round(totalHours)))h" : "—",
-                            label: "Loggad tid"
+                            icon: "quote.bubble.fill",
+                            color: .purple,
+                            value: "\(reviewedCount)",
+                            label: "Recensioner"
                         )
                     }
                 }

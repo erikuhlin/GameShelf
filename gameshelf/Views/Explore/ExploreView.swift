@@ -654,16 +654,6 @@ struct ExploreView: View {
     }
 
     private func heroProgressInfo(for game: Game) -> HeroProgress? {
-        let loggedHours = game.effectiveHoursPlayed
-        let hasLoggedHours = loggedHours > 0
-        let loggedStr: String = {
-            if loggedHours.truncatingRemainder(dividingBy: 1) == 0 {
-                return "\(Int(loggedHours))h"
-            } else {
-                return "\(String(format: "%.1f", loggedHours))h"
-            }
-        }()
-
         let hasTodos = !game.todos.isEmpty
         let todosDone = game.todos.filter(\.isDone).count
         let todosTotal = game.todos.count
@@ -682,57 +672,24 @@ struct ExploreView: View {
 
         // 1. Kapitel & uppdrag har högsta prioritet för faktisk framsteg
         if hasTodos {
-            if hasLoggedHours {
-                return HeroProgress(
-                    icon: "checklist",
-                    text: "\(loggedStr) · \(todosDone)/\(todosTotal) kapitel",
-                    ratio: todoRatio
-                )
-            } else {
-                let percent = Int(round((todoRatio ?? 0) * 100))
-                return HeroProgress(
-                    icon: "checklist",
-                    text: "\(todosDone) av \(todosTotal) kapitel (\(percent)%)",
-                    ratio: todoRatio
-                )
-            }
-        }
-
-        // 2. Story progress etapp ("Börjat nyss", "Halvvägs", "Nära slutet")
-        if let s = story {
-            if hasLoggedHours {
-                return HeroProgress(
-                    icon: "flag.fill",
-                    text: "\(loggedStr) · \(s.rawValue)",
-                    ratio: storyRatio
-                )
-            } else {
-                return HeroProgress(
-                    icon: "flag.fill",
-                    text: s.rawValue,
-                    ratio: storyRatio
-                )
-            }
-        }
-
-        // 3. Loggad tid mot beräknad speltid
-        if hasLoggedHours {
-            if let est = game.estimatedHours, est > 0 {
-                let ratio = min(1.0, loggedHours / Double(est))
-                return HeroProgress(
-                    icon: "clock.fill",
-                    text: "\(loggedStr) / ~\(est)h",
-                    ratio: ratio
-                )
-            }
+            let percent = Int(round((todoRatio ?? 0) * 100))
             return HeroProgress(
-                icon: "clock.fill",
-                text: "\(loggedStr) spelat",
-                ratio: nil
+                icon: "checklist",
+                text: "\(todosDone) av \(todosTotal) kapitel (\(percent)%)",
+                ratio: todoRatio
             )
         }
 
-        // 4. Beräknad speltid från IGDB
+        // 2. Story progress etapp ("Precis börjat", "Halvvägs", "Snart klar")
+        if let s = story {
+            return HeroProgress(
+                icon: "flag.fill",
+                text: s.rawValue,
+                ratio: storyRatio
+            )
+        }
+
+        // 3. Beräknad speltid från IGDB
         if let est = game.estimatedHours, est > 0 {
             return HeroProgress(
                 icon: "clock",
@@ -741,7 +698,7 @@ struct ExploreView: View {
             )
         }
 
-        // 5. Senast spelat
+        // 4. Senast spelat
         if let last = game.lastPlayedFormatted {
             return HeroProgress(
                 icon: "clock.arrow.circlepath",

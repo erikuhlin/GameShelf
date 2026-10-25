@@ -69,8 +69,6 @@ struct GameDetailView: View {
     @State private var showingToplistSheet = false
 
     // Spelframsteg state
-    @State private var isEditingHours = false
-    @State private var manualHoursInput = ""
     @State private var isEditingProgressNote = false
     @State private var progressNoteDraft = ""
 
@@ -225,7 +223,7 @@ struct GameDetailView: View {
                     case .myPlay:
                         myPlayTabContent(g)
                     case .gameFacts:
-                        infoTabContent(includeTimeToBeat: false)
+                        infoTabContent(includeTimeToBeat: !isUpcomingGame)
                     }
                 } else if let g = currentGame, !g.isOwned {
                     // LÄGE B: ÖNSKELISTA
@@ -1430,13 +1428,8 @@ struct GameDetailView: View {
             if g.status == .completed {
                 completedCelebrationCard(g)
             }
-            if !g.isMultiplayerOrOngoing {
-                playtimeProgressCard(g)
-            } else {
-                multiplayerPlaytimeCard(g)
-            }
 
-            // Kapitel & uppdrag (Eget kort enligt mockup)
+            // Kapitel & uppdrag (huvudsaklig progress-sektion)
             GameWalkthroughSectionView(
                 game: g,
                 remoteIGDBID: remote?.id,
@@ -1444,6 +1437,11 @@ struct GameDetailView: View {
                     updateLocal(updated)
                 }
             )
+
+            // Snabbval för etapp ("Precis börjat" / "Halvvägs" / "Snart klar") om inga kapitel lagts in än
+            if g.status == .playing && !g.isMultiplayerOrOngoing && g.todos.isEmpty {
+                playtimeProgressCard(g)
+            }
 
             notesCard(g)
             collectionsCard(g)
@@ -1524,20 +1522,6 @@ struct GameDetailView: View {
                     .background(Color.yellow.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
                 }
 
-                if let hours = g.hoursPlayed, hours > 0 {
-                    HStack(spacing: 4) {
-                        Image(systemName: "clock.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.orange)
-                        Text(String(format: hours.truncatingRemainder(dividingBy: 1) == 0 ? "%.0f h" : "%.1f h", hours))
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.primary)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 8))
-                }
-
                 if let plat = g.platforms.first {
                     HStack(spacing: 4) {
                         Image(systemName: "gamecontroller.fill")
@@ -1580,7 +1564,7 @@ struct GameDetailView: View {
             // 1. Om spelet
             aboutGameSection
 
-            // 2. Speltid (kompakt) – visas bara om ej i Bibliotek-Info, ej osläppt och data finns
+            // 2. Speltid (kompakt) – visas om ej osläppt och data finns
             if includeTimeToBeat && !isUpcomingGame {
                 compactTimeToBeatSection(remote?.timeToBeat)
             }
@@ -1617,25 +1601,9 @@ struct GameDetailView: View {
         }
     }
 
-    // MARK: - Spelframsteg (Enhetlig HLTB-tidslinje, Etapper under Spelar nu & 1:1 Walkthrough)
+    // MARK: - Spelframsteg (Etapper under Spelar nu om ingen kapitellista används)
 
     private func playtimeProgressCard(_ g: Game) -> some View {
-        let hours = g.effectiveHoursPlayed
-        let mainHours = remote?.timeToBeat?.mainStoryHours ?? 0
-        let extraHours = remote?.timeToBeat?.mainExtraHours ?? 0
-        let compHours = remote?.timeToBeat?.completionistHours ?? 0
-        let hasHLTB = mainHours > 0 || extraHours > 0 || compHours > 0
-
-        let hoursDisplay: String = {
-            if hours == 0 { return "0h" }
-            if hours.truncatingRemainder(dividingBy: 1) == 0 {
-                return "\(Int(hours))h"
-            } else {
-                return "\(String(format: "%.1f", hours))h"
-            }
-        }()
-
-        // Under "Spelar nu" får framsteg ALDRIG vara .completed ("Klar")
         let activeMilestone: GameStoryProgress = {
             if let sp = g.storyProgress, sp != .completed {
                 return sp
@@ -1644,206 +1612,10 @@ struct GameDetailView: View {
         }()
 
         return VStack(alignment: .leading, spacing: 10) {
-            Text("Spelframsteg")
-                .font(.title3.weight(.bold))
-                .foregroundStyle(.primary)
-
-            VStack(alignment: .leading, spacing: 16) {
-                // 1. Loggad tid + röd "+ Logga tid"-knapp
-                playtimeHoursSection(g, hours: hours, hoursDisplay: hoursDisplay)
-
-                // 2. EN sammanslagen tidslinje med markeringar vid Main / Extra / 100% (37 tim / 72 tim / 123 tim)
-                if hasHLTB {
-                    unifiedHLTBTimelineSection(hours: hours, mainHours: mainHours, extraHours: extraHours, compHours: compHours)
-                }
-
-                // 3. "Var är du i spelet?" visas BARA när status är Spelar nu
-                if g.status == .playing {
-                    Divider()
-                        .padding(.top, 2)
-                    playtimeMilestonesSection(g, currentMilestone: activeMilestone)
-                }
-            }
-            .padding(16)
-            .background(Color(.secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }
-    }
-
-    @ViewBuilder
-    private func playtimeHoursSection(_ g: Game, hours: Double, hoursDisplay: String) -> some View {
-        if isEditingHours {
-            HStack(spacing: 8) {
-                TextField("0", text: $manualHoursInput)
-                    .keyboardType(.decimalPad)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color(.tertiarySystemFill))
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .frame(width: 80)
-                    .onSubmit {
-                        saveManualHours(for: g)
-                    }
-
-                Text("timmar")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Button("Klar") {
-                    saveManualHours(for: g)
-                }
-                .font(.caption.bold())
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(Color.red)
-                .foregroundStyle(.white)
-                .clipShape(Capsule())
-                .buttonStyle(.plain)
-
-                Button("Avbryt") {
-                    isEditingHours = false
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .buttonStyle(.plain)
-            }
-        } else {
-            HStack(alignment: .center) {
-                if hours == 0 {
-                    Text("Ingen tid loggad")
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(.secondary)
-                } else {
-                    Button {
-                        manualHoursInput = hours.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(hours))" : String(format: "%.1f", hours)
-                        isEditingHours = true
-                    } label: {
-                        HStack(alignment: .firstTextBaseline, spacing: 5) {
-                            Text("\(hoursDisplay) spelade")
-                                .font(.headline.weight(.bold))
-                                .foregroundStyle(Color.primary)
-                            Image(systemName: "pencil")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                Spacer()
-
-                Button {
-                    manualHoursInput = hours > 0 ? (hours.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(hours))" : String(format: "%.1f", hours)) : ""
-                    isEditingHours = true
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 13, weight: .bold))
-                        Text("Logga tid")
-                            .font(.subheadline.weight(.bold))
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.red)
-                    .foregroundStyle(.white)
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    // MARK: - Enhetlig HLTB-tidslinje (1:1 mockup)
-    @ViewBuilder
-    private func unifiedHLTBTimelineSection(hours: Double, mainHours: Int, extraHours: Int, compHours: Int) -> some View {
-        let maxTarget = max(compHours, max(extraHours, mainHours))
-        let fillRatio = maxTarget > 0 ? min(1.0, hours / Double(maxTarget)) : 0.0
-
-        VStack(spacing: 6) {
-            // Tidslinje med vertikala streck
-            GeometryReader { geo in
-                let width = geo.size.width
-                let safeMax = maxTarget > 0 ? Double(maxTarget) : 1.0
-
-                ZStack(alignment: .leading) {
-                    // Bakgrundsspår
-                    Capsule()
-                        .fill(Color(.tertiarySystemFill))
-                        .frame(height: 7)
-
-                    // Fyllnad när tid loggas
-                    if fillRatio > 0 {
-                        Capsule()
-                            .fill(Color.red)
-                            .frame(width: max(7, width * CGFloat(fillRatio)), height: 7)
-                    }
-
-                    // Vertikalt streck vid Main Story
-                    if mainHours > 0 {
-                        let pos = width * CGFloat(Double(mainHours) / safeMax)
-                        Rectangle()
-                            .fill(Color.secondary.opacity(0.85))
-                            .frame(width: 2, height: 16)
-                            .offset(x: min(width - 2, max(0, pos - 1)))
-                    }
-
-                    // Vertikalt streck vid Main + Extra
-                    if extraHours > 0 {
-                        let pos = width * CGFloat(Double(extraHours) / safeMax)
-                        Rectangle()
-                            .fill(Color.secondary.opacity(0.85))
-                            .frame(width: 2, height: 16)
-                            .offset(x: min(width - 2, max(0, pos - 1)))
-                    }
-
-                    // Vertikalt streck vid 100% (Completionist)
-                    if compHours > 0 {
-                        let pos = width * CGFloat(Double(compHours) / safeMax)
-                        Rectangle()
-                            .fill(Color.secondary.opacity(0.85))
-                            .frame(width: 2, height: 16)
-                            .offset(x: min(width - 2, max(0, pos - 1)))
-                    }
-                }
-            }
-            .frame(height: 16)
-            .padding(.top, 4)
-
-            // Etiketter under strecken (t.ex. "37 tim", "72 tim", "123 tim")
-            GeometryReader { geo in
-                let width = geo.size.width
-                let safeMax = maxTarget > 0 ? Double(maxTarget) : 1.0
-
-                ZStack(alignment: .leading) {
-                    if mainHours > 0 {
-                        let pos = width * CGFloat(Double(mainHours) / safeMax)
-                        Text("\(mainHours) tim")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .offset(x: max(0, min(width - 45, pos - 18)))
-                    }
-
-                    if extraHours > 0 {
-                        let pos = width * CGFloat(Double(extraHours) / safeMax)
-                        Text("\(extraHours) tim")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .offset(x: max(0, min(width - 45, pos - 18)))
-                    }
-
-                    if compHours > 0 {
-                        let pos = width * CGFloat(Double(compHours) / safeMax)
-                        Text("\(compHours) tim")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .offset(x: max(0, width - 45))
-                    }
-                }
-            }
-            .frame(height: 14)
+            playtimeMilestonesSection(g, currentMilestone: activeMilestone)
+                .padding(16)
+                .background(Color(.secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
     }
 
@@ -1884,99 +1656,11 @@ struct GameDetailView: View {
         }
     }
 
-    private func saveManualHours(for g: Game) {
-        let sanitized = manualHoursInput.replacingOccurrences(of: ",", with: ".")
-        if let val = Double(sanitized), val >= 0 {
-            var copy = g
-            copy.effectiveHoursPlayed = val
-            copy.lastPlayedDate = Date()
-            updateLocal(copy)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        }
-        isEditingHours = false
-    }
-
     private func formattedRelativeDate(_ date: Date) -> String {
         let formatter = RelativeDateTimeFormatter()
         formatter.locale = Locale(identifier: "sv_SE")
         formatter.unitsStyle = .short
         return formatter.localizedString(for: date, relativeTo: Date())
-    }
-
-    private func multiplayerPlaytimeCard(_ g: Game) -> some View {
-        let loggedHours = g.effectiveHoursPlayed
-        let hoursDisplay = loggedHours > 0 ? (loggedHours.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(loggedHours))" : String(format: "%.1f", loggedHours)) : "0"
-
-        return detailCard(title: "Speltid & Aktivitet") {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(loggedHours > 0 ? "\(hoursDisplay) timmar" : "Ingen tid loggad")
-                            .font(.system(size: 26, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color.primary)
-
-                        if let lastPlayed = g.lastPlayedFormatted {
-                            Text(lastPlayed)
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text("Aktiv rotation")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Spacer()
-
-                    HStack(spacing: 5) {
-                        Circle()
-                            .fill(g.status.color)
-                            .frame(width: 7, height: 7)
-                        Text(g.statusDisplayTitle)
-                            .font(.caption.bold())
-                            .foregroundStyle(g.status.color)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(g.status.color.opacity(0.12), in: Capsule())
-                }
-
-                HStack(spacing: 8) {
-                    ForEach([1, 2, 5], id: \.self) { delta in
-                        Button("+\(delta)h") {
-                            adjustPlaytime(by: Double(delta), for: g)
-                        }
-                        .font(.caption.bold())
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(Color(.tertiarySystemFill))
-                        .foregroundStyle(Color.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-
-                    if loggedHours > 0 {
-                        Button("-1h") {
-                            adjustPlaytime(by: -1.0, for: g)
-                        }
-                        .font(.caption.bold())
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(Color(.tertiarySystemFill))
-                        .foregroundStyle(.secondary)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                }
-
-                // Story / Uppdragslista även för pågående eller kampanjer i multiplayer-spel
-                GameWalkthroughSectionView(
-                    game: g,
-                    remoteIGDBID: remote?.id,
-                    onUpdateGame: { updated in
-                        updateLocal(updated)
-                    }
-                )
-            }
-        }
     }
 
     private func moveToWishlist(_ g: Game) {
@@ -1986,16 +1670,6 @@ struct GameDetailView: View {
         copy.status = .notStarted
         updateLocal(copy)
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-    }
-
-    private func adjustPlaytime(by delta: Double, for g: Game) {
-        var copy = g
-        let current = copy.effectiveHoursPlayed
-        let newHours = max(0.0, current + delta)
-        copy.effectiveHoursPlayed = newHours
-        copy.lastPlayedDate = Date()
-        updateLocal(copy)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     private func gameModeIcon(_ mode: String) -> String {

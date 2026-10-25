@@ -16,7 +16,6 @@ struct GameCompletionCelebrationSheet: View {
     @State private var rating: Int
     @State private var selectedPlatform: String
     @State private var reviewNotes: String
-    @State private var hoursPlayedText: String
     @State private var showConfetti = false
 
     init(game: Game, onSave: @escaping (Game) -> Void) {
@@ -27,13 +26,6 @@ struct GameCompletionCelebrationSheet: View {
         _rating = State(initialValue: game.rating ?? 0)
         _selectedPlatform = State(initialValue: game.platforms.first ?? "PlayStation 5")
         _reviewNotes = State(initialValue: game.notes)
-        if let h = game.hoursPlayed, h > 0 {
-            _hoursPlayedText = State(initialValue: String(format: h.truncatingRemainder(dividingBy: 1) == 0 ? "%.0f" : "%.1f", h))
-        } else if let est = game.estimatedHours, est > 0 {
-            _hoursPlayedText = State(initialValue: "\(est)")
-        } else {
-            _hoursPlayedText = State(initialValue: "")
-        }
     }
 
     var body: some View {
@@ -95,26 +87,6 @@ struct GameCompletionCelebrationSheet: View {
                                     .tint(.purple)
                                 }
                             }
-                        }
-
-                        // Hours played
-                        Divider()
-                            .background(Color.white.opacity(0.1))
-
-                        HStack {
-                            Label("Speltid (timmar)", systemImage: "clock.fill")
-                                .font(.subheadline.bold())
-                                .foregroundStyle(.primary)
-
-                            Spacer()
-
-                            TextField("Valfritt", text: $hoursPlayedText)
-                                .keyboardType(.decimalPad)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 80)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 8))
                         }
 
                         Divider()
@@ -360,9 +332,6 @@ struct GameCompletionCelebrationSheet: View {
         if !reviewNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             updated.notes = reviewNotes
             updated.noteUpdatedAt = Date()
-        }
-        if let h = Double(hoursPlayedText.replacingOccurrences(of: ",", with: ".")) {
-            updated.hoursPlayed = h
         }
         if !selectedPlatform.isEmpty && !updated.platforms.contains(selectedPlatform) {
             updated.platforms.insert(selectedPlatform, at: 0)

@@ -1075,145 +1075,328 @@ struct GameWalkthroughSectionView: View {
         }
     }
 
+    private func extractGeminiVersion(_ name: String) -> Double {
+        guard let regex = try? NSRegularExpression(pattern: "gemini[^\\d]*(\\d+(?:\\.\\d+)?)", options: [.caseInsensitive]),
+              let match = regex.firstMatch(in: name, options: [], range: NSRange(name.startIndex..., in: name)),
+              match.numberOfRanges > 1,
+              let range = Range(match.range(at: 1), in: name),
+              let version = Double(name[range]) else {
+            return 0
+        }
+        return version
+    }
+
     private func generateWithGeminiAI() async {
         let targetIgdbId = game.igdbID ?? remoteIGDBID ?? abs(game.title.hashValue)
-        let key = geminiApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { return }
+        let cleanKey = geminiApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanKey.isEmpty else { return }
 
         isGeneratingAI = true
         aiErrorMessage = nil
         defer { isGeneratingAI = false }
 
-        do {
-            let prompt = """
-            Returnera en komplett 1:1 walkthrough-kapitellista (varje enskilt huvuduppdrag/kapitel i rätt ordning, exakt som IGN Walkthrough) för spelet "\(game.title)".
-            Klumpa ALDRIG ihop flera uppdrag på samma rad. Behåll de officiella engelska kapitel-/uppdragsnamnen men översätt akt-/delrubriker (`chapterGroup`) till svenska (t.ex. "Akt 1: ...", "Prolog", "Epilog").
-            Svara ENDAST med giltig JSON i exakt detta format:
-            {"steps":[{"order":1,"title":"...","chapterGroup":"..."}]}
-            """
+        let title = game.title
+        let encodedKey = cleanKey.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? cleanKey
 
-            struct GeminiCandidateResponse: Decodable {
-                struct Candidate: Decodable {
-                    struct Content: Decodable {
-                        struct Part: Decodable { let text: String? }
-                        let parts: [Part]?
+        let prompt = """
+        Task: Create the COMPLETE, chronological 1:1 main story walkthrough progression list for the video game "\(title)", structured like IGN's official Walkthrough guide.
+
+        STRICT RULES:
+        1. COMPLETE 1:1 LIST (NO LUMPING, NO SKIPPING):
+           - Include EVERY official main story chapter, main quest, or walkthrough area in chronological order from start to finish.
+           - NEVER combine two chapters, quests, or areas into one item (e.g., NEVER write "Chapter 1 & 2"). Each must be its own separate object in "items".
+        2. EXCLUDE MINOR SIDE CONTENT:
+           - Only include main story chapters/quests/areas (plus major optional boss areas if relevant, marked with "isOptional": true).
+        3. OFFICIAL ENGLISH TITLES:
+           - Keep the official English in-game/IGN titles for all chapters, quests, and areas. Do not translate titles to Swedish!
+        4. ACT / PHASE GROUPING ("chapterGroup"):
+           - Group every item into its overarching Act, Phase, or Region using "chapterGroup" (e.g., "Prolog", "Akt 1", "Akt 2", "Akt 3", "Final").
+        5. Output ONLY valid JSON matching this exact schema:
+        {
+          "gameTitle": "\(title)",
+          "hasLinearProgression": true,
+          "progressionType": "chapters",
+          "summary": "Kort svensk sammanfattning av spelets upplägg",
+          "items": [
+            {
+              "id": "1",
+              "title": "Exact English Chapter / Quest / Area Title",
+              "order": 1,
+              "chapterGroup": "Akt 1",
+              "description": "Kort svensk info",
+              "isOptional": false
+            }
+          ]
+        }
+        """
+
+        struct GeminiModelsListResponse: Decodable {
+            struct ModelInfo: Decodable {
+                let name: String
+                let supportedGenerationMethods: [String]?
+            }
+            let models: [ModelInfo]?
+        }
+
+        struct GeminiCandidateResponse: Decodable {
+            struct Candidate: Decodable {
+                struct Content: Decodable {
+                    struct Part: Decodable {
+                        let text: String?
+                        let thought: Bool?
                     }
-                    let content: Content?
+                    let parts: [Part]?
                 }
-                let candidates: [Candidate]?
+                let content: Content?
             }
+            let candidates: [Candidate]?
+        }
 
-            struct GeminiStepItem: Decodable {
-                let order: Int
-                let title: String
-                let chapterGroup: String?
+        struct GeminiApiErrorResponse: Decodable {
+            struct ApiError: Decodable {
+                let code: Int?
+                let message: String?
+                let status: String?
             }
+            let error: ApiError?
+        }
 
-            struct StepsWrapper: Decodable {
-                let steps: [GeminiStepItem]
-            }
+        do {
+            // 1. Hämta aktiva modeller dynamiskt från Google (precis som i webbtestet), med gemini-3.8-flash som primär standard
+            var candidateModels = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-2.5-flash"]
 
-            struct GeminiApiErrorResponse: Decodable {
-                struct ApiError: Decodable {
-                    let code: Int?
-                    let message: String?
-                    let status: String?
+            if let listURL = URL(string: "https://generativelanguage.googleapis.com/v1beta/models?key=\(encodedKey)") {
+                var listReq = URLRequest(url: listURL)
+                listReq.timeoutInterval = 8
+                if let (listData, listResp) = try? await URLSession.shared.data(for: listReq),
+                   let httpResp = listResp as? HTTPURLResponse {
+                    if !(200...299).contains(httpResp.statusCode) {
+                        if let errObj = try? JSONDecoder().decode(GeminiApiErrorResponse.self, from: listData),
+                           let msg = errObj.error?.message, !msg.isEmpty {
+                            if msg.localizedCaseInsensitiveContains("API key") || httpResp.statusCode == 400 || httpResp.statusCode == 403 {
+                                throw NSError(
+                                    domain: "Gemini",
+                                    code: httpResp.statusCode,
+                                    userInfo: [NSLocalizedDescriptionKey: "Ogiltig API-nyckel (\(msg))"]
+                                )
+                            }
+                        }
+                    } else if let decodedList = try? JSONDecoder().decode(GeminiModelsListResponse.self, from: listData),
+                              let rawModels = decodedList.models {
+                        let excludedKeywords = ["tts", "audio", "embed", "imagen", "aqa", "learnlm", "vision", "robotics", "computer-use"]
+                        let supported = rawModels
+                            .filter { ($0.supportedGenerationMethods ?? []).contains("generateContent") }
+                            .map { $0.name.replacingOccurrences(of: "^models/", with: "", options: .regularExpression) }
+                            .filter { name in
+                                let lower = name.lowercased()
+                                return !excludedKeywords.contains(where: { lower.contains($0) })
+                            }
+
+                        let flashModels = supported
+                            .filter { $0.lowercased().contains("flash") }
+                            .sorted { extractGeminiVersion($0) > extractGeminiVersion($1) }
+
+                        let otherModels = supported
+                            .filter { !$0.lowercased().contains("flash") }
+                            .sorted { extractGeminiVersion($0) > extractGeminiVersion($1) }
+
+                        var unique: [String] = []
+                        for m in (flashModels + otherModels) where !unique.contains(m) {
+                            unique.append(m)
+                        }
+                        if !unique.isEmpty {
+                            candidateModels = Array(unique.prefix(4))
+                        }
+                    }
                 }
-                let error: ApiError?
             }
 
-            let models = ["gemini-2.0-flash", "gemini-1.5-flash"]
+            // 2. Anropa kandidatmodellerna i tur och ordning med thinkingBudget: 0 (och 400-fallback utan thinkingConfig)
             var lastError: Error? = nil
-            var decodedSteps: [GeminiStepItem] = []
+            var parsedTemplateItems: [GameWalkthroughTemplateItem] = []
+            var parsedSummary = "Kapitellista genererad för \(title)."
+            var parsedProgressionType = "chapters"
+            var usedModelName = candidateModels.first ?? "gemini-3.8-flash"
 
-            for modelName in models {
-                guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(modelName):generateContent?key=\(key)") else {
+            for modelName in candidateModels {
+                guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(modelName):generateContent?key=\(encodedKey)") else {
                     continue
                 }
 
-                let payload: [String: Any] = [
+                let payloadWithThinking: [String: Any] = [
                     "contents": [
                         ["parts": [["text": prompt]]]
                     ],
                     "generationConfig": [
                         "temperature": 0.1,
-                        "responseMimeType": "application/json"
+                        "responseMimeType": "application/json",
+                        "maxOutputTokens": 8192,
+                        "thinkingConfig": ["thinkingBudget": 0]
                     ]
                 ]
 
-                var request = URLRequest(url: url)
-                request.httpMethod = "POST"
-                request.timeoutInterval = 60
-                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+                let payloadWithoutThinking: [String: Any] = [
+                    "contents": [
+                        ["parts": [["text": prompt]]]
+                    ],
+                    "generationConfig": [
+                        "temperature": 0.1,
+                        "responseMimeType": "application/json",
+                        "maxOutputTokens": 8192
+                    ]
+                ]
 
                 do {
-                    let (data, response) = try await URLSession.shared.data(for: request)
-                    guard let http = response as? HTTPURLResponse else {
+                    var request = URLRequest(url: url)
+                    request.httpMethod = "POST"
+                    request.timeoutInterval = 45
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    request.httpBody = try JSONSerialization.data(withJSONObject: payloadWithThinking)
+
+                    var (data, response) = try await URLSession.shared.data(for: request)
+                    guard var http = response as? HTTPURLResponse else {
                         throw URLError(.badServerResponse)
+                    }
+
+                    // Om modellen inte stödjer thinkingConfig (HTTP 400), prova direkt utan thinkingConfig
+                    if http.statusCode == 400 {
+                        var retryRequest = URLRequest(url: url)
+                        retryRequest.httpMethod = "POST"
+                        retryRequest.timeoutInterval = 45
+                        retryRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                        retryRequest.httpBody = try JSONSerialization.data(withJSONObject: payloadWithoutThinking)
+
+                        let (retryData, retryResponse) = try await URLSession.shared.data(for: retryRequest)
+                        if let retryHttp = retryResponse as? HTTPURLResponse {
+                            data = retryData
+                            http = retryHttp
+                        }
                     }
 
                     if !(200...299).contains(http.statusCode) {
                         if let errResp = try? JSONDecoder().decode(GeminiApiErrorResponse.self, from: data),
                            let msg = errResp.error?.message, !msg.isEmpty {
                             if msg.localizedCaseInsensitiveContains("API key") {
-                                throw NSError(domain: "Gemini", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Ogiltig API-nyckel. Kontrollera din nyckel från Google AI Studio."])
+                                throw NSError(
+                                    domain: "GeminiKeyError",
+                                    code: http.statusCode,
+                                    userInfo: [NSLocalizedDescriptionKey: "Ogiltig API-nyckel. Kontrollera din nyckel från Google AI Studio."]
+                                )
                             }
-                            throw NSError(domain: "Gemini", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: msg])
+                            throw NSError(domain: "GeminiModelError", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: msg])
                         }
-                        throw URLError(.badServerResponse)
+                        throw NSError(domain: "GeminiModelError", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode)"])
                     }
 
                     let geminiResp = try JSONDecoder().decode(GeminiCandidateResponse.self, from: data)
-                    guard let rawText = geminiResp.candidates?.first?.content?.parts?.first?.text else {
-                        throw URLError(.cannotParseResponse)
+                    let parts = geminiResp.candidates?.first?.content?.parts ?? []
+                    let nonThoughtText = parts
+                        .filter { $0.thought != true }
+                        .compactMap(\.text)
+                        .joined(separator: "\n")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    let fallbackText = parts
+                        .compactMap(\.text)
+                        .joined(separator: "\n")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    let textContent = !nonThoughtText.isEmpty ? nonThoughtText : fallbackText
+
+                    guard !textContent.isEmpty else {
+                        throw NSError(domain: "GeminiModelError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Tomt svar från AI"])
                     }
 
-                    var cleanJson = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if cleanJson.hasPrefix("```json") {
-                        cleanJson = String(cleanJson.dropFirst(7))
-                    } else if cleanJson.hasPrefix("```") {
-                        cleanJson = String(cleanJson.dropFirst(3))
-                    }
-                    if cleanJson.hasSuffix("```") {
-                        cleanJson = String(cleanJson.dropLast(3))
-                    }
-                    cleanJson = cleanJson.trimmingCharacters(in: .whitespacesAndNewlines)
-
-                    guard let jsonData = cleanJson.data(using: .utf8) else {
-                        throw URLError(.cannotParseResponse)
+                    var cleaned = textContent
+                    if let regex = try? NSRegularExpression(pattern: "```(?:json)?\\s*([\\s\\S]*?)\\s*```", options: [.caseInsensitive]),
+                       let match = regex.firstMatch(in: cleaned, options: [], range: NSRange(cleaned.startIndex..., in: cleaned)),
+                       match.numberOfRanges > 1,
+                       let range = Range(match.range(at: 1), in: cleaned) {
+                        cleaned = String(cleaned[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    } else if let firstBrace = cleaned.firstIndex(of: "{"),
+                              let lastBrace = cleaned.lastIndex(of: "}"),
+                              firstBrace < lastBrace {
+                        cleaned = String(cleaned[firstBrace...lastBrace]).trimmingCharacters(in: .whitespacesAndNewlines)
                     }
 
-                    let decoded = try JSONDecoder().decode(StepsWrapper.self, from: jsonData)
-                    if !decoded.steps.isEmpty {
-                        decodedSteps = decoded.steps
+                    guard let jsonData = cleaned.data(using: .utf8),
+                          let jsonObject = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
+                        throw NSError(domain: "GeminiModelError", code: -2, userInfo: [NSLocalizedDescriptionKey: "Kunde inte tolka JSON från AI"])
+                    }
+
+                    let rawItems = (jsonObject["items"] as? [[String: Any]])
+                        ?? (jsonObject["chapters"] as? [[String: Any]])
+                        ?? (jsonObject["walkthrough"] as? [[String: Any]])
+                        ?? (jsonObject["steps"] as? [[String: Any]])
+                        ?? []
+
+                    guard !rawItems.isEmpty else {
+                        throw NSError(domain: "GeminiModelError", code: -3, userInfo: [NSLocalizedDescriptionKey: "Inga kapitel returnerades"])
+                    }
+
+                    if let summary = jsonObject["summary"] as? String, !summary.isEmpty {
+                        parsedSummary = summary
+                    }
+                    if let progType = jsonObject["progressionType"] as? String, !progType.isEmpty, progType != "none" {
+                        parsedProgressionType = progType
+                    }
+
+                    parsedTemplateItems = rawItems.enumerated().compactMap { idx, dict in
+                        let rawTitle = (dict["title"] as? String) ?? (dict["name"] as? String) ?? ""
+                        let cleanTitle = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !cleanTitle.isEmpty else { return nil }
+
+                        let orderVal: Int
+                        if let intOrder = dict["order"] as? Int {
+                            orderVal = intOrder
+                        } else if let strOrder = dict["order"] as? String, let parsedInt = Int(strOrder) {
+                            orderVal = parsedInt
+                        } else {
+                            orderVal = idx + 1
+                        }
+
+                        let groupVal = (dict["chapterGroup"] as? String)
+                            ?? (dict["act"] as? String)
+                            ?? (dict["region"] as? String)
+                            ?? "Huvudberättelsen"
+
+                        let descVal = dict["description"] as? String
+                        let optionalVal = (dict["isOptional"] as? Bool) ?? false
+
+                        return GameWalkthroughTemplateItem(
+                            id: UUID().uuidString,
+                            title: cleanTitle,
+                            order: orderVal,
+                            chapterGroup: groupVal,
+                            description: descVal,
+                            isOptional: optionalVal
+                        )
+                    }
+
+                    if !parsedTemplateItems.isEmpty {
+                        usedModelName = modelName
                         break
                     }
                 } catch {
                     lastError = error
-                    if let nsErr = error as NSError?, nsErr.domain == "Gemini" {
+                    if let nsErr = error as NSError?, nsErr.domain == "GeminiKeyError" {
                         throw error
                     }
+                    // Annars fortsätt till nästa reservmodell i candidateModels
                 }
             }
 
-            guard !decodedSteps.isEmpty else {
+            guard !parsedTemplateItems.isEmpty else {
                 if let err = lastError {
                     throw err
                 }
                 throw URLError(.cannotParseResponse)
             }
 
-            let templateItems = decodedSteps.map { step in
-                GameWalkthroughTemplateItem(
-                    id: UUID().uuidString,
-                    title: step.title,
-                    order: step.order,
-                    chapterGroup: step.chapterGroup,
-                    description: nil,
-                    isOptional: false
-                )
-            }
+            let ignSlug = title
+                .folding(options: .diacriticInsensitive, locale: .current)
+                .lowercased()
+                .replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+            let ignSourceUrl = "https://www.ign.com/wikis/\(ignSlug)/Walkthrough"
 
             let template = GameWalkthroughTemplate(
                 igdbId: targetIgdbId,
@@ -1221,11 +1404,11 @@ struct GameWalkthroughSectionView: View {
                 normalizedTitle: GameWalkthroughTemplate.normalizeTitle(game.title),
                 alternateIgdbIds: nil,
                 hasLinearProgression: true,
-                progressionType: "chapters",
-                summary: "AI (IGN 1:1)",
-                items: templateItems,
-                source: "AI (IGN 1:1)",
-                sourceUrl: nil
+                progressionType: parsedProgressionType,
+                summary: parsedSummary,
+                items: parsedTemplateItems,
+                source: "AI (\(usedModelName))",
+                sourceUrl: ignSourceUrl
             )
 
             var copy = game

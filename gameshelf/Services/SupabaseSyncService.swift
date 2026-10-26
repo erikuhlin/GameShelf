@@ -21,14 +21,14 @@ nonisolated enum SupabaseDateParser: Sendable {
         return formatter
     }()
 
-    private nonisolated(unsafe) static let fallbackDateFormatter: DateFormatter = {
+    private static let fallbackDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         return formatter
     }()
 
-    private nonisolated(unsafe) static let lock = NSLock()
+    private static let lock = NSLock()
 
     nonisolated static func parse(_ string: String?) -> Date? {
         guard let raw = string?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
@@ -96,12 +96,25 @@ actor SupabaseSyncService {
         var created_at: String?
         var completed_year: Int?
         var completed_date: String?
+        var story_progress: String?
+        var hours_played: Double?
+        var progress_note: String?
+        var note_updated_at: String?
+        var play_types: [String]?
+        var priority: String?
+        var is_backlog: Bool?
+        var last_played_date: String?
+        var started_playing_date: String?
+        var paused_date: String?
 
         enum CodingKeys: String, CodingKey {
             case id, user_id, title, platform, platforms, release_year, first_release_date
             case genres, developers, status, rating, igdb_rating, cover_url, igdb_id
             case estimated_hours, is_owned, notes, todos, created_at
             case completed_year, completed_date
+            case story_progress, hours_played, progress_note, note_updated_at
+            case play_types, priority, is_backlog, last_played_date
+            case started_playing_date, paused_date
         }
 
         func encode(to encoder: Encoder) throws {
@@ -125,7 +138,18 @@ actor SupabaseSyncService {
             try container.encodeIfPresent(notes, forKey: .notes)
             try container.encodeIfPresent(todos, forKey: .todos)
             try container.encodeIfPresent(created_at, forKey: .created_at)
-            // intentionally omit completed_year and completed_date to prevent PGRST204 errors
+            try container.encodeIfPresent(completed_year, forKey: .completed_year)
+            try container.encodeIfPresent(completed_date, forKey: .completed_date)
+            try container.encodeIfPresent(story_progress, forKey: .story_progress)
+            try container.encodeIfPresent(hours_played, forKey: .hours_played)
+            try container.encodeIfPresent(progress_note, forKey: .progress_note)
+            try container.encodeIfPresent(note_updated_at, forKey: .note_updated_at)
+            try container.encodeIfPresent(play_types, forKey: .play_types)
+            try container.encodeIfPresent(priority, forKey: .priority)
+            try container.encodeIfPresent(is_backlog, forKey: .is_backlog)
+            try container.encodeIfPresent(last_played_date, forKey: .last_played_date)
+            try container.encodeIfPresent(started_playing_date, forKey: .started_playing_date)
+            try container.encodeIfPresent(paused_date, forKey: .paused_date)
         }
 
         init(from game: Game, userId: UUID? = nil) {
@@ -149,24 +173,18 @@ actor SupabaseSyncService {
             self.created_at = SupabaseDateParser.string(from: game.dateAdded)
             self.completed_year = game.completedYear
             self.completed_date = game.completedDate.map { SupabaseDateParser.string(from: $0) }
+            self.story_progress = game.storyProgress?.rawValue
+            self.hours_played = game.hoursPlayed
+            self.progress_note = game.progressNote
+            self.note_updated_at = game.noteUpdatedAt.map { SupabaseDateParser.string(from: $0) }
+            self.play_types = game.playTypes.map(\.rawValue)
+            self.priority = game.priority.rawValue
+            self.is_backlog = game.isBacklog
+            self.last_played_date = game.lastPlayedDate.map { SupabaseDateParser.string(from: $0) }
+            self.started_playing_date = game.startedPlayingDate.map { SupabaseDateParser.string(from: $0) }
+            self.paused_date = game.pausedDate.map { SupabaseDateParser.string(from: $0) }
 
-            // Pack metadata (completedYear, completedDate) into notes
-            var metaDict: [String: Any] = [:]
-            if let cy = game.completedYear {
-                metaDict["completed_year"] = cy
-            } else if game.status == .completed {
-                metaDict["completed_year"] = NSNull()
-            }
-            if let cd = game.completedDate { metaDict["completed_date"] = SupabaseDateParser.string(from: cd) }
-
-            let cleanNotes = game.notes.replacingOccurrences(of: #"<!--GS_META:[\s\S]*?-->\n?"#, with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
-
-            if !metaDict.isEmpty, let jsonData = try? JSONSerialization.data(withJSONObject: metaDict), let metaStr = String(data: jsonData, encoding: .utf8) {
-                let tag = "<!--GS_META:\(metaStr)-->"
-                self.notes = cleanNotes.isEmpty ? tag : "\(tag)\n\(cleanNotes)"
-            } else {
-                self.notes = cleanNotes
-            }
+            self.notes = game.notes.replacingOccurrences(of: #"<!--GS_META:[\s\S]*?-->\n?"#, with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
         func toDomainGame() -> Game {
@@ -243,6 +261,16 @@ actor SupabaseSyncService {
                 parsedCompletedDate = SupabaseDateParser.parse(compStr)
             }
 
+            let mappedStoryProgress = (story_progress.flatMap { GameStoryProgress(rawValue: $0) }) ?? (playStatus == .completed ? .completed : nil)
+            let mappedPlayTypes: [GamePlayType]? = play_types.flatMap { types in
+                let parsed = types.compactMap { GamePlayType(rawValue: $0) }
+                return parsed.isEmpty ? nil : parsed
+            }
+            let mappedPriority = priority.flatMap { PlayPriority(rawValue: $0) } ?? .none
+            let mappedLastPlayed = last_played_date.flatMap { SupabaseDateParser.parse($0) }
+            let mappedStartedPlaying = started_playing_date.flatMap { SupabaseDateParser.parse($0) }
+            let mappedPaused = paused_date.flatMap { SupabaseDateParser.parse($0) }
+            let mappedNoteUpdated = note_updated_at.flatMap { SupabaseDateParser.parse($0) }
 
             return Game(
                 id: id,
@@ -262,9 +290,18 @@ actor SupabaseSyncService {
                 notes: cleanUserNotes,
                 todos: todos ?? [],
                 dateAdded: parsedDate,
-                isBacklog: isBacklog,
+                playTypes: mappedPlayTypes,
+                isBacklog: is_backlog ?? isBacklog,
+                priority: mappedPriority,
+                lastPlayedDate: mappedLastPlayed,
+                startedPlayingDate: mappedStartedPlaying,
+                pausedDate: mappedPaused,
                 completedYear: parsedCompletedYear,
-                completedDate: parsedCompletedDate
+                completedDate: parsedCompletedDate,
+                storyProgress: mappedStoryProgress,
+                hoursPlayed: hours_played,
+                progressNote: progress_note,
+                noteUpdatedAt: mappedNoteUpdated
             )
         }
     }

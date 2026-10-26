@@ -25,6 +25,16 @@ CREATE TABLE IF NOT EXISTS public.games (
     todos JSONB NOT NULL DEFAULT '[]'::JSONB,
     completed_year INTEGER,
     completed_date TIMESTAMPTZ,
+    story_progress TEXT,
+    hours_played DOUBLE PRECISION DEFAULT 0,
+    progress_note TEXT,
+    note_updated_at TIMESTAMPTZ,
+    play_types TEXT[] NOT NULL DEFAULT '{"singlePlayer"}'::TEXT[],
+    priority TEXT NOT NULL DEFAULT 'none',
+    is_backlog BOOLEAN NOT NULL DEFAULT FALSE,
+    last_played_date TIMESTAMPTZ,
+    started_playing_date TIMESTAMPTZ,
+    paused_date TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -72,6 +82,16 @@ CREATE TABLE IF NOT EXISTS public.user_games (
     todos JSONB NOT NULL DEFAULT '[]'::JSONB,
     completed_year INTEGER,
     completed_date TIMESTAMPTZ,
+    story_progress TEXT,
+    hours_played DOUBLE PRECISION DEFAULT 0,
+    progress_note TEXT,
+    note_updated_at TIMESTAMPTZ,
+    play_types TEXT[] NOT NULL DEFAULT '{"singlePlayer"}'::TEXT[],
+    priority TEXT NOT NULL DEFAULT 'none',
+    is_backlog BOOLEAN NOT NULL DEFAULT FALSE,
+    last_played_date TIMESTAMPTZ,
+    started_playing_date TIMESTAMPTZ,
+    paused_date TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

@@ -119,7 +119,7 @@ export function sanitizeUserGamePayload(updates: Partial<Game>, existingGame?: P
 
   const finalNotes = packGameNotes(userNotes, mergedMeta);
 
-  // Exclusively map columns present in Supabase 'user_games' schema
+  // Map both standard and new metadata columns in Supabase 'user_games' schema
   const payload: Record<string, any> = {
     updated_at: new Date().toISOString(),
   };
@@ -143,7 +143,20 @@ export function sanitizeUserGamePayload(updates: Partial<Game>, existingGame?: P
   if (updates.todos !== undefined) payload.todos = updates.todos;
   if (updates.igdb_id !== undefined) payload.igdb_id = updates.igdb_id;
 
-  payload.notes = finalNotes;
+  // New first-class metadata columns
+  if (merged.story_progress !== undefined) payload.story_progress = merged.story_progress;
+  if (merged.hours_played !== undefined) payload.hours_played = merged.hours_played;
+  if (merged.progress_note !== undefined) payload.progress_note = merged.progress_note;
+  if (merged.note_updated_at !== undefined) payload.note_updated_at = merged.note_updated_at;
+  if (merged.play_types !== undefined) payload.play_types = merged.play_types;
+  if (merged.priority !== undefined) payload.priority = merged.priority;
+  if (merged.is_backlog !== undefined) payload.is_backlog = merged.is_backlog;
+  if (merged.last_played_date !== undefined) payload.last_played_date = merged.last_played_date;
+  if (merged.completed_year !== undefined) payload.completed_year = merged.completed_year;
+  if (merged.completed_date !== undefined) payload.completed_date = merged.completed_date;
+
+  // Store clean user notes (without tag clutter)
+  payload.notes = userNotes;
 
   return payload;
 }

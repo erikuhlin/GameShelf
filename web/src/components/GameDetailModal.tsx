@@ -50,6 +50,7 @@ import {
 } from 'lucide-react';
 import { GameShareModal } from './GameShareModal';
 import { ReleaseCountdownBanner } from './ReleaseCountdownBanner';
+import { GameWalkthroughSection } from './GameWalkthroughSection';
 import { fetchGameDeal, getStoreLinks, GameDeal, StoreQuickLink } from '@/services/priceWatcherService';
 
 interface GameDetailModalProps {
@@ -1820,20 +1821,31 @@ function GameDetailModalContent({
                 )}
               </div>
 
-              {/* Sektion: Anteckningar & Checklista */}
-              <div className="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-4 sm:p-5 space-y-4">
+              {/* Sektion: Kapitel & uppdrag */}
+              <GameWalkthroughSection
+                game={{ ...effectiveGame, todos }}
+                onUpdateTodos={(updatedTodos) => {
+                  setTodos(updatedTodos);
+                  saveGameUpdates({ todos: updatedTodos });
+                }}
+                onUpdateStoryProgress={(progress) => {
+                  setStoryProgress(progress);
+                  saveGameUpdates({ story_progress: progress });
+                }}
+              />
+
+              {/* Sektion: Egna anteckningar */}
+              <div className="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-4 sm:p-5 space-y-3">
                 <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3">
                   <div className="flex items-center gap-2">
                     <BookOpen className="w-4 h-4 text-brand-red" />
                     <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
-                      Anteckningar & Checklista
+                      Egna anteckningar
                     </span>
                   </div>
                 </div>
 
-                {/* Anteckningar */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-zinc-400">Egna anteckningar</label>
                   <textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
@@ -1842,67 +1854,6 @@ function GameDetailModalContent({
                     rows={3}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-brand-red"
                   />
-                </div>
-
-                {/* Checklista */}
-                <div className="space-y-2 pt-2 border-t border-zinc-800/60">
-                  <label className="text-xs font-medium text-zinc-400">Checklista / Mål</label>
-                  <form onSubmit={handleAddTodo} className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newTodoTitle}
-                      onChange={(e) => setNewTodoTitle(e.target.value)}
-                      placeholder="Ny punkt (t.ex. Hitta alla shrine-kistor)..."
-                      className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-brand-red"
-                    />
-                    <button
-                      type="submit"
-                      className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
-                    >
-                      Lägg till
-                    </button>
-                  </form>
-
-                  {todos.length > 0 && (
-                    <div className="space-y-1.5 pt-1">
-                      {todos.map((t) => (
-                        <div
-                          key={t.id}
-                          className="flex items-center justify-between px-3 py-2 bg-zinc-950/60 border border-zinc-800/80 rounded-xl text-xs"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => handleToggleTodo(t.id)}
-                            className="flex items-center gap-2 text-left cursor-pointer flex-1 mr-2"
-                          >
-                            <span
-                              className={`w-4 h-4 rounded flex items-center justify-center border transition ${
-                                t.isDone
-                                  ? 'bg-emerald-500 border-emerald-500 text-black'
-                                  : 'border-zinc-700 bg-zinc-900'
-                              }`}
-                            >
-                              {t.isDone && <Check className="w-3 h-3" />}
-                            </span>
-                            <span
-                              className={
-                                t.isDone ? 'line-through text-zinc-500' : 'text-zinc-200 font-medium'
-                              }
-                            >
-                              {t.title}
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteTodo(t.id)}
-                            className="text-zinc-600 hover:text-red-400 p-1 cursor-pointer"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
 

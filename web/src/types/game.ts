@@ -29,6 +29,10 @@ export interface GameTodoItem {
   id: string;
   title: string;
   isDone: boolean;
+  order?: number;
+  chapterGroup?: string;
+  description?: string;
+  isOptional?: boolean;
 }
 
 export type GameStoryProgress =

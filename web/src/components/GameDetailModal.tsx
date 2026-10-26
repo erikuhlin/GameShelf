@@ -185,8 +185,6 @@ function GameDetailModalContent({
   const [noteUpdatedAt, setNoteUpdatedAt] = useState<string | null>(game.note_updated_at || null);
 
   // Edit states
-  const [isEditingHours, setIsEditingHours] = useState(false);
-  const [manualHoursInput, setManualHoursInput] = useState('');
   const [isEditingProgressNote, setIsEditingProgressNote] = useState(false);
   const [progressNoteDraft, setProgressNoteDraft] = useState('');
 
@@ -453,31 +451,6 @@ function GameDetailModalContent({
   const handleMilestoneClick = (milestone: GameStoryProgress) => {
     setStoryProgress(milestone);
     saveGameUpdates({ story_progress: milestone });
-  };
-
-  // Snabbjustering av speltid (+1h, +5h, -1h)
-  const handleAdjustHours = (delta: number) => {
-    const nextHours = Math.max(0, Math.round((hoursPlayed + delta) * 10) / 10);
-    setHoursPlayed(nextHours);
-    saveGameUpdates({
-      hours_played: nextHours,
-      last_played_date: new Date().toISOString(),
-    });
-  };
-
-  // Manuell inmatning av speltid (stöd för decimaler som 12.5)
-  const handleSaveManualHours = () => {
-    const clean = manualHoursInput.replace(',', '.').trim();
-    const val = parseFloat(clean);
-    if (!isNaN(val) && val >= 0) {
-      const rounded = Math.round(val * 10) / 10;
-      setHoursPlayed(rounded);
-      saveGameUpdates({
-        hours_played: rounded,
-        last_played_date: new Date().toISOString(),
-      });
-    }
-    setIsEditingHours(false);
   };
 
   // Spara lägesanteckning (max 140 tecken)
@@ -1470,13 +1443,19 @@ function GameDetailModalContent({
                       </div>
                     </div>
 
-                    {/* Speltid */}
+                    {/* Kapitel & Uppdrag */}
                     <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-xl p-3 flex items-center gap-3">
-                      <Clock className="w-5 h-5 text-orange-400 shrink-0" />
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                       <div>
-                        <div className="text-[10px] text-zinc-400 uppercase font-semibold">Loggad speltid</div>
+                        <div className="text-[10px] text-zinc-400 uppercase font-semibold">Uppdrag & Kapitel</div>
                         <div className="text-sm font-bold text-white">
-                          {hoursPlayed > 0 ? `${hoursPlayed} tim` : 'Ej loggat'}
+                          {todos.length > 0
+                            ? `${todos.filter((t) => t.isDone).length}/${todos.length} klara (${Math.round(
+                                (todos.filter((t) => t.isDone).length / todos.length) * 100
+                              )}%)`
+                            : game.story_progress
+                            ? game.story_progress
+                            : 'Ej påbörjat'}
                         </div>
                       </div>
                     </div>
@@ -1501,185 +1480,34 @@ function GameDetailModalContent({
                   </div>
                 </div>
 
-                {/* 1. Tidsangivelse */}
-                {isEditingHours ? (
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={manualHoursInput}
-                      onChange={(e) => setManualHoursInput(e.target.value)}
-                      placeholder="0"
-                      className="w-24 bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-1.5 text-base font-bold text-white focus:outline-none focus:border-brand-red"
-                      autoFocus
-                      onKeyDown={(e) => e.key === 'Enter' && handleSaveManualHours()}
-                    />
-                    <span className="text-sm text-zinc-400">timmar</span>
-                    <button
-                      type="button"
-                      onClick={handleSaveManualHours}
-                      className="px-3.5 py-1.5 bg-brand-red hover:bg-red-700 text-white text-xs font-bold rounded-xl transition cursor-pointer"
-                    >
-                      Klar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsEditingHours(false)}
-                      className="text-xs text-zinc-400 hover:text-white cursor-pointer"
-                    >
-                      Avbryt
-                    </button>
-                  </div>
-                ) : hoursPlayed === 0 ? (
-                  /* Tomt läge: Logga tid knapp */
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-semibold text-zinc-400">Speltid</div>
-                      <div className="text-sm text-zinc-500 mt-0.5">Ingen tid loggad</div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setManualHoursInput('');
-                        setIsEditingHours(true);
-                      }}
-                      className="px-4 py-2 bg-brand-red hover:bg-red-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-md shadow-brand-red/15 cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Logga tid</span>
-                    </button>
-                  </div>
-                ) : (
-                  /* Aktivt läge: Siffra med tap-redigering och snabbknappar */
-                  <div className="flex items-center justify-between flex-wrap gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setManualHoursInput(String(hoursPlayed));
-                        setIsEditingHours(true);
-                      }}
-                      className="flex items-baseline gap-2 group text-left cursor-pointer"
-                      title="Klicka för att redigera timmar"
-                    >
-                      <span className="text-2xl sm:text-3xl font-black text-white group-hover:text-brand-red transition">
-                        {hoursDisplay} spelade
-                      </span>
-                      <Pencil className="w-3.5 h-3.5 text-zinc-500 group-hover:text-brand-red transition" />
-                    </button>
-
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => handleAdjustHours(-1)}
-                        className="px-2.5 py-1.5 bg-zinc-800/80 hover:bg-zinc-800 text-zinc-400 hover:text-white text-xs font-bold rounded-lg border border-zinc-700/60 transition cursor-pointer"
-                      >
-                        -1h
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleAdjustHours(1)}
-                        className="px-2.5 py-1.5 bg-zinc-800/80 hover:bg-zinc-800 text-zinc-200 hover:text-white text-xs font-bold rounded-lg border border-zinc-700/60 transition cursor-pointer"
-                      >
-                        +1h
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleAdjustHours(5)}
-                        className="px-2.5 py-1.5 bg-brand-red/15 hover:bg-brand-red/25 text-brand-red text-xs font-bold rounded-lg border border-brand-red/30 transition cursor-pointer"
-                      >
-                        +5h
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* 2. HLTB-referensband */}
+                {/* 1. HLTB-referens (Speltid HowLongToBeat) */}
                 {hasHLTB && (
-                  <div className="space-y-3 pt-2">
-                    <div className="text-[11px] font-bold text-zinc-500 tracking-wider">
-                      REFERENS · HOWLONGTOBEAT
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-zinc-300">Uppskattad speltid</span>
+                      <span className="text-[11px] text-zinc-500">HowLongToBeat</span>
                     </div>
-                    <div className="space-y-3">
+
+                    <div className="grid grid-cols-3 gap-2.5">
                       {mainHours > 0 && (
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-2 text-zinc-300 font-medium">
-                              <span className="w-6 h-6 rounded-md bg-zinc-800 flex items-center justify-center text-xs">
-                                📖
-                              </span>
-                              <span>Main Story</span>
-                            </div>
-                            <span className="font-bold text-white">{mainHours} tim</span>
-                          </div>
-                          {/* Progress bar */}
-                          <div className="relative w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full transition-all duration-300 rounded-full ${
-                                hoursPlayed >= mainHours ? 'bg-emerald-500' : 'bg-brand-red'
-                              }`}
-                              style={{
-                                width: `${Math.min(100, Math.max(0, (hoursPlayed / mainHours) * 100))}%`,
-                              }}
-                            />
-                          </div>
+                        <div className="bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-3 text-center">
+                          <div className="text-[10px] text-zinc-500 uppercase font-bold truncate">Main Story</div>
+                          <div className="text-xl sm:text-2xl font-black text-white mt-0.5">{mainHours}h</div>
                         </div>
                       )}
-
                       {extraHours > 0 && (
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-2 text-zinc-300 font-medium">
-                              <span className="w-6 h-6 rounded-md bg-zinc-800 flex items-center justify-center text-xs">
-                                ➕
-                              </span>
-                              <span>Main + Extra</span>
-                            </div>
-                            <span className="font-bold text-white">{extraHours} tim</span>
-                          </div>
-                          <div className="relative w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full transition-all duration-300 rounded-full ${
-                                hoursPlayed >= extraHours ? 'bg-emerald-500' : 'bg-brand-red'
-                              }`}
-                              style={{
-                                width: `${Math.min(100, Math.max(0, (hoursPlayed / extraHours) * 100))}%`,
-                              }}
-                            />
-                          </div>
+                        <div className="bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-3 text-center">
+                          <div className="text-[10px] text-zinc-500 uppercase font-bold truncate">Main + Extra</div>
+                          <div className="text-xl sm:text-2xl font-black text-white mt-0.5">{extraHours}h</div>
                         </div>
                       )}
-
                       {compHours > 0 && (
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-2 text-zinc-300 font-medium">
-                              <span className="w-6 h-6 rounded-md bg-zinc-800 flex items-center justify-center text-xs">
-                                🏆
-                              </span>
-                              <span>Completionist</span>
-                            </div>
-                            <span className="font-bold text-white">{compHours} tim</span>
-                          </div>
-                          <div className="relative w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full transition-all duration-300 rounded-full ${
-                                hoursPlayed >= compHours ? 'bg-emerald-500' : 'bg-brand-red'
-                              }`}
-                              style={{
-                                width: `${Math.min(100, Math.max(0, (hoursPlayed / compHours) * 100))}%`,
-                              }}
-                            />
-                          </div>
+                        <div className="bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-3 text-center">
+                          <div className="text-[10px] text-zinc-500 uppercase font-bold truncate">100% / Comp</div>
+                          <div className="text-xl sm:text-2xl font-black text-white mt-0.5">{compHours}h</div>
                         </div>
                       )}
                     </div>
-
-                    {isOverflow && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 pt-1">
-                        <Info className="w-3.5 h-3.5 text-zinc-500" />
-                        <span>Du har spelat mer än genomsnittet för 100%-genomgång</span>
-                      </div>
-                    )}
                   </div>
                 )}
 

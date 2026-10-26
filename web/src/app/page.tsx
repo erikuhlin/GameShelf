@@ -20,6 +20,8 @@ import { UniversalSearchModal } from '@/components/UniversalSearchModal';
 import { ProfileModal } from '@/components/ProfileModal';
 import { CompanyModal } from '@/components/CompanyModal';
 import { YearWrappedModal } from '@/components/YearWrappedModal';
+import { GamingGoalModal } from '@/components/GamingGoalModal';
+import { GamingGoalEngine } from '@/lib/gamingGoalEngine';
 import { UserProfile } from '@/types/profile';
 import { loadUserProfile, saveUserProfile, DEFAULT_PROFILE, isGotySeason } from '@/lib/profileStore';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -41,6 +43,8 @@ import {
   Flame,
   Clock,
   Crown,
+  Trophy,
+  Gamepad2,
 } from 'lucide-react';
 import { fetchDealsForGames, normalizeTitle, GameDeal } from '@/services/priceWatcherService';
 
@@ -79,6 +83,7 @@ export default function HomePage() {
   const [isPairingModalOpen, setIsPairingModalOpen] = useState(false);
   const [isRouletteModalOpen, setIsRouletteModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isGamingGoalModalOpen, setIsGamingGoalModalOpen] = useState(false);
   const [isWrappedModalOpen, setIsWrappedModalOpen] = useState(false);
   const [wrappedInitialYear, setWrappedInitialYear] = useState<number | undefined>(undefined);
   const [activeCompanyModal, setActiveCompanyModal] = useState<{
@@ -780,13 +785,28 @@ export default function HomePage() {
     return 0;
   };
 
-  // Aktiva spel som spelas just nu
+  // Spelmålsberäkningar via GamingGoalEngine
+  const currentGoalYear = GamingGoalEngine.currentYear();
+  const completedGamesThisYear = useMemo(() => {
+    return GamingGoalEngine.completedCount(games, currentGoalYear);
+  }, [games, currentGoalYear]);
+
+  // Aktiva spel som spelas just nu (äventyr först, senast spelade först)
   const playingNowGames = useMemo(() => {
-    return games.filter(
-      (g) =>
-        (g.status === 'playing' || (g.status as string) === 'Spelar nu') &&
-        g.is_owned
-    );
+    return games
+      .filter(
+        (g) =>
+          (g.status === 'playing' || (g.status as string) === 'Spelar nu') &&
+          g.is_owned
+      )
+      .sort((a, b) => {
+        const m1 = isMultiplayerOrOngoing(a);
+        const m2 = isMultiplayerOrOngoing(b);
+        if (m1 !== m2) return !m1 && m2 ? -1 : 1;
+        const d1 = a.last_played_date || a.started_playing_date || '';
+        const d2 = b.last_played_date || b.started_playing_date || '';
+        return d2.localeCompare(d1);
+      });
   }, [games]);
 
   // Filtrerade och sorterade spel
@@ -1356,6 +1376,7 @@ export default function HomePage() {
         onOpenCollectionsModal={() => setIsCollectionsModalOpen(false)}
         onOpenPairingModal={() => setIsPairingModalOpen(true)}
         onOpenProfileModal={() => setIsProfileModalOpen(true)}
+        onOpenGamingGoalModal={() => setIsGamingGoalModalOpen(true)}
         onOpenRouletteModal={() => setIsRouletteModalOpen(true)}
         onLogout={handleLogout}
         searchQuery={searchQuery}
@@ -1552,6 +1573,19 @@ export default function HomePage() {
                   </button>
                 );
               })}
+
+              {/* Spelmål-knapp direkt i biblioteket */}
+              <button
+                onClick={() => setIsGamingGoalModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition shadow-sm cursor-pointer ml-1"
+                title={`Spelmål ${currentGoalYear}: ${completedGamesThisYear} av ${userProfile.annualGamingGoal || 12} klara`}
+              >
+                <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                <span>Mål {currentGoalYear}</span>
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500/25 text-amber-300 font-mono">
+                  {completedGamesThisYear}/{userProfile.annualGamingGoal || 12}
+                </span>
+              </button>
             </div>
 
             {/* Right: View Mode Switcher (Hylla | Grid | Lista) */}
@@ -1838,9 +1872,29 @@ export default function HomePage() {
                           <h4 className="text-xs font-bold text-white line-clamp-2 leading-tight group-hover:text-brand-red transition">
                             {game.title}
                           </h4>
-                          <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
-                            {game.developers?.[0] ||
-                              (game.estimated_hours ? `${game.estimated_hours}h speltid` : 'Aktiv')}
+                          <p className="text-[11px] text-zinc-400 mt-0.5 truncate flex items-center gap-1">
+                            {isMultiplayerOrOngoing(game) ? (
+                              <span className="text-[10px] text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded">
+                                Löpande spel
+                              </span>
+                            ) : game.todos && game.todos.length > 0 ? (
+                              <span className="text-emerald-400 font-semibold text-[10px]">
+                                {game.todos.filter((t) => t.isDone).length}/{game.todos.length} uppdrag (
+                                {Math.round(
+                                  (game.todos.filter((t) => t.isDone).length / game.todos.length) * 100
+                                )}
+                                %)
+                              </span>
+                            ) : game.story_progress ? (
+                              <span className="text-amber-400 font-medium text-[10px]">
+                                {game.story_progress}
+                              </span>
+                            ) : (
+                              <span>
+                                {game.developers?.[0] ||
+                                  (game.estimated_hours ? `${game.estimated_hours}h speltid` : 'Aktiv')}
+                              </span>
+                            )}
                           </p>
                         </div>
                       </div>
@@ -1849,19 +1903,110 @@ export default function HomePage() {
                 </div>
               )}
 
-            {viewMode === 'shelf' && (
-              <ShelfView games={filteredGames} onSelectGame={setSelectedGame} dealsMap={dealsMap} />
-            )}
-            {viewMode === 'grid' && (
-              <GridView
-                games={filteredGames}
-                onSelectGame={setSelectedGame}
-                groupByYear={librarySort === 'releaseYearDesc' || librarySort === 'releaseYearAsc'}
-                dealsMap={dealsMap}
-              />
-            )}
-            {viewMode === 'list' && (
-              <ListView games={filteredGames} onSelectGame={setSelectedGame} dealsMap={dealsMap} />
+            {/* Sektionsuppdelning i Spelar nu: Aktiva äventyr vs Löpande multiplayer */}
+            {selectedStatus === 'playing' &&
+              (() => {
+                const progressGames = filteredGames.filter((g) => !isMultiplayerOrOngoing(g));
+                const ongoingGames = filteredGames.filter((g) => isMultiplayerOrOngoing(g));
+                const hasBoth = progressGames.length > 0 && ongoingGames.length > 0;
+
+                if (!hasBoth) {
+                  return (
+                    <>
+                      {viewMode === 'shelf' && (
+                        <ShelfView games={filteredGames} onSelectGame={setSelectedGame} dealsMap={dealsMap} />
+                      )}
+                      {viewMode === 'grid' && (
+                        <GridView
+                          games={filteredGames}
+                          onSelectGame={setSelectedGame}
+                          groupByYear={librarySort === 'releaseYearDesc' || librarySort === 'releaseYearAsc'}
+                          dealsMap={dealsMap}
+                        />
+                      )}
+                      {viewMode === 'list' && (
+                        <ListView games={filteredGames} onSelectGame={setSelectedGame} dealsMap={dealsMap} />
+                      )}
+                    </>
+                  );
+                }
+
+                return (
+                  <div className="space-y-8">
+                    {/* 1. Aktiva äventyr (Singleplayer / Story) */}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+                          Aktiva äventyr ({progressGames.length})
+                        </h3>
+                        <span className="text-xs text-zinc-500">
+                          Berättelsespel med kapitel och uppdrag
+                        </span>
+                      </div>
+                      {viewMode === 'shelf' && (
+                        <ShelfView games={progressGames} onSelectGame={setSelectedGame} dealsMap={dealsMap} />
+                      )}
+                      {viewMode === 'grid' && (
+                        <GridView
+                          games={progressGames}
+                          onSelectGame={setSelectedGame}
+                          groupByYear={false}
+                          dealsMap={dealsMap}
+                        />
+                      )}
+                      {viewMode === 'list' && (
+                        <ListView games={progressGames} onSelectGame={setSelectedGame} dealsMap={dealsMap} />
+                      )}
+                    </div>
+
+                    {/* 2. Löpande spel / Multiplayer */}
+                    <div className="space-y-3 pt-4 border-t border-zinc-800/80">
+                      <div className="flex items-center gap-2">
+                        <Gamepad2 className="w-3.5 h-3.5 text-zinc-400" />
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                          Löpande spel & Multiplayer ({ongoingGames.length})
+                        </h3>
+                        <span className="text-xs text-zinc-500">
+                          Live-service, MMO och återkommande spel
+                        </span>
+                      </div>
+                      {viewMode === 'shelf' && (
+                        <ShelfView games={ongoingGames} onSelectGame={setSelectedGame} dealsMap={dealsMap} />
+                      )}
+                      {viewMode === 'grid' && (
+                        <GridView
+                          games={ongoingGames}
+                          onSelectGame={setSelectedGame}
+                          groupByYear={false}
+                          dealsMap={dealsMap}
+                        />
+                      )}
+                      {viewMode === 'list' && (
+                        <ListView games={ongoingGames} onSelectGame={setSelectedGame} dealsMap={dealsMap} />
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+            {selectedStatus !== 'playing' && (
+              <>
+                {viewMode === 'shelf' && (
+                  <ShelfView games={filteredGames} onSelectGame={setSelectedGame} dealsMap={dealsMap} />
+                )}
+                {viewMode === 'grid' && (
+                  <GridView
+                    games={filteredGames}
+                    onSelectGame={setSelectedGame}
+                    groupByYear={librarySort === 'releaseYearDesc' || librarySort === 'releaseYearAsc'}
+                    dealsMap={dealsMap}
+                  />
+                )}
+                {viewMode === 'list' && (
+                  <ListView games={filteredGames} onSelectGame={setSelectedGame} dealsMap={dealsMap} />
+                )}
+              </>
             )}
           </>
         )}
@@ -2051,6 +2196,21 @@ export default function HomePage() {
         profile={userProfile}
         onUpdateProfile={handleUpdateProfile}
         initialYear={wrappedInitialYear}
+      />
+
+      <GamingGoalModal
+        isOpen={isGamingGoalModalOpen}
+        onClose={() => setIsGamingGoalModalOpen(false)}
+        annualGoal={userProfile.annualGamingGoal || 12}
+        onUpdateAnnualGoal={(val) => handleUpdateProfile({ annualGamingGoal: val })}
+        targetGameIds={userProfile.targetGameIDs || []}
+        onToggleTargetGoal={handleToggleTargetGoal}
+        libraryGames={games}
+        completedGamesCount={completedGamesThisYear}
+        onSelectGame={(g) => {
+          setIsGamingGoalModalOpen(false);
+          setSelectedGame(g);
+        }}
       />
     </div>
   );

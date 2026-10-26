@@ -11,6 +11,7 @@ import {
   QrCode,
   Layers,
   Sparkles,
+  Trophy,
 } from 'lucide-react';
 
 import { UserProfile } from '@/types/profile';
@@ -24,6 +25,7 @@ interface ProfileMenuProps {
   totalCollections: number;
   onOpenPairingModal: () => void;
   onOpenProfileModal?: () => void;
+  onOpenGamingGoalModal?: () => void;
   onLogout: () => void;
 }
 
@@ -35,6 +37,7 @@ export function ProfileMenu({
   totalCollections,
   onOpenPairingModal,
   onOpenProfileModal,
+  onOpenGamingGoalModal,
   onLogout,
 }: ProfileMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -166,6 +169,24 @@ export function ProfileMenu({
 
           {/* Menu Items */}
           <div className="space-y-1">
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                onOpenGamingGoalModal?.();
+              }}
+              className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-amber-300 hover:text-amber-200 hover:bg-amber-950/25 rounded-xl transition"
+            >
+              <div className="flex items-center gap-2.5">
+                <Trophy className="w-4 h-4 text-amber-400" />
+                <span>Spelmål {new Date().getFullYear()}</span>
+              </div>
+              {profile?.annualGamingGoal && (
+                <span className="text-[10px] font-mono font-bold bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">
+                  {profile.annualGamingGoal} spel
+                </span>
+              )}
+            </button>
+
             <button
               onClick={() => {
                 setIsOpen(false);

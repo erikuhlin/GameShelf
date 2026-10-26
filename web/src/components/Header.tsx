@@ -24,6 +24,7 @@ interface HeaderProps {
   onOpenCollectionsModal: () => void;
   onOpenPairingModal: () => void;
   onOpenProfileModal?: () => void;
+  onOpenGamingGoalModal?: () => void;
   onOpenRouletteModal: () => void;
   onOpenSearchModal: () => void;
   onLogout: () => void;
@@ -44,6 +45,7 @@ export function Header({
   onOpenAddModal,
   onOpenPairingModal,
   onOpenProfileModal,
+  onOpenGamingGoalModal,
   onOpenSearchModal,
   onLogout,
   searchQuery,
@@ -201,6 +203,7 @@ export function Header({
               totalCollections={collections.length}
               onOpenPairingModal={onOpenPairingModal}
               onOpenProfileModal={onOpenProfileModal}
+              onOpenGamingGoalModal={onOpenGamingGoalModal}
               onLogout={onLogout}
             />
           </div>

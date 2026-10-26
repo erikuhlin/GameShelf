@@ -8,6 +8,7 @@ import {
 } from './statusHelper';
 import { normalizeIgdbRating, unpackGameNotes, sanitizeUserGamePayload } from './gamePayload';
 import { normalizeWalkthroughTitle } from './verifiedWalkthroughs';
+import { GamingGoalEngine } from './gamingGoalEngine';
 
 test('statusHelper: normalizePlayStatus correctly parses legacy Swedish and English statuses', () => {
   assert.equal(normalizePlayStatus('Spelar nu').status, 'playing');
@@ -162,4 +163,31 @@ test('gamePayload: sanitizeUserGamePayload produces clean columns and cleans not
   assert.equal(payload.hours_played, 25.5);
   assert.equal(payload.is_backlog, true);
   assert.equal(payload.notes, 'Grym handling hittills!');
+});
+
+test('gamingGoalEngine: calculates tempo, focus games and suggested next game correctly', () => {
+  const currentYear = new Date().getFullYear();
+
+  // 1. Tempo calculation (late October: ~82% of year passed, 9/10 games is ahead of pace)
+  const tempoAhead = GamingGoalEngine.calculateTempo(10, 9, currentYear);
+  assert.equal(tempoAhead.isAheadOfPace, true);
+  assert.equal(tempoAhead.remainingGames, 1);
+
+  const tempoReached = GamingGoalEngine.calculateTempo(10, 10, currentYear);
+  assert.equal(tempoReached.isGoalReached, true);
+  assert.equal(tempoReached.remainingGames, 0);
+
+  // 2. Suggested next game (prefers active playing over paused and backlog)
+  const games: any[] = [
+    { id: '1', title: 'Playing Game', status: 'playing', is_owned: true, play_types: ['singlePlayer'] },
+    { id: '2', title: 'Paused Game', status: 'paused', is_owned: true, play_types: ['singlePlayer'] },
+    { id: '3', title: 'Multiplayer Game', status: 'playing', is_owned: true, play_types: ['multiplayer', 'ongoing'] },
+  ];
+
+  const suggested = GamingGoalEngine.suggestedNextGame(games, []);
+  assert.equal(suggested?.id, '1');
+
+  // If playing game is already a target, prefer paused
+  const suggested2 = GamingGoalEngine.suggestedNextGame(games, ['1']);
+  assert.equal(suggested2?.id, '2');
 });

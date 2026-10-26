@@ -148,18 +148,18 @@ test('verifiedWalkthroughs: normalizeWalkthroughTitle removes editions, punctuat
 test('gamePayload: sanitizeUserGamePayload produces clean columns and cleans notes', () => {
   const payload = sanitizeUserGamePayload(
     {
-      story_progress: 'Akt 2',
+      story_progress: 'midway',
       hours_played: 25.5,
       is_backlog: true,
       notes: 'Grym handling hittills!',
     },
     {
       id: 'game-123',
-      notes: '<!--GS_META:{"story_progress":"Akt 1"}-->\nGammal notering',
+      notes: '<!--GS_META:{"story_progress":"justStarted"}-->\nGammal notering',
     }
   );
 
-  assert.equal(payload.story_progress, 'Akt 2');
+  assert.equal(payload.story_progress, 'midway');
   assert.equal(payload.hours_played, 25.5);
   assert.equal(payload.is_backlog, true);
   assert.equal(payload.notes, 'Grym handling hittills!');

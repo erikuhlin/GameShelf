@@ -39,7 +39,8 @@ export type GameStoryProgress =
   | 'justStarted'
   | 'midway'
   | 'nearEnd'
-  | 'completed';
+  | 'completed'
+  | (string & {});
 
 export interface Game {
   id: string;

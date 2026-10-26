@@ -116,7 +116,7 @@ export const GamingGoalEngine = {
       ) {
         seen.add(g.id.toLowerCase());
         result.push(g);
-        if (result.count === 3 || result.length === 3) break;
+        if (result.length === 3) break;
       }
     }
     return result;

@@ -231,7 +231,6 @@ function GameDetailModalContent({
       setNoteUpdatedAt(game.note_updated_at || null);
       setLiveReleaseDate(game.first_release_date || null);
       setRemoteDetails(null);
-      setIsEditingHours(false);
       setShowMovePicker(false);
       setShowCollectionPicker(false);
 
@@ -676,19 +675,11 @@ function GameDetailModalContent({
     return null;
   }, [remoteDetails?.aggregatedRating]);
 
-  // Formatera speltidssiffra
-  const hoursDisplay = useMemo(() => {
-    if (hoursPlayed === 0) return '0h';
-    return hoursPlayed % 1 === 0 ? `${hoursPlayed}h` : `${hoursPlayed.toFixed(1)}h`;
-  }, [hoursPlayed]);
-
   // HLTB data beräkning
   const mainHours = remoteDetails?.timeToBeat?.mainStory || 0;
   const extraHours = remoteDetails?.timeToBeat?.mainExtra || 0;
   const compHours = remoteDetails?.timeToBeat?.completionist || 0;
   const hasHLTB = mainHours > 0 || extraHours > 0 || compHours > 0;
-  const maxHLTBHours = Math.max(compHours, extraHours, mainHours);
-  const isOverflow = hasHLTB && maxHLTBHours > 0 && hoursPlayed > maxHLTBHours;
 
   // Formatera relativ tid
   const formatRelativeTime = (isoString: string) => {

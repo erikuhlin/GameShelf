@@ -66,6 +66,8 @@ export interface Game {
   play_types?: GamePlayType[];
   priority?: PlayPriority;
   last_played_date?: string | null;
+  started_playing_date?: string | null;
+  paused_date?: string | null;
   completed_year?: number | null;
   completed_date?: string | null;
   story_progress?: GameStoryProgress | null;

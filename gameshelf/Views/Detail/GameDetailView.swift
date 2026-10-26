@@ -762,6 +762,7 @@ struct GameDetailView: View {
                             Button {
                                 var copy = g
                                 copy.completedYear = nil
+                                copy.completedDate = nil
                                 updateLocal(copy)
                             } label: {
                                 HStack {
@@ -968,6 +969,7 @@ struct GameDetailView: View {
                             Button("Ej angivet (Räkna inte i årets mål)") {
                                 var copy = g
                                 copy.completedYear = nil
+                                copy.completedDate = nil
                                 updateLocal(copy)
                             }
                             let currentY = Calendar.current.component(.year, from: Date())

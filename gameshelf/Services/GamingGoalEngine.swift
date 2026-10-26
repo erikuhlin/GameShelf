@@ -47,17 +47,11 @@ enum GamingGoalEngine {
             if let y = g.completedYear {
                 return y == year
             }
-            if let date = g.completedDate {
-                return Calendar.current.component(.year, from: date) == year
-            }
-            if let lastPlayed = g.lastPlayedDate {
-                return Calendar.current.component(.year, from: lastPlayed) == year
-            }
             return false
         }
         .sorted { (g1, g2) -> Bool in
-            let d1 = g1.completedDate ?? g1.lastPlayedDate ?? Date.distantPast
-            let d2 = g2.completedDate ?? g2.lastPlayedDate ?? Date.distantPast
+            let d1 = g1.completedDate ?? Date.distantPast
+            let d2 = g2.completedDate ?? Date.distantPast
             return d1 > d2
         }
     }
@@ -72,17 +66,11 @@ enum GamingGoalEngine {
             if let y = g.completedYear {
                 return y == year
             }
-            if let date = g.completedDate {
-                return Calendar.current.component(.year, from: date) == year
-            }
-            if let lastPlayed = g.lastPlayedDate {
-                return Calendar.current.component(.year, from: lastPlayed) == year
-            }
-            return Calendar.current.component(.year, from: g.dateAdded) == year
+            return false
         }
         .sorted { (g1, g2) -> Bool in
-            let d1 = g1.completedDate ?? g1.lastPlayedDate ?? g1.dateAdded
-            let d2 = g2.completedDate ?? g2.lastPlayedDate ?? g2.dateAdded
+            let d1 = g1.completedDate ?? Date.distantPast
+            let d2 = g2.completedDate ?? Date.distantPast
             return d1 > d2
         }
     }

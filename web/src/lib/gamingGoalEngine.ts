@@ -41,20 +41,20 @@ export const GamingGoalEngine = {
         if (!g.is_owned || g.status !== 'completed' || isMultiplayerOrOngoing(g)) {
           return false;
         }
-        if (g.completed_year !== undefined && g.completed_year !== null) {
+        if (g.completed_year !== undefined) {
+          if (g.completed_year === null || g.completed_year <= 0) {
+            return false;
+          }
           return g.completed_year === year;
         }
         if (g.completed_date) {
           return new Date(g.completed_date).getFullYear() === year;
         }
-        if (g.last_played_date) {
-          return new Date(g.last_played_date).getFullYear() === year;
-        }
         return false;
       })
       .sort((a, b) => {
-        const da = a.completed_date || a.last_played_date || '';
-        const db = b.completed_date || b.last_played_date || '';
+        const da = a.completed_date || '';
+        const db = b.completed_date || '';
         return db.localeCompare(da);
       });
   },
@@ -69,23 +69,20 @@ export const GamingGoalEngine = {
         if (!g.is_owned || g.status !== 'abandoned') {
           return false;
         }
-        if (g.completed_year !== undefined && g.completed_year !== null) {
+        if (g.completed_year !== undefined) {
+          if (g.completed_year === null || g.completed_year <= 0) {
+            return false;
+          }
           return g.completed_year === year;
         }
         if (g.completed_date) {
           return new Date(g.completed_date).getFullYear() === year;
         }
-        if (g.last_played_date) {
-          return new Date(g.last_played_date).getFullYear() === year;
-        }
-        if (g.created_at) {
-          return new Date(g.created_at).getFullYear() === year;
-        }
         return false;
       })
       .sort((a, b) => {
-        const da = a.completed_date || a.last_played_date || a.created_at || '';
-        const db = b.completed_date || b.last_played_date || b.created_at || '';
+        const da = a.completed_date || '';
+        const db = b.completed_date || '';
         return db.localeCompare(da);
       });
   },

@@ -424,17 +424,30 @@ function GameDetailModalContent({
     if (isPlaying) setIsBacklog(false);
 
     let nextStoryProgress = storyProgress;
+    let targetCompletedYear = completedYear;
+    let targetCompletedDate = game.completed_date;
+
     if (isCompleted) {
       nextStoryProgress = 'completed';
       setStoryProgress('completed');
+      if (targetCompletedYear === currentYear) {
+        targetCompletedDate = targetCompletedDate || new Date().toISOString();
+      } else if (!targetCompletedYear) {
+        // Ej angivet: auto-stämpla INTE med dagens datum (bevara som spelminne)
+        targetCompletedDate = null;
+      }
+    } else {
+      targetCompletedDate = null;
+      targetCompletedYear = null;
+      setCompletedYear(null);
     }
 
     const updates: Partial<Game> = {
       status: newStatus,
       is_backlog: isPlaying ? false : isBacklog,
       last_played_date: isPlaying ? game.last_played_date || new Date().toISOString() : game.last_played_date,
-      completed_year: completedYear ?? null,
-      completed_date: isCompleted ? (game.completed_date || new Date().toISOString()) : game.completed_date,
+      completed_year: targetCompletedYear ?? null,
+      completed_date: targetCompletedDate,
       story_progress: nextStoryProgress,
     };
 
@@ -443,7 +456,20 @@ function GameDetailModalContent({
 
   const handleCompletedYearChange = (year: number | null) => {
     setCompletedYear(year);
-    saveGameUpdates({ completed_year: year });
+    const currentYear = new Date().getFullYear();
+    let newCompletedDate: string | null = null;
+
+    if (year === currentYear) {
+      newCompletedDate = game.completed_date || new Date().toISOString();
+    } else {
+      // Om "Ej angivet" eller ett äldre år: nollställ completed_date så att det inte auto-stämplas felaktigt
+      newCompletedDate = null;
+    }
+
+    saveGameUpdates({
+      completed_year: year,
+      completed_date: newCompletedDate,
+    });
   };
 
   // Kvalitativ milstolpeändring (Enkelriktad: ändrar INTE spelets status)
@@ -1403,8 +1429,10 @@ function GameDetailModalContent({
                           Genomspelat
                         </span>
                         <span className="text-[11px] text-zinc-400">
-                          {game.completed_date
+                          {game.completed_date && (completedYear || game.completed_year)
                             ? `Avklarat ${new Date(game.completed_date).toLocaleDateString('sv-SE', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                            : (completedYear || game.completed_year)
+                            ? `Klarat ${completedYear || game.completed_year}`
                             : 'Spelminne / Nostalgi'}
                         </span>
                       </div>

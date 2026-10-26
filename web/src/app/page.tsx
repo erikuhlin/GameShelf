@@ -1050,7 +1050,7 @@ export default function HomePage() {
       todos: gameToAdd.todos || [],
       completed_year: finalStatus === 'completed' ? finalCompletedYear : null,
       completed_date:
-        finalStatus === 'completed'
+        finalStatus === 'completed' && finalCompletedYear === new Date().getFullYear()
           ? gameToAdd.completed_date || new Date().toISOString()
           : null,
       story_progress:
@@ -1135,10 +1135,16 @@ export default function HomePage() {
       ...(isCompleted
         ? {
             completed_year: currentGame?.completed_year ?? null,
-            completed_date: currentGame?.completed_date || new Date().toISOString(),
+            completed_date:
+              currentGame?.completed_year === new Date().getFullYear()
+                ? (currentGame?.completed_date || new Date().toISOString())
+                : (currentGame?.completed_year ? currentGame?.completed_date ?? null : null),
             story_progress: 'completed',
           }
-        : {}),
+        : {
+            completed_year: null,
+            completed_date: null,
+          }),
     };
 
     setGames((prev) => {

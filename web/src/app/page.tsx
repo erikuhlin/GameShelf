@@ -262,10 +262,11 @@ export default function HomePage() {
     }
   };
 
-  const handleUpdateProfile = async (updated: UserProfile) => {
-    setUserProfile(updated);
-    setProfileName(updated.username);
-    saveUserProfile(updated);
+  const handleUpdateProfile = async (updated: Partial<UserProfile>) => {
+    const full: UserProfile = { ...userProfile, ...updated };
+    setUserProfile(full);
+    setProfileName(full.username);
+    saveUserProfile(full);
 
     const activeUserId =
       pairedUserId ||
@@ -273,33 +274,33 @@ export default function HomePage() {
 
     if (activeUserId) {
       const prefs = {
-        age: updated.age,
-        platforms: updated.platforms,
-        favoriteGenres: updated.favoriteGenres,
-        playFor: updated.playFor,
-        favoriteGameIDs: updated.favoriteGameIDs,
-        targetGameIDs: updated.targetGameIDs || [],
-        annualGamingGoal: updated.annualGamingGoal,
-        avatarType: updated.avatarType,
-        playingMood: updated.playingMood,
-        gamerBio: updated.gamerBio,
-        playstyle: updated.playstyle,
-        gotyByYear: updated.gotyByYear || {},
+        age: full.age,
+        platforms: full.platforms,
+        favoriteGenres: full.favoriteGenres,
+        playFor: full.playFor,
+        favoriteGameIDs: full.favoriteGameIDs,
+        targetGameIDs: full.targetGameIDs || [],
+        annualGamingGoal: full.annualGamingGoal,
+        avatarType: full.avatarType,
+        playingMood: full.playingMood,
+        gamerBio: full.gamerBio,
+        playstyle: full.playstyle,
+        gotyByYear: full.gotyByYear || {},
       };
 
       const basePayload: Record<string, any> = {
         id: activeUserId,
-        username: updated.username,
+        username: full.username,
         full_name: JSON.stringify(prefs),
-        avatar_url: updated.avatarCustomImage || updated.avatarType,
+        avatar_url: full.avatarCustomImage || full.avatarType,
         updated_at: new Date().toISOString(),
       };
 
       try {
         const extendedPayload = {
           ...basePayload,
-          annual_gaming_goal: updated.annualGamingGoal,
-          target_game_ids: updated.targetGameIDs || [],
+          annual_gaming_goal: full.annualGamingGoal,
+          target_game_ids: full.targetGameIDs || [],
         };
 
         const { error } = await supabase.from('profiles').upsert(extendedPayload);
@@ -2202,7 +2203,7 @@ export default function HomePage() {
         isOpen={isGamingGoalModalOpen}
         onClose={() => setIsGamingGoalModalOpen(false)}
         annualGoal={userProfile.annualGamingGoal || 12}
-        onUpdateAnnualGoal={(val) => handleUpdateProfile({ annualGamingGoal: val })}
+        onUpdateAnnualGoal={(val) => handleUpdateProfile({ ...userProfile, annualGamingGoal: val })}
         targetGameIds={userProfile.targetGameIDs || []}
         onToggleTargetGoal={handleToggleTargetGoal}
         libraryGames={games}

@@ -24,6 +24,7 @@ import {
   Bookmark,
   BookmarkCheck,
   ChevronDown,
+  ChevronUp,
   Target,
   Hourglass,
   Trophy,
@@ -266,6 +267,7 @@ export function DiscoverView({
   const [showAllInMonth, setShowAllInMonth] = useState<boolean>(true);
   const [calendarGames, setCalendarGames] = useState<Game[]>([]);
   const [isLoadingCalendar, setIsLoadingCalendar] = useState<boolean>(false);
+  const [showFullCalendar, setShowFullCalendar] = useState<boolean>(false);
 
   // Dynamiska månadsval för releasekalendern (Mest hypade + 6 kommande månader)
   const monthOptions: MonthOption[] = useMemo(() => {
@@ -343,6 +345,10 @@ export function DiscoverView({
 
   useEffect(() => {
     loadCalendarGames();
+  }, [selectedMonthID, selectedCalendarPlatform]);
+
+  useEffect(() => {
+    setShowFullCalendar(false);
   }, [selectedMonthID, selectedCalendarPlatform]);
 
   const displayedCalendarGames = useMemo(() => {
@@ -2276,205 +2282,30 @@ export function DiscoverView({
         </section>
 
         {/* 3. 📅 Kommande spelsläpp & Releasekalender */}
-        <section id="section-upcoming" className="space-y-6 pt-6 border-t border-zinc-800/80">
-          {/* Närmaste kommande släpp */}
-                    {/* 4. 📅 Kommande spelsläpp (Releasekalender från IGDB) */}
-          <div className="space-y-3.5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-brand-red" />
-                <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">
-                  Kommande spelsläpp
-                </h3>
-              </div>
-              <button
-                onClick={() => handleTabChange('calendar')}
-                className="flex items-center gap-1.5 text-xs font-semibold text-brand-red hover:text-red-400 transition cursor-pointer"
-              >
-                <span>Öppna hela releasekalendern</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {isLoadingDiscover && upcomingGames.length === 0 ? (
-              <div className="flex gap-3.5 overflow-x-auto pb-2.5 scrollbar-none">
-                {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <div
-                    key={i}
-                    className="flex-shrink-0 w-36 sm:w-44 h-56 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 animate-pulse flex flex-col p-2.5"
-                  >
-                    <div className="w-full aspect-[3/4] rounded-xl bg-zinc-800/60 mb-2.5" />
-                    <div className="w-3/4 h-3 bg-zinc-800 rounded mb-1.5" />
-                    <div className="w-1/2 h-2.5 bg-zinc-800/60 rounded" />
-                  </div>
-                ))}
-              </div>
-            ) : upcomingGames.length > 0 ? (
-              <div className="flex gap-3.5 overflow-x-auto pb-2.5 scrollbar-thin scrollbar-thumb-zinc-800">
-                {upcomingGames.map((game) => {
-                  const matching = getMatchingGame(game.igdb_id, game.title);
-                  const inLibrary = Boolean(matching);
-                  const inWishlist = Boolean(matching && matching.is_owned === false);
-                  const targetMs = game.first_release_date
-                    ? Number(game.first_release_date) *
-                      (Number(game.first_release_date) < 10000000000 ? 1000 : 1)
-                    : null;
-                  const isToday = targetMs
-                    ? (() => {
-                        const d = new Date(targetMs);
-                        const today = new Date();
-                        return (
-                          d.getFullYear() === today.getFullYear() &&
-                          d.getMonth() === today.getMonth() &&
-                          d.getDate() === today.getDate()
-                        );
-                      })()
-                    : false;
-                  const daysUntil = targetMs
-                    ? Math.ceil((targetMs - Date.now()) / (1000 * 60 * 60 * 24))
-                    : null;
-                  const countdownText = isToday
-                    ? 'Idag'
-                    : daysUntil === 1
-                    ? 'Imorgon'
-                    : daysUntil !== null && daysUntil > 1 && daysUntil <= 60
-                    ? `Om ${daysUntil}d`
-                    : null;
-                  const relDate = targetMs
-                    ? new Date(targetMs).toLocaleDateString('sv-SE', {
-                        month: 'short',
-                        day: 'numeric',
-                      })
-                    : (game.release_year ? String(game.release_year) : null);
-
-                  return (
-                    <div
-                      key={game.id}
-                      className="flex-shrink-0 w-36 sm:w-44 flex flex-col group bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden p-2.5 transition hover:border-zinc-700 relative"
-                    >
-                      {/* Datum & Nedräkningsbadge */}
-                      {(isToday || countdownText || relDate) && (
-                        <div
-                          className={`absolute top-4 left-4 z-10 px-2 py-0.5 rounded-md text-[10px] font-black shadow-md backdrop-blur-md capitalize ${
-                            isToday
-                              ? 'bg-emerald-600 text-white border border-emerald-400 animate-pulse'
-                              : countdownText
-                              ? 'bg-red-600/90 text-white border border-red-400/40'
-                              : 'bg-zinc-800/90 text-zinc-300 border border-zinc-700'
-                          }`}
-                          title={countdownText && relDate ? `${relDate} (${countdownText})` : relDate || ''}
-                        >
-                          {countdownText || relDate}
-                        </div>
-                      )}
-
-                      <div
-                        onClick={() => onSelectGame(game)}
-                        className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-zinc-950 mb-2 relative cursor-pointer"
-                      >
-                        {game.cover_url ? (
-                          <img
-                            src={game.cover_url}
-                            alt={game.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Gamepad className="w-6 h-6 text-zinc-600" />
-                          </div>
-                        )}
-                      </div>
-
-                      <h4
-                        onClick={() => onSelectGame(game)}
-                        className="text-xs font-bold text-zinc-100 line-clamp-2 leading-snug min-h-[2rem] cursor-pointer hover:text-red-400 transition"
-                      >
-                        {game.title}
-                      </h4>
-
-                      <span className="text-[10px] text-zinc-400 mt-0.5 truncate">
-                        {getPrimaryGenre(game.genres)} • {game.platforms?.[0] || 'Kommande'}
-                      </span>
-
-                      <button
-                        onClick={() =>
-                          onAddGame({ ...game, status: 'notStarted', is_owned: false, is_backlog: false })
-                        }
-                        disabled={inLibrary}
-                        className={`mt-2.5 w-full py-1.5 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 transition ${
-                          inLibrary
-                            ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-default'
-                            : 'bg-zinc-800 hover:bg-brand-red text-zinc-200 hover:text-white border border-zinc-700 hover:border-brand-red cursor-pointer'
-                        }`}
-                      >
-                        {inLibrary ? (
-                          <>
-                            {inWishlist ? (
-                              <Heart className="w-3 h-3 fill-current text-brand-red" />
-                            ) : (
-                              <Check className="w-3 h-3 text-emerald-400" />
-                            )}
-                            <span>{inWishlist ? 'På önskelistan' : 'I samlingen'}</span>
-                          </>
-                        ) : (
-                          <>
-                            <Bookmark className="w-3 h-3 text-amber-400" />
-                            <span>Önskelista</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="py-6 px-4 rounded-2xl bg-zinc-900/40 border border-dashed border-zinc-800 text-center flex flex-col items-center justify-center gap-2">
-                <p className="text-xs text-zinc-400">Inga kommande spelsläpp kunde hämtas just nu.</p>
-                <button
-                  onClick={() => {
-                    setIsLoadingDiscover(true);
-                    fetch('/api/games/discover?category=upcoming&limit=20')
-                      .then((r) => r.json())
-                      .then((d) => {
-                        if (Array.isArray(d.results)) setUpcomingGames(d.results);
-                      })
-                      .finally(() => setIsLoadingDiscover(false));
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-800 text-xs font-semibold text-white hover:bg-zinc-700 transition"
-                >
-                  Försök igen
-                </button>
-              </div>
-            )}
-          </div>
-
-
-          {/* Hela månadskalendern */}
-                  <div className="space-y-6 animate-in fade-in duration-200">
-          {/* Kalender Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-zinc-900/90 via-zinc-900/60 to-zinc-950 border border-zinc-800/80 rounded-3xl p-5 sm:p-6 shadow-lg">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-brand-red/10 border border-brand-red/20 flex items-center justify-center text-brand-red flex-shrink-0 shadow-inner">
-                <Calendar className="w-6 h-6" />
+        <section id="section-upcoming" className="space-y-5 pt-6 border-t border-zinc-800/80">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800/80 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-brand-red/10 border border-brand-red/20 flex items-center justify-center text-brand-red flex-shrink-0 shadow-inner">
+                <Calendar className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight">
-                  Releasekalender
-                </h2>
-                <p className="text-xs sm:text-sm text-zinc-400 mt-0.5">
+                <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                  Releasekalender & Kommande spelsläpp
+                </h3>
+                <p className="text-xs text-zinc-400">
                   {currentMonthOption.isMostHyped
-                    ? 'De mest efterlängtade och hypade kommande spelsläppen'
+                    ? 'Årets mest efterlängtade och hypade spelsläpp'
                     : `Spelsläpp under ${currentMonthOption.title}`}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 self-start sm:self-auto">
               <button
                 onClick={() => loadCalendarGames()}
                 disabled={isLoadingCalendar}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 transition disabled:opacity-50 cursor-pointer shadow-sm"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white transition disabled:opacity-50 cursor-pointer shadow-sm"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isLoadingCalendar ? 'animate-spin text-brand-red' : ''}`} />
                 <span>Uppdatera</span>
@@ -2488,7 +2319,7 @@ export function DiscoverView({
               <button
                 key={opt.id}
                 onClick={() => setSelectedMonthID(opt.id)}
-                className={`px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
                   selectedMonthID === opt.id
                     ? 'bg-brand-red text-white shadow-md shadow-brand-red/25'
                     : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
@@ -2499,8 +2330,8 @@ export function DiscoverView({
             ))}
           </div>
 
-          {/* Plattformsväljare + Filter Toggle */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+          {/* Plattformsväljare & Filter */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-0.5">
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
               {CALENDAR_PLATFORMS.map((p) => (
                 <button
@@ -2535,24 +2366,21 @@ export function DiscoverView({
 
           {/* Kalender Innehåll */}
           {isLoadingCalendar && calendarGames.length === 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pt-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 pt-1">
               {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
                 <div
                   key={i}
-                  className="h-36 rounded-2xl bg-zinc-900/60 border border-zinc-800 animate-pulse flex p-3 gap-3"
+                  className="rounded-2xl bg-zinc-900/60 border border-zinc-800/80 animate-pulse p-3 space-y-2.5"
                 >
-                  <div className="w-20 h-full rounded-xl bg-zinc-800 flex-shrink-0" />
-                  <div className="flex-1 space-y-2 py-1">
-                    <div className="w-3/4 h-4 bg-zinc-800 rounded" />
-                    <div className="w-1/2 h-3 bg-zinc-800/60 rounded" />
-                    <div className="w-1/3 h-3 bg-zinc-800/40 rounded" />
-                  </div>
+                  <div className="w-full aspect-[3/4] rounded-xl bg-zinc-800/60" />
+                  <div className="w-3/4 h-3.5 bg-zinc-800 rounded" />
+                  <div className="w-1/2 h-3 bg-zinc-800/60 rounded" />
                 </div>
               ))}
             </div>
           ) : displayedCalendarGames.length === 0 ? (
-            <div className="text-center py-20 text-zinc-500 border border-dashed border-zinc-800 rounded-3xl p-8 space-y-3">
-              <Calendar className="w-10 h-10 mx-auto opacity-40 text-brand-red" />
+            <div className="text-center py-16 text-zinc-500 border border-dashed border-zinc-800 rounded-3xl p-8 space-y-2">
+              <Calendar className="w-10 h-10 mx-auto opacity-40 text-brand-red mb-1" />
               <p className="text-sm font-semibold text-zinc-300">
                 Inga kommande spelsläpp hittades för det valda filtret.
               </p>
@@ -2560,267 +2388,475 @@ export function DiscoverView({
                 Prova att byta plattform eller välja en annan månad.
               </p>
             </div>
-          ) : currentMonthOption.isMostHyped ? (
-            /* --- Mest Hypade Spel Rutnät --- */
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pt-1">
-              {displayedCalendarGames.map((game, idx) => {
-                const matching = getMatchingGame(game.igdb_id, game.title);
-                const inLibrary = Boolean(matching);
-                const inWishlist = Boolean(matching && matching.is_owned === false);
-                const isToday = game.first_release_date
-                  ? (() => {
-                      const ms =
-                        Number(game.first_release_date) *
-                        (Number(game.first_release_date) < 10000000000 ? 1000 : 1);
-                      const d = new Date(ms);
-                      const today = new Date();
-                      return (
-                        d.getFullYear() === today.getFullYear() &&
-                        d.getMonth() === today.getMonth() &&
-                        d.getDate() === today.getDate()
-                      );
-                    })()
-                  : false;
-                const relDate = game.first_release_date
-                  ? new Date(
-                      Number(game.first_release_date) *
-                        (Number(game.first_release_date) < 10000000000 ? 1000 : 1)
-                    ).toLocaleDateString('sv-SE', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })
-                  : game.release_year
-                  ? String(game.release_year)
-                  : 'Kommande';
-
-                return (
-                  <div
-                    key={game.id}
-                    className="flex flex-col justify-between bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 rounded-2xl p-3 group transition shadow-md relative"
-                  >
-                    <div className="flex gap-3">
-                      {/* Omslag */}
-                      <div
-                        onClick={() => onSelectGame(game)}
-                        className="w-20 sm:w-24 aspect-[3/4] rounded-xl overflow-hidden bg-zinc-950 flex-shrink-0 relative cursor-pointer border border-zinc-800 shadow"
-                      >
-                        {game.cover_url ? (
-                          <img
-                            src={game.cover_url}
-                            alt={game.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Gamepad className="w-6 h-6 text-zinc-600" />
-                          </div>
-                        )}
-                        <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-black bg-black/80 text-amber-400 border border-amber-500/30">
-                          #{idx + 1}
-                        </div>
-                      </div>
-
-                      {/* Info */}
-                      <div className="flex-1 min-w-0 flex flex-col justify-between">
-                        <div>
-                          {/* Hype badge */}
-                          {game.hypes ? (
-                            <div className="inline-flex items-center gap-1 text-[10px] font-black text-rose-400 mb-1">
-                              <Flame className="w-3 h-3 text-brand-red fill-current" />
-                              <span>{game.hypes} hypes</span>
-                            </div>
-                          ) : null}
-
-                          <h4
-                            onClick={() => onSelectGame(game)}
-                            className="text-sm font-bold text-white group-hover:text-red-400 transition cursor-pointer line-clamp-2 leading-snug"
-                          >
-                            {game.title}
-                          </h4>
-
-                          <p className="text-[11px] text-zinc-400 mt-1 truncate">
-                            {game.developers?.[0] || getPrimaryGenre(game.genres)}
-                          </p>
-                        </div>
-
-                        <div className="mt-2">
-                          <span
-                            className={`text-[11px] font-bold flex items-center gap-1 ${
-                              isToday ? 'text-emerald-400 font-extrabold' : 'text-zinc-300'
-                            }`}
-                          >
-                            {isToday ? (
-                              <>
-                                <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse" />
-                                <span>Släpps idag!</span>
-                              </>
-                            ) : (
-                              <>
-                                <Calendar className="w-3 h-3 text-brand-red" />
-                                <span>{relDate}</span>
-                              </>
-                            )}
-                          </span>
-                          <span className="text-[10px] text-zinc-500 truncate block mt-0.5">
-                            {game.platforms?.slice(0, 3).join(', ') || 'Okänd plattform'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() =>
-                        onAddGame({ ...game, status: 'notStarted', is_owned: false, is_backlog: false })
-                      }
-                      disabled={inLibrary}
-                      className={`mt-3 w-full py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                        inLibrary
-                          ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-default'
-                          : 'bg-zinc-800 hover:bg-brand-red text-zinc-200 hover:text-white border border-zinc-700 hover:border-brand-red'
-                      }`}
-                    >
-                      {inLibrary ? (
-                        <>
-                          {inWishlist ? (
-                            <Heart className="w-3.5 h-3.5 fill-current text-brand-red" />
-                          ) : (
-                            <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          )}
-                          <span>{inWishlist ? 'På önskelistan' : 'I biblioteket'}</span>
-                        </>
-                      ) : (
-                        <>
-                          <Bookmark className="w-3.5 h-3.5 text-amber-400" />
-                          <span>Lägg till i önskelista</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
           ) : (
-            /* --- Månadsvy Grupperad per Datum (Tidslinje med nedräkningar) --- */
-            <div className="space-y-6 pt-1">
-              {groupedCalendarReleases.map((group) => (
-                <div key={group.dateKey} className="space-y-3">
-                  {/* Datumrubrik med Countdown-badge */}
-                  <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-brand-red" />
-                      <h3 className="text-sm sm:text-base font-bold text-white">
-                        {group.displayDate}
-                      </h3>
-                    </div>
+            <div className="space-y-4 pt-1">
+              {/* Kompakt läge (Standard: 8 spel) */}
+              {!showFullCalendar ? (
+                <>
+                  {/* Mobil: App-liknande horisontell swipe-karusell */}
+                  <div className="block md:hidden">
+                    <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none snap-x -mx-3 px-3">
+                      {displayedCalendarGames.slice(0, 8).map((game) => {
+                        const matching = getMatchingGame(game.igdb_id, game.title);
+                        const inLibrary = Boolean(matching);
+                        const inWishlist = Boolean(matching && matching.is_owned === false);
+                        const targetMs = game.first_release_date
+                          ? Number(game.first_release_date) *
+                            (Number(game.first_release_date) < 10000000000 ? 1000 : 1)
+                          : null;
+                        const isToday = targetMs
+                          ? (() => {
+                              const d = new Date(targetMs);
+                              const today = new Date();
+                              return (
+                                d.getFullYear() === today.getFullYear() &&
+                                d.getMonth() === today.getMonth() &&
+                                d.getDate() === today.getDate()
+                              );
+                            })()
+                          : false;
+                        const daysUntil = targetMs
+                          ? Math.ceil((targetMs - Date.now()) / (1000 * 60 * 60 * 24))
+                          : null;
+                        const countdownText = isToday
+                          ? 'Idag!'
+                          : daysUntil === 1
+                          ? 'Imorgon'
+                          : daysUntil !== null && daysUntil > 1 && daysUntil <= 60
+                          ? `Om ${daysUntil}d`
+                          : null;
+                        const relDate = targetMs
+                          ? new Date(targetMs).toLocaleDateString('sv-SE', {
+                              month: 'short',
+                              day: 'numeric',
+                            })
+                          : game.release_year
+                          ? String(game.release_year)
+                          : 'Kommande';
 
-                    {group.countdown && (
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-                          group.countdown === 'Idag'
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 animate-pulse'
-                            : group.countdown === 'Imorgon'
-                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                            : 'bg-zinc-800/80 text-zinc-300 border-zinc-700'
-                        }`}
-                      >
-                        {group.countdown}
-                      </span>
-                    )}
+                        return (
+                          <div
+                            key={game.id}
+                            className="flex-shrink-0 w-36 snap-start flex flex-col justify-between bg-zinc-900/80 border border-zinc-800/80 rounded-2xl p-2.5 relative shadow-sm"
+                          >
+                            <div>
+                              <div
+                                onClick={() => onSelectGame(game)}
+                                className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-zinc-950 mb-2 relative cursor-pointer border border-zinc-800/60"
+                              >
+                                {game.cover_url ? (
+                                  <img
+                                    src={game.cover_url}
+                                    alt={game.title}
+                                    className="w-full h-full object-cover"
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <Gamepad className="w-6 h-6 text-zinc-600" />
+                                  </div>
+                                )}
+                                {(countdownText || relDate) && (
+                                  <div
+                                    className={`absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded text-[9px] font-black shadow-md backdrop-blur-md ${
+                                      isToday
+                                        ? 'bg-emerald-600 text-white animate-pulse'
+                                        : countdownText
+                                        ? 'bg-red-600/90 text-white'
+                                        : 'bg-black/75 text-zinc-200'
+                                    }`}
+                                  >
+                                    {countdownText || relDate}
+                                  </div>
+                                )}
+                              </div>
+                              <h4
+                                onClick={() => onSelectGame(game)}
+                                className="text-xs font-bold text-white line-clamp-1 cursor-pointer leading-snug"
+                              >
+                                {game.title}
+                              </h4>
+                              <p className="text-[10px] text-zinc-400 mt-0.5 truncate">
+                                {game.platforms?.slice(0, 2).join(', ') || 'Okänd'}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() =>
+                                onAddGame({ ...game, status: 'notStarted', is_owned: false, is_backlog: false })
+                              }
+                              disabled={inLibrary}
+                              className={`mt-2 w-full py-1 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition ${
+                                inLibrary
+                                  ? 'bg-zinc-800/60 text-zinc-400'
+                                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
+                              }`}
+                            >
+                              {inLibrary ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-400" />
+                                  <span>Sparat</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Bookmark className="w-3 h-3 text-amber-400" />
+                                  <span>Önska</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
 
-                  {/* Spelkort för detta datum */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                    {group.games.map((game) => {
+                  {/* Desktop: 4-kolumners strukturerat rutnät */}
+                  <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {displayedCalendarGames.slice(0, 8).map((game, idx) => {
                       const matching = getMatchingGame(game.igdb_id, game.title);
                       const inLibrary = Boolean(matching);
                       const inWishlist = Boolean(matching && matching.is_owned === false);
+                      const targetMs = game.first_release_date
+                        ? Number(game.first_release_date) *
+                          (Number(game.first_release_date) < 10000000000 ? 1000 : 1)
+                        : null;
+                      const isToday = targetMs
+                        ? (() => {
+                            const d = new Date(targetMs);
+                            const today = new Date();
+                            return (
+                              d.getFullYear() === today.getFullYear() &&
+                              d.getMonth() === today.getMonth() &&
+                              d.getDate() === today.getDate()
+                            );
+                          })()
+                        : false;
+                      const daysUntil = targetMs
+                        ? Math.ceil((targetMs - Date.now()) / (1000 * 60 * 60 * 24))
+                        : null;
+                      const countdownText = isToday
+                        ? 'Släpps idag!'
+                        : daysUntil === 1
+                        ? 'Imorgon'
+                        : daysUntil !== null && daysUntil > 1 && daysUntil <= 60
+                        ? `Om ${daysUntil} dagar`
+                        : null;
+                      const relDate = targetMs
+                        ? new Date(targetMs).toLocaleDateString('sv-SE', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                          })
+                        : game.release_year
+                        ? String(game.release_year)
+                        : 'Kommande';
 
                       return (
                         <div
                           key={game.id}
-                          className="flex items-center gap-3.5 p-3 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 group transition shadow-sm"
+                          className="flex flex-col justify-between bg-zinc-900/70 border border-zinc-800/80 hover:border-zinc-700 rounded-2xl p-3 group transition shadow-sm hover:shadow-md relative"
                         >
-                          {/* Omslagsbild */}
-                          <div
-                            onClick={() => onSelectGame(game)}
-                            className="w-14 h-20 rounded-xl overflow-hidden bg-zinc-950 flex-shrink-0 cursor-pointer border border-zinc-800 shadow relative"
-                          >
-                            {game.cover_url ? (
-                              <img
-                                src={game.cover_url}
-                                alt={game.title}
-                                className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                                loading="lazy"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <Gamepad className="w-6 h-6 text-zinc-600" />
+                          <div>
+                            <div
+                              onClick={() => onSelectGame(game)}
+                              className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-zinc-950 mb-2.5 relative cursor-pointer border border-zinc-800/60"
+                            >
+                              {game.cover_url ? (
+                                <img
+                                  src={game.cover_url}
+                                  alt={game.title}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <Gamepad className="w-6 h-6 text-zinc-600" />
+                                </div>
+                              )}
+                              <div
+                                className={`absolute top-2 left-2 z-10 px-2 py-0.5 rounded-md text-[10px] font-black shadow-md backdrop-blur-md ${
+                                  isToday
+                                    ? 'bg-emerald-600 text-white animate-pulse'
+                                    : countdownText
+                                    ? 'bg-red-600/90 text-white'
+                                    : 'bg-black/75 text-zinc-200'
+                                }`}
+                              >
+                                {countdownText || relDate}
                               </div>
-                            )}
-                          </div>
+                              {game.hypes && game.hypes > 0 ? (
+                                <div className="absolute bottom-2 right-2 z-10 px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-black/80 text-rose-300 border border-rose-500/30 flex items-center gap-1">
+                                  <Flame className="w-2.5 h-2.5 text-brand-red fill-current" />
+                                  <span>{game.hypes} hypes</span>
+                                </div>
+                              ) : null}
+                            </div>
 
-                          {/* Spelinfo */}
-                          <div className="flex-1 min-w-0">
                             <h4
                               onClick={() => onSelectGame(game)}
-                              className="text-xs sm:text-sm font-bold text-white line-clamp-2 leading-snug group-hover:text-red-400 transition cursor-pointer"
+                              className="text-sm font-bold text-white group-hover:text-red-400 transition cursor-pointer line-clamp-1 leading-snug"
+                              title={game.title}
                             >
                               {game.title}
                             </h4>
 
-                            <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
-                              {game.developers?.[0] || getPrimaryGenre(game.genres)}
-                            </p>
-
-                            <div className="flex items-center gap-1.5 mt-1 text-[10px] text-zinc-400">
-                              <span className="font-semibold text-zinc-300 truncate">
-                                {game.platforms?.slice(0, 2).join(', ') || 'Multi'}
+                            <div className="flex items-center justify-between text-xs text-zinc-400 mt-1">
+                              <span className="truncate max-w-[130px]">
+                                {game.platforms?.slice(0, 2).join(', ') || 'Okänd plattform'}
                               </span>
-                              {game.hypes && game.hypes > 0 ? (
-                                <>
-                                  <span>•</span>
-                                  <span className="text-amber-400 font-bold">
-                                    🔥 {game.hypes}
-                                  </span>
-                                </>
-                              ) : null}
+                              <span className="text-[11px] text-zinc-500 shrink-0">{relDate}</span>
                             </div>
                           </div>
 
-                          {/* Snabbknapp för önskelista */}
                           <button
                             onClick={() =>
                               onAddGame({ ...game, status: 'notStarted', is_owned: false, is_backlog: false })
                             }
                             disabled={inLibrary}
-                            title={inLibrary ? (inWishlist ? 'På önskelistan' : 'I biblioteket') : 'Lägg till i önskelista'}
-                            className={`p-2.5 rounded-xl border transition cursor-pointer flex-shrink-0 ${
+                            className={`mt-3 w-full py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
                               inLibrary
-                                ? 'bg-zinc-800/40 border-zinc-700/50 cursor-default'
-                                : 'bg-zinc-800 hover:bg-brand-red text-zinc-300 hover:text-white border-zinc-700'
+                                ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-default'
+                                : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white border border-zinc-700'
                             }`}
                           >
                             {inLibrary ? (
-                              inWishlist ? (
-                                <Heart className="w-4 h-4 fill-current text-brand-red" />
-                              ) : (
-                                <Check className="w-4 h-4 text-emerald-400" />
-                              )
+                              <>
+                                {inWishlist ? (
+                                  <Heart className="w-3.5 h-3.5 fill-current text-brand-red" />
+                                ) : (
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                )}
+                                <span>{inWishlist ? 'På önskelistan' : 'I samlingen'}</span>
+                              </>
                             ) : (
-                              <Bookmark className="w-4 h-4 text-amber-400" />
+                              <>
+                                <Bookmark className="w-3.5 h-3.5 text-amber-400" />
+                                <span>Lägg till i önskelista</span>
+                              </>
                             )}
                           </button>
                         </div>
                       );
                     })}
                   </div>
+
+                  {/* Expander-knapp för att se alla släpp i månaden */}
+                  {displayedCalendarGames.length > 8 && (
+                    <div className="pt-2 flex justify-center">
+                      <button
+                        onClick={() => setShowFullCalendar(true)}
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 hover:border-brand-red/40 text-xs sm:text-sm font-bold text-zinc-300 hover:text-white transition shadow-sm cursor-pointer"
+                      >
+                        <span>Visa alla ${displayedCalendarGames.length} spelsläpp för ${currentMonthOption.title}</span>
+                        <ChevronDown className="w-4 h-4 text-brand-red" />
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* Utökat läge: Visa samtliga spel för månaden */
+                <div className="space-y-6 animate-in fade-in duration-200">
+                  {currentMonthOption.isMostHyped ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                      {displayedCalendarGames.map((game, idx) => {
+                        const matching = getMatchingGame(game.igdb_id, game.title);
+                        const inLibrary = Boolean(matching);
+                        const inWishlist = Boolean(matching && matching.is_owned === false);
+                        const relDate = game.first_release_date
+                          ? new Date(
+                              Number(game.first_release_date) *
+                                (Number(game.first_release_date) < 10000000000 ? 1000 : 1)
+                            ).toLocaleDateString('sv-SE', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                            })
+                          : game.release_year
+                          ? String(game.release_year)
+                          : 'Kommande';
+
+                        return (
+                          <div
+                            key={game.id}
+                            className="flex flex-col justify-between bg-zinc-900/70 border border-zinc-800/80 hover:border-zinc-700 rounded-2xl p-3 group transition shadow-sm relative"
+                          >
+                            <div>
+                              <div
+                                onClick={() => onSelectGame(game)}
+                                className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-zinc-950 mb-2 relative cursor-pointer border border-zinc-800/60"
+                              >
+                                {game.cover_url ? (
+                                  <img
+                                    src={game.cover_url}
+                                    alt={game.title}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <Gamepad className="w-6 h-6 text-zinc-600" />
+                                  </div>
+                                )}
+                                <div className="absolute top-2 left-2 z-10 px-1.5 py-0.5 rounded text-[9px] font-black bg-black/80 text-amber-400 border border-amber-500/30">
+                                  #{idx + 1}
+                                </div>
+                                {game.hypes && game.hypes > 0 ? (
+                                  <div className="absolute bottom-2 right-2 z-10 px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-black/80 text-rose-300 border border-rose-500/30 flex items-center gap-1">
+                                    <Flame className="w-2.5 h-2.5 text-brand-red fill-current" />
+                                    <span>{game.hypes}</span>
+                                  </div>
+                                ) : null}
+                              </div>
+
+                              <h4
+                                onClick={() => onSelectGame(game)}
+                                className="text-xs sm:text-sm font-bold text-white group-hover:text-red-400 transition cursor-pointer line-clamp-1 leading-snug"
+                              >
+                                {game.title}
+                              </h4>
+
+                              <div className="flex items-center justify-between text-[11px] text-zinc-400 mt-1">
+                                <span className="truncate max-w-[120px]">
+                                  {game.platforms?.slice(0, 2).join(', ') || 'Okänd'}
+                                </span>
+                                <span className="text-zinc-500 text-[10px]">{relDate}</span>
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() =>
+                                onAddGame({ ...game, status: 'notStarted', is_owned: false, is_backlog: false })
+                              }
+                              disabled={inLibrary}
+                              className={`mt-2.5 w-full py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
+                                inLibrary
+                                  ? 'bg-zinc-800/60 text-zinc-400 cursor-default'
+                                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white'
+                              }`}
+                            >
+                              {inLibrary ? (
+                                inWishlist ? (
+                                  <Heart className="w-3.5 h-3.5 fill-current text-brand-red" />
+                                ) : (
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                )
+                              ) : (
+                                <Bookmark className="w-3.5 h-3.5 text-amber-400" />
+                              )}
+                              <span>{inLibrary ? (inWishlist ? 'Önskelista' : 'I samlingen') : 'Önskelista'}</span>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    /* Datum-grupperad tidslinje för månaden */
+                    <div className="space-y-6">
+                      {groupedCalendarReleases.map(({ dateKey, displayDate, countdown, games: dateGames }) => (
+                        <div key={dateKey} className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-brand-red flex-shrink-0" />
+                            <h3 className="text-xs sm:text-sm font-black text-white tracking-wide uppercase">
+                              {displayDate}
+                            </h3>
+                            {countdown && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300">
+                                {countdown}
+                              </span>
+                            )}
+                            <span className="text-xs text-zinc-500">({dateGames.length} spelsläpp)</span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {dateGames.map((game) => {
+                              const matching = getMatchingGame(game.igdb_id, game.title);
+                              const inLibrary = Boolean(matching);
+                              const inWishlist = Boolean(matching && matching.is_owned === false);
+
+                              return (
+                                <div
+                                  key={game.id}
+                                  className="flex items-center gap-3 bg-zinc-900/80 border border-zinc-800/80 hover:border-zinc-700 rounded-2xl p-2.5 group transition shadow-sm"
+                                >
+                                  <div
+                                    onClick={() => onSelectGame(game)}
+                                    className="w-12 h-16 rounded-xl overflow-hidden bg-zinc-950 flex-shrink-0 cursor-pointer border border-zinc-800"
+                                  >
+                                    {game.cover_url ? (
+                                      <img
+                                        src={game.cover_url}
+                                        alt={game.title}
+                                        className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                                        loading="lazy"
+                                      />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center">
+                                        <Gamepad className="w-4 h-4 text-zinc-600" />
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="flex-1 min-w-0">
+                                    <h4
+                                      onClick={() => onSelectGame(game)}
+                                      className="text-xs sm:text-sm font-bold text-white group-hover:text-red-400 transition cursor-pointer line-clamp-1"
+                                    >
+                                      {game.title}
+                                    </h4>
+                                    <p className="text-[11px] text-zinc-400 truncate mt-0.5">
+                                      {game.platforms?.slice(0, 2).join(', ') || 'Okänd'}
+                                    </p>
+                                    {game.hypes && game.hypes > 0 ? (
+                                      <span className="text-[10px] text-rose-400 font-bold flex items-center gap-0.5 mt-0.5">
+                                        <Flame className="w-2.5 h-2.5 text-brand-red fill-current" />
+                                        <span>{game.hypes} hypes</span>
+                                      </span>
+                                    ) : null}
+                                  </div>
+
+                                  <button
+                                    onClick={() =>
+                                      onAddGame({ ...game, status: 'notStarted', is_owned: false, is_backlog: false })
+                                    }
+                                    disabled={inLibrary}
+                                    className={`p-2 rounded-xl border transition cursor-pointer flex-shrink-0 ${
+                                      inLibrary
+                                        ? 'bg-zinc-800/40 border-zinc-700/50 cursor-default'
+                                        : 'bg-zinc-800 hover:bg-brand-red text-zinc-300 hover:text-white border-zinc-700'
+                                    }`}
+                                  >
+                                    {inLibrary ? (
+                                      inWishlist ? (
+                                        <Heart className="w-3.5 h-3.5 fill-current text-brand-red" />
+                                      ) : (
+                                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                      )
+                                    ) : (
+                                      <Bookmark className="w-3.5 h-3.5 text-amber-400" />
+                                    )}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Knapp för att återgå till kompakt kalender */}
+                  <div className="pt-3 flex justify-center">
+                    <button
+                      onClick={() => setShowFullCalendar(false)}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs sm:text-sm font-bold text-zinc-300 hover:text-white transition shadow-sm cursor-pointer"
+                    >
+                      <span>Visa kompakt kalender (8 spelsläpp)</span>
+                      <ChevronUp className="w-4 h-4 text-zinc-400" />
+                    </button>
+                  </div>
                 </div>
-              ))}
+              )}
             </div>
           )}
-        </div>
         </section>
 
         {/* 4. 🏆 Topplistor & Högst betygsatta */}
@@ -2841,6 +2877,7 @@ export function DiscoverView({
             onSelectGame={onSelectGame}
             onAddGame={onAddGame}
             libraryGames={games}
+            initialExpanded={false}
           />
         </div>
         </section>

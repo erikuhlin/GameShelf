@@ -21,7 +21,7 @@ enum GamePlayType: String, CaseIterable, Codable, Identifiable, Sendable {
         case .singlePlayer: return "Singleplayer"
         case .multiplayer: return "Multiplayer"
         case .coOp: return "Co-op"
-        case .ongoing: return "Ongoing / Live Service"
+        case .ongoing: return "Löpande spel"
         }
     }
 
@@ -30,7 +30,7 @@ enum GamePlayType: String, CaseIterable, Codable, Identifiable, Sendable {
         case .singlePlayer: return "person.fill"
         case .multiplayer: return "person.3.fill"
         case .coOp: return "person.2.fill"
-        case .ongoing: return "bolt.shield.fill"
+        case .ongoing: return "infinity"
         }
     }
 
@@ -44,7 +44,7 @@ enum GamePlayType: String, CaseIterable, Codable, Identifiable, Sendable {
             self = .multiplayer
         case "coop", "co_op", "co-op", "co-operative", "cooperative":
             self = .coOp
-        case "ongoing", "live_service", "liveservice", "live-service", "mmo", "online":
+        case "ongoing", "live_service", "liveservice", "live-service", "mmo", "online", "löpande multiplayer-spel", "löpande spel", "löpande":
             self = .ongoing
         default:
             self = .singlePlayer
@@ -154,7 +154,7 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
             case .playing: return "circle.fill"
             case .paused: return "pause.fill"
             case .completed: return "archivebox.fill"
-            case .abandoned: return "xmark.circle.fill"
+            case .abandoned: return "flag.checkered"
             }
         } else {
             switch self {
@@ -162,7 +162,7 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
             case .playing: return "play.fill"
             case .paused: return "pause.fill"
             case .completed: return "checkmark.seal.fill"
-            case .abandoned: return "xmark.circle.fill"
+            case .abandoned: return "flag.checkered"
             }
         }
     }

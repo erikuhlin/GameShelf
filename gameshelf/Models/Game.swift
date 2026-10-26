@@ -156,6 +156,8 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
     var isBacklog: Bool = false
     var priority: PlayPriority = .none
     var lastPlayedDate: Date? = nil
+    var startedPlayingDate: Date? = nil
+    var pausedDate: Date? = nil
     var completedYear: Int? = nil
     var completedDate: Date? = nil
     var storyProgress: GameStoryProgress? = nil
@@ -164,6 +166,14 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
     var noteUpdatedAt: Date? = nil
 
     // MARK: - Computed Helpers
+    var effectiveStartedPlayingDate: Date {
+        startedPlayingDate ?? lastPlayedDate ?? dateAdded
+    }
+
+    var effectivePausedDate: Date {
+        pausedDate ?? lastPlayedDate ?? dateAdded
+    }
+
     var effectiveHoursPlayed: Double {
         get {
             hoursPlayed ?? 0.0
@@ -326,7 +336,7 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
     enum CodingKeys: String, CodingKey {
         case id, title, platforms, releaseYear, genres, developers, status, rating
         case igdbRating, rawgRating, coverURL, igdbID, firstReleaseDate, estimatedHours, isOwned, notes, todos, dateAdded
-        case playTypes, isBacklog, priority, lastPlayedDate
+        case playTypes, isBacklog, priority, lastPlayedDate, startedPlayingDate, pausedDate
         case completedYear, completedDate, storyProgress
         case hoursPlayed, progressNote, noteUpdatedAt
     }
@@ -353,6 +363,8 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         isBacklog: Bool = false,
         priority: PlayPriority = .none,
         lastPlayedDate: Date? = nil,
+        startedPlayingDate: Date? = nil,
+        pausedDate: Date? = nil,
         completedYear: Int? = nil,
         completedDate: Date? = nil,
         storyProgress: GameStoryProgress? = nil,
@@ -381,6 +393,8 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         self.isBacklog = isBacklog
         self.priority = priority
         self.lastPlayedDate = lastPlayedDate
+        self.startedPlayingDate = startedPlayingDate
+        self.pausedDate = pausedDate
         self.completedYear = completedYear
         self.completedDate = completedDate
         self.storyProgress = storyProgress
@@ -465,6 +479,8 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
 
         priority = (try? container.decodeIfPresent(PlayPriority.self, forKey: .priority)) ?? .none
         lastPlayedDate = try? container.decodeIfPresent(Date.self, forKey: .lastPlayedDate)
+        startedPlayingDate = try? container.decodeIfPresent(Date.self, forKey: .startedPlayingDate)
+        pausedDate = try? container.decodeIfPresent(Date.self, forKey: .pausedDate)
         completedYear = try? container.decodeIfPresent(Int.self, forKey: .completedYear)
         completedDate = try? container.decodeIfPresent(Date.self, forKey: .completedDate)
         storyProgress = try? container.decodeIfPresent(GameStoryProgress.self, forKey: .storyProgress)
@@ -496,6 +512,8 @@ struct Game: Identifiable, Hashable, Codable, Sendable {
         try container.encode(isBacklog, forKey: .isBacklog)
         try container.encode(priority, forKey: .priority)
         try container.encodeIfPresent(lastPlayedDate, forKey: .lastPlayedDate)
+        try container.encodeIfPresent(startedPlayingDate, forKey: .startedPlayingDate)
+        try container.encodeIfPresent(pausedDate, forKey: .pausedDate)
         try container.encodeIfPresent(completedYear, forKey: .completedYear)
         try container.encodeIfPresent(completedDate, forKey: .completedDate)
         try container.encodeIfPresent(storyProgress, forKey: .storyProgress)

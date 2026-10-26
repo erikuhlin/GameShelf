@@ -13,8 +13,8 @@ struct EditGameGoalsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var showingSelectGameSheet = false
-    @State private var gameToRemoveFromFocus: Game? = nil
-    @State private var showingRemoveFocusConfirmation = false
+    @State private var recentlyRemovedFocusGame: Game? = nil
+    @State private var previousTargetIDs: [String] = []
 
     private var currentYear: Int {
         GamingGoalEngine.currentYear
@@ -64,7 +64,7 @@ struct EditGameGoalsSheet: View {
                             Spacer()
 
                             VStack(spacing: 2) {
-                                Text("\(profile.annualGamingGoal)")
+                                Text("\(max(minimumGoal, profile.annualGamingGoal))")
                                     .font(.system(size: 38, weight: .black, design: .rounded))
                                     .foregroundStyle(.primary)
 
@@ -77,7 +77,11 @@ struct EditGameGoalsSheet: View {
 
                             Button {
                                 withAnimation {
-                                    profile.annualGamingGoal += 1
+                                    if profile.annualGamingGoal < minimumGoal {
+                                        profile.annualGamingGoal = minimumGoal + 1
+                                    } else {
+                                        profile.annualGamingGoal += 1
+                                    }
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                 }
                             } label: {
@@ -124,7 +128,7 @@ struct EditGameGoalsSheet: View {
                         }
 
                         if completedThisYear > 0 {
-                            Text("Minimum är \(completedThisYear) eftersom du redan klarat så många spel i år.")
+                            Text("Minimum för årsmålet är \(completedThisYear) (antalet redan klarade spel).")
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                         }
@@ -137,7 +141,7 @@ struct EditGameGoalsSheet: View {
                 // Sektion 2: Fokusmål (upp till 3 spel)
                 Section {
                     if focusGames.isEmpty {
-                        VStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 6) {
                             Text("Inga aktiva fokusspel")
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.secondary)
@@ -182,15 +186,16 @@ struct EditGameGoalsSheet: View {
                                 Spacer()
 
                                 Button {
-                                    gameToRemoveFromFocus = game
-                                    showingRemoveFocusConfirmation = true
+                                    removeFromFocusWithUndo(game)
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.title3)
+                                    Image(systemName: "xmark")
+                                        .font(.caption.bold())
                                         .foregroundStyle(Color(.secondaryLabel))
+                                        .frame(width: 28, height: 28)
+                                        .background(Color(.tertiarySystemFill), in: Circle())
                                 }
                                 .buttonStyle(.plain)
-                                .accessibilityLabel("Ta bort från fokusmål")
+                                .accessibilityLabel("Ta bort från fokus")
                             }
                             .padding(.vertical, 2)
                         }
@@ -204,9 +209,10 @@ struct EditGameGoalsSheet: View {
                             showingSelectGameSheet = true
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: "plus.circle.fill")
+                                Image(systemName: "plus")
+                                    .font(.subheadline.bold())
                                     .foregroundStyle(Color.red)
-                                Text("Lägg till fokusspel (\(3 - focusGames.count) kvar)")
+                                Text("Lägg till fokusspel")
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(Color.red)
                             }
@@ -215,7 +221,7 @@ struct EditGameGoalsSheet: View {
                     }
                 } header: {
                     HStack {
-                        Text("Aktiva fokusmål (\(focusGames.count)/3)")
+                        Text("Fokusmål (\(focusGames.count)/3)")
                         Spacer()
                         if focusGames.count > 1 {
                             Text("Dra för att ändra ordning")
@@ -224,10 +230,41 @@ struct EditGameGoalsSheet: View {
                         }
                     }
                 } footer: {
-                    Text("När ett fokusspel klaras räknas det mot årsmålet och platsen frigörs automatiskt.")
+                    Text("✕ tar bort spelet från dina fokusmål utan att ta bort det ur biblioteket.")
                 }
             }
             .listStyle(.insetGrouped)
+            .safeAreaInset(edge: .bottom) {
+                if let removed = recentlyRemovedFocusGame {
+                    HStack(spacing: 12) {
+                        Text("\"\(removed.title)\" borttaget från fokus")
+                            .font(.subheadline)
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+
+                        Spacer()
+
+                        Button {
+                            withAnimation {
+                                profile.targetGameIDs = previousTargetIDs
+                                recentlyRemovedFocusGame = nil
+                            }
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        } label: {
+                            Text("Ångra")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(Color.yellow)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(Color(.darkGray).opacity(0.95), in: Capsule())
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
             .navigationTitle("Redigera spelmål")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -246,27 +283,27 @@ struct EditGameGoalsSheet: View {
                     .environmentObject(store)
                     .environmentObject(profile)
             }
-            .confirmationDialog(
-                "Ta bort från fokusmål?",
-                isPresented: $showingRemoveFocusConfirmation,
-                titleVisibility: .visible,
-                presenting: gameToRemoveFromFocus
-            ) { game in
-                Button("Ta bort från fokusmål", role: .destructive) {
-                    profile.removeTargetGoal(gameID: game.id)
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            .onAppear {
+                if profile.annualGamingGoal < minimumGoal {
+                    profile.annualGamingGoal = minimumGoal
                 }
-                Button("Avbryt", role: .cancel) {}
-            } message: { game in
-                Text("\"\(game.title)\" tas bort från dina aktiva fokusmål. Spelet och all din historik finns kvar i biblioteket.")
             }
         }
+    }
+
+    private func removeFromFocusWithUndo(_ game: Game) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            previousTargetIDs = profile.targetGameIDs
+            profile.removeTargetGoal(gameID: game.id)
+            recentlyRemovedFocusGame = game
+        }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     private func statusColor(_ status: PlayStatus) -> Color {
         switch status {
         case .playing: return .green
-        case .paused: return .orange
+        case .paused: return .yellow
         case .notStarted: return .secondary
         case .completed: return .teal
         case .abandoned: return .purple

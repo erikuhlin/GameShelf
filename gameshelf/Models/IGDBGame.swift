@@ -27,6 +27,7 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
     let category: Int?
     let gameType: Int?
     let parentGame: Int?
+    let versionParent: Int?
     let hypes: Int?
     let franchises: [IGDBFranchise]?
 
@@ -56,6 +57,7 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
         category: Int? = nil,
         gameType: Int? = nil,
         parentGame: Int? = nil,
+        versionParent: Int? = nil,
         hypes: Int? = nil,
         franchises: [IGDBFranchise]? = nil
     ) {
@@ -84,6 +86,7 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
         self.category = category
         self.gameType = gameType
         self.parentGame = parentGame
+        self.versionParent = versionParent
         self.hypes = hypes
         self.franchises = franchises
     }
@@ -93,6 +96,7 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
         case dlcs, expansions, themes, category, hypes, franchises
         case gameType = "game_type"
         case parentGame = "parent_game"
+        case versionParent = "version_parent"
         case firstReleaseDate = "first_release_date"
         case totalRating = "total_rating"
         case aggregatedRating = "aggregated_rating"
@@ -126,6 +130,98 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
             return true
         }
         return false
+    }
+
+    /// Identifierar specialutgåvor, bundles och alternativa versioner (t.ex. Ultimate Edition, Deluxe Edition, GOTY)
+    nonisolated var isSpecialEditionOrBundle: Bool {
+        if versionParent != nil { return true }
+        // 3: bundle, 11: port
+        let bundleTypes: Set<Int> = [3, 11]
+        if let type = gameType, bundleTypes.contains(type) { return true }
+        if let cat = category, bundleTypes.contains(cat) { return true }
+
+        let lower = name.lowercased()
+        let editionMarkers = [
+            "ultimate edition", "deluxe edition", "digital deluxe", "gold edition",
+            "complete edition", "game of the year", "goty edition", "definitive edition",
+            "director's cut", "directors cut", "collector's edition", "collectors edition",
+            "anniversary edition", "special edition", "premium edition", "legendary edition",
+            "royal edition", "expanded edition", "enhanced edition", "cross-gen bundle",
+            "launch edition", "day one edition", "complete collection", "trilogy", "bundle"
+        ]
+        return editionMarkers.contains { lower.contains($0) }
+    }
+
+    /// Normaliserar en speltitel till dess kanoniska bastitel så att t.ex.
+    /// "Cyberpunk 2077: Ultimate Edition" och "Cyberpunk 2077" matchar som samma spel.
+    nonisolated static func canonicalBaseTitle(_ rawTitle: String) -> String {
+        var s = rawTitle.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Ta bort eventuella parenteser/hakparenteser på slutet, t.ex. "(PS5)" eller "[Deluxe Edition]"
+        s = s.replacingOccurrences(of: #"\s*[\(\[][^\)\]]*[\)\]]\s*$"#, with: "", options: .regularExpression)
+
+        // Vanliga utgåve- och versionssuffix att rensa bort
+        let suffixes = [
+            "digital deluxe edition",
+            "game of the year edition",
+            "collector's edition",
+            "collectors edition",
+            "anniversary edition",
+            "definitive edition",
+            "ultimate edition",
+            "complete edition",
+            "expanded edition",
+            "enhanced edition",
+            "legendary edition",
+            "standard edition",
+            "champion edition",
+            "imperial edition",
+            "komplete edition",
+            "tarnished edition",
+            "special edition",
+            "premium edition",
+            "deluxe edition",
+            "royal edition",
+            "launch edition",
+            "day one edition",
+            "goty edition",
+            "gold edition",
+            "full clip edition",
+            "prepare to die edition",
+            "the fire fades edition",
+            "scholar of the first sin",
+            "director's cut",
+            "directors cut",
+            "digital deluxe",
+            "game of the year",
+            "cross-gen bundle",
+            "complete collection",
+            "hd remaster",
+            "remastered",
+            "remaster",
+            "remake",
+            "bundle"
+        ]
+
+        // Upprepa städning ifall en titel har t.ex. ": Director's Cut Deluxe Edition"
+        var didStrip = true
+        while didStrip {
+            didStrip = false
+            for suffix in suffixes {
+                let pattern = #"(?:\s*[:\-–—]\s*|\s+)"# + NSRegularExpression.escapedPattern(for: suffix) + #"$"#
+                if let range = s.range(of: pattern, options: .regularExpression) {
+                    s.removeSubrange(range)
+                    s = s.trimmingCharacters(in: .whitespacesAndNewlines)
+                    didStrip = true
+                }
+            }
+        }
+
+        // Normalisera skiljetecken och mellanslag
+        s = s.replacingOccurrences(of: "’", with: "'")
+        s = s.replacingOccurrences(of: #"[:\-–—']+"#, with: " ", options: .regularExpression)
+        s = s.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var releaseYear: Int? {

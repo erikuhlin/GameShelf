@@ -43,7 +43,7 @@ enum GamingGoalEngine {
 
     static func completedGames(in games: [Game], for year: Int = currentYear) -> [Game] {
         games.filter { g in
-            guard g.isOwned, g.status == .completed else { return false }
+            guard g.isOwned, g.status == .completed, !g.isMultiplayerOrOngoing else { return false }
             if let y = g.completedYear {
                 return y == year
             }
@@ -66,41 +66,56 @@ enum GamingGoalEngine {
         completedGames(in: games, for: year).count
     }
 
+    static func abandonedGames(in games: [Game], for year: Int = currentYear) -> [Game] {
+        games.filter { g in
+            guard g.isOwned, g.status == .abandoned else { return false }
+            if let y = g.completedYear {
+                return y == year
+            }
+            if let date = g.completedDate {
+                return Calendar.current.component(.year, from: date) == year
+            }
+            if let lastPlayed = g.lastPlayedDate {
+                return Calendar.current.component(.year, from: lastPlayed) == year
+            }
+            return Calendar.current.component(.year, from: g.dateAdded) == year
+        }
+        .sorted { (g1, g2) -> Bool in
+            let d1 = g1.completedDate ?? g1.lastPlayedDate ?? g1.dateAdded
+            let d2 = g2.completedDate ?? g2.lastPlayedDate ?? g2.dateAdded
+            return d1 > d2
+        }
+    }
+
+    static func abandonedCount(in games: [Game], for year: Int = currentYear) -> Int {
+        abandonedGames(in: games, for: year).count
+    }
+
+    static func formatShortDayMonth(_ date: Date) -> String {
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "sv_SE")
+        df.dateFormat = "d MMM"
+        return df.string(from: date).replacingOccurrences(of: ".", with: "").lowercased()
+    }
+
+    /// Fokusmål hålls helt isär från status (endast valda targetIDs, exklusive klarade/avslutade spel, max 3)
     static func focusGames(from allGames: [Game], targetIDs: [String] = []) -> [Game] {
+        guard !targetIDs.isEmpty else { return [] }
+        let lookup: [String: Game] = Dictionary(
+            allGames.map { ($0.id.uuidString.lowercased(), $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
         var result: [Game] = []
         var seenIDs = Set<UUID>()
-
-        // 1. Singleplayer-spel i "Spelar nu" blir automatiskt fokusmål (exkluderar multiplayer/ongoing)
-        let activePlayingSingleplayer = allGames
-            .filter { g in
-                g.isOwned && g.status == .playing && !g.isMultiplayerOrOngoing
-            }
-            .sorted { (g1, g2) in
-                let d1 = g1.lastPlayedDate ?? g1.dateAdded
-                let d2 = g2.lastPlayedDate ?? g2.dateAdded
-                return d1 > d2
-            }
-
-        for game in activePlayingSingleplayer {
-            if result.count < 3 && seenIDs.insert(game.id).inserted {
+        for id in targetIDs {
+            if let game = lookup[id.lowercased()],
+               game.status != .completed,
+               game.status != .abandoned,
+               seenIDs.insert(game.id).inserted {
                 result.append(game)
+                if result.count == 3 { break }
             }
         }
-
-        // 2. Om platser finns kvar: Fyll på med eventuella manuellt valda targetIDs från profilen
-        if result.count < 3 && !targetIDs.isEmpty {
-            let lookup: [String: Game] = Dictionary(
-                allGames.map { ($0.id.uuidString.lowercased(), $0) },
-                uniquingKeysWith: { first, _ in first }
-            )
-            for id in targetIDs {
-                if let game = lookup[id.lowercased()], game.status != .completed, seenIDs.insert(game.id).inserted {
-                    result.append(game)
-                    if result.count == 3 { break }
-                }
-            }
-        }
-
         return result
     }
 
@@ -124,13 +139,13 @@ enum GamingGoalEngine {
                 case .paused: return "Pausat"
                 case .notStarted: return "Inte påbörjat"
                 case .completed: return "Klarat"
-                case .abandoned: return "Slutat"
+                case .abandoned: return "Avslutat"
                 }
             }()
 
             var subParts: [String] = [
                 statusLabel,
-                "\(done) av \(total)"
+                "\(done) av \(total) uppdrag"
             ]
             if let n = next, !n.isEmpty {
                 subParts.append("Nästa: \(n)")
@@ -154,7 +169,7 @@ enum GamingGoalEngine {
             case .paused: return "Pausat"
             case .notStarted: return "Inte påbörjat"
             case .completed: return "Klarat"
-            case .abandoned: return "Slutat"
+            case .abandoned: return "Avslutat"
             }
         }()
 
@@ -214,7 +229,7 @@ enum GamingGoalEngine {
                 isGoalReached: true,
                 isAheadOfPace: true,
                 isUnrealistic: false,
-                displayText: "Målet för \(targetYear) är nått! Bra jobbat! 🏆"
+                displayText: "Årsmålet för \(targetYear) är nått!"
             )
         }
 
@@ -227,18 +242,7 @@ enum GamingGoalEngine {
         let expectedCompleted = (Double(dayOfYear) / Double(totalDaysInYear)) * Double(goal)
         let isAhead = Double(completed) >= expectedCompleted
 
-        let text: String = {
-            if remainingGames == 1 {
-                return "\(daysRemaining) dagar kvar · Bara 1 spel kvar till målet! 🎯"
-            }
-            if isUnrealistic {
-                return "\(daysRemaining) dagar kvar · ca ett spel var \(daysPerGame):e dag"
-            }
-            if isAhead && completed > 0 {
-                return "\(daysRemaining) dagar kvar · Du ligger före! · ca ett spel var \(daysPerGame):e dag"
-            }
-            return "\(daysRemaining) dagar kvar · ca ett spel var \(daysPerGame):e dag"
-        }()
+        let text = "\(daysRemaining) dagar kvar · ca ett spel var \(daysPerGame):e dag för att nå målet"
 
         return GameGoalTempoInfo(
             daysRemainingInYear: daysRemaining,
@@ -252,7 +256,7 @@ enum GamingGoalEngine {
     }
 
     static func closestToFinish(from games: [Game]) -> (game: Game, info: GameGoalProgressInfo)? {
-        let active = games.filter { $0.status != .completed }
+        let active = games.filter { $0.status != .completed && $0.status != .abandoned }
         guard !active.isEmpty else { return nil }
 
         var candidates: [(game: Game, info: GameGoalProgressInfo)] = []

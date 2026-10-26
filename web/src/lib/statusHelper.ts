@@ -1,4 +1,4 @@
-import { PlayStatus, GamePlayType, Game } from '@/types/game';
+import { PlayStatus, GamePlayType, Game } from '../types/game';
 
 /**
  * Normaliserar inkommande statussträngar från Supabase, localStorage eller äldre format.

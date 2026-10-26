@@ -3573,7 +3573,7 @@ private struct LibraryStatusSheetView: View {
                         dismiss()
                     } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: "xmark.circle.fill")
+                            Image(systemName: "flag.checkered")
                                 .font(.headline)
                                 .foregroundStyle(.purple)
                             VStack(alignment: .leading, spacing: 2) {

@@ -6,23 +6,63 @@
 //
 
 import SwiftUI
+import CryptoKit
 
-// MARK: - In-Memory Image Cache för blixtsnabb rendering
+// MARK: - Tvåstegs Image Cache (Minne + Persistent Disk) för blixtsnabb & offline rendering
 final class CoverImageCache: @unchecked Sendable {
     static let shared = CoverImageCache()
-    private let cache = NSCache<NSURL, UIImage>()
+    private let memoryCache = NSCache<NSURL, UIImage>()
+    private let fileManager = FileManager.default
+    private let diskCacheDirectory: URL
+    private let ioQueue = DispatchQueue(label: "gameshelf.covercache.disk", qos: .utility)
 
     private init() {
-        cache.countLimit = 250 // max 250 bilder i minnet
-        cache.totalCostLimit = 60 * 1024 * 1024 // ~60 MB
+        memoryCache.countLimit = 350 // max 350 bilder i minnet
+        memoryCache.totalCostLimit = 100 * 1024 * 1024 // ~100 MB RAM
+
+        let paths = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
+        let cacheFolder = paths[0].appendingPathComponent("GameCovers", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: cacheFolder.path) {
+            try? FileManager.default.createDirectory(at: cacheFolder, withIntermediateDirectories: true)
+        }
+        self.diskCacheDirectory = cacheFolder
+    }
+
+    private func diskFileURL(for url: URL) -> URL {
+        let hash = SHA256.hash(data: Data(url.absoluteString.utf8))
+        let hashString = hash.compactMap { String(format: "%02x", $0) }.joined()
+        return diskCacheDirectory.appendingPathComponent(hashString).appendingPathExtension("img")
     }
 
     func image(for url: URL) -> UIImage? {
-        cache.object(forKey: url as NSURL)
+        // 1. Blixtsnabb minnescache (0 ms)
+        if let memoryImage = memoryCache.object(forKey: url as NSURL) {
+            return memoryImage
+        }
+
+        // 2. Persistent diskcache (fungerar offline och vid omstart)
+        let fileURL = diskFileURL(for: url)
+        if fileManager.fileExists(atPath: fileURL.path),
+           let data = try? Data(contentsOf: fileURL),
+           let diskImage = UIImage(data: data) {
+            memoryCache.setObject(diskImage, forKey: url as NSURL)
+            return diskImage
+        }
+
+        return nil
     }
 
-    func insert(_ image: UIImage, for url: URL) {
-        cache.setObject(image, forKey: url as NSURL)
+    func insert(_ image: UIImage, data: Data? = nil, for url: URL) {
+        memoryCache.setObject(image, forKey: url as NSURL)
+
+        let fileURL = diskFileURL(for: url)
+        ioQueue.async {
+            if let rawData = data {
+                try? rawData.write(to: fileURL, options: .atomic)
+            } else if let jpegData = image.jpegData(compressionQuality: 0.88) {
+                try? jpegData.write(to: fileURL, options: .atomic)
+            }
+        }
     }
 }
 
@@ -44,6 +84,25 @@ struct CoverView: View {
     @State private var loadedImage: UIImage? = nil
     @State private var isLoading: Bool = false
     @State private var hasFailed: Bool = false
+
+    init(
+        title: String,
+        url: URL?,
+        corner: CGFloat = Radius.m,
+        height: CGFloat = 160,
+        fitMode: FitMode = .fill,
+        fullWidth: Bool = false
+    ) {
+        self.title = title
+        self.url = url
+        self.corner = corner
+        self.height = height
+        self.fitMode = fitMode
+        self.fullWidth = fullWidth
+        if let u = url, let cached = CoverImageCache.shared.image(for: u) {
+            self._loadedImage = State(initialValue: cached)
+        }
+    }
 
     var body: some View {
         Group {
@@ -123,7 +182,7 @@ struct CoverView: View {
                 return
             }
 
-            CoverImageCache.shared.insert(uiImage, for: url)
+            CoverImageCache.shared.insert(uiImage, data: data, for: url)
 
             await MainActor.run {
                 self.loadedImage = uiImage

@@ -17,9 +17,10 @@ struct SelectFocusGameSheet: View {
     private var availableGames: [Game] {
         let currentFocusIDs = Set(GamingGoalEngine.focusGames(from: store.games, targetIDs: profile.targetGameIDs).map { $0.id.uuidString.lowercased() })
         return store.games.filter { game in
-            // Endast singleplayer-spel i ägo som inte redan är fokusmål och inte redan är klara
+            // Endast singleplayer-spel i ägo som inte redan är fokusmål och inte är klara/avslutade
             game.isOwned &&
             game.status != .completed &&
+            game.status != .abandoned &&
             !game.isMultiplayerOrOngoing &&
             !currentFocusIDs.contains(game.id.uuidString.lowercased())
         }
@@ -71,13 +72,7 @@ struct SelectFocusGameSheet: View {
                     List {
                         ForEach(filteredGames) { game in
                             Button {
-                                var copy = game
-                                if copy.status != .playing {
-                                    copy.status = .playing
-                                    copy.isBacklog = false
-                                    copy.lastPlayedDate = Date()
-                                    store.update(copy)
-                                }
+                                // Fokusmål och status hålls isär: ändrar inte spelets status
                                 profile.addTargetGoal(gameID: game.id)
                                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                                 dismiss()

@@ -165,6 +165,23 @@ struct ForYouFingerprint: Sendable {
     let spelDNA: SpelDNAProfile?
     let ownedIGDBIDs: Set<Int>
     let ownedTitles: Set<String>
+    let ownedCanonicalTitles: Set<String>
+
+    nonisolated func isAlreadyInLibraryOrEdition(_ game: IGDBGame, seenCanonicalTitles: Set<String> = []) -> Bool {
+        if game.isDLC || game.isSpecialEditionOrBundle { return true }
+        if ownedIGDBIDs.contains(game.id) { return true }
+        if let parent = game.parentGame, ownedIGDBIDs.contains(parent) { return true }
+        if let vParent = game.versionParent, ownedIGDBIDs.contains(vParent) { return true }
+
+        let lower = game.name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        if ownedTitles.contains(lower) { return true }
+
+        let canonical = IGDBGame.canonicalBaseTitle(game.name)
+        if !canonical.isEmpty && (ownedCanonicalTitles.contains(canonical) || seenCanonicalTitles.contains(canonical)) {
+            return true
+        }
+        return false
+    }
 }
 
 struct CuratedRecommendation: Identifiable, Sendable {
@@ -212,8 +229,9 @@ final class ForYouEngine: ObservableObject {
     // MARK: - 1. Analysera användarens bibliotek & profil
     func buildFingerprint(games: [Game], profile: ProfileStore) -> ForYouFingerprint {
         let owned = games.filter { $0.isOwned }
-        let ownedIGDBIDs = Set(owned.compactMap(\.igdbID))
-        let ownedTitles = Set(owned.map { $0.title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) })
+        let ownedIGDBIDs = Set(games.compactMap(\.igdbID))
+        let ownedTitles = Set(games.map { $0.title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) })
+        let ownedCanonicalTitles = Set(games.map { IGDBGame.canonicalBaseTitle($0.title) }.filter { !$0.isEmpty })
 
         // Genre-frekvens
         var genreCounts: [String: Int] = [:]
@@ -316,7 +334,8 @@ final class ForYouEngine: ObservableObject {
             userPlatformIDs: Array(Set(platformIDs)),
             spelDNA: spelDNA,
             ownedIGDBIDs: ownedIGDBIDs,
-            ownedTitles: ownedTitles
+            ownedTitles: ownedTitles,
+            ownedCanonicalTitles: ownedCanonicalTitles
         )
         self.fingerprint = fp
         return fp
@@ -408,8 +427,7 @@ final class ForYouEngine: ObservableObject {
                 limit: 12
             ) {
                 let filtered = topRanked.filter {
-                    !fp.ownedIGDBIDs.contains($0.id) &&
-                    !fp.ownedTitles.contains($0.name.lowercased()) &&
+                    !fp.isAlreadyInLibraryOrEdition($0) &&
                     !seenGameIDs.contains($0.id)
                 }
                 if !filtered.isEmpty {
@@ -528,14 +546,14 @@ final class ForYouEngine: ObservableObject {
     /// Hämtar liknande spel med kvalitetsspärr + smart genrekontroll + automatisk påfyllnad
     private func fetchSmartSimilarGames(for game: Game, fp: ForYouFingerprint, seenIDs: inout Set<Int>) async -> [IGDBGame] {
         var results: [IGDBGame] = []
+        var seenCanonicals = Set<String>()
         let refGenres = Set(game.genres.map { $0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) })
 
         // Steg 1: Officiella IGDB similar_games med betyg >= 70 och genreöverlapp
         if let igdbID = game.igdbID {
             if let similar = try? await IGDBService.shared.fetchSimilarGames(forGameID: igdbID, limit: 14) {
                 for g in similar {
-                    guard !fp.ownedIGDBIDs.contains(g.id),
-                          !fp.ownedTitles.contains(g.name.lowercased()),
+                    guard !fp.isAlreadyInLibraryOrEdition(g, seenCanonicalTitles: seenCanonicals),
                           !seenIDs.contains(g.id) else { continue }
 
                     // Kasta bort spel med lågt betyg
@@ -549,6 +567,8 @@ final class ForYouEngine: ObservableObject {
 
                     results.append(g)
                     seenIDs.insert(g.id)
+                    let canonical = IGDBGame.canonicalBaseTitle(g.name)
+                    if !canonical.isEmpty { seenCanonicals.insert(canonical) }
                 }
             }
         }
@@ -563,11 +583,12 @@ final class ForYouEngine: ObservableObject {
                 limit: 16
             ) {
                 for g in genrePicks {
-                    guard !fp.ownedIGDBIDs.contains(g.id),
-                          !fp.ownedTitles.contains(g.name.lowercased()),
+                    guard !fp.isAlreadyInLibraryOrEdition(g, seenCanonicalTitles: seenCanonicals),
                           !seenIDs.contains(g.id) else { continue }
                     results.append(g)
                     seenIDs.insert(g.id)
+                    let canonical = IGDBGame.canonicalBaseTitle(g.name)
+                    if !canonical.isEmpty { seenCanonicals.insert(canonical) }
                     if results.count >= 14 { break }
                 }
             }
@@ -611,10 +632,15 @@ final class ForYouEngine: ObservableObject {
             sortOption: sort,
             limit: 16
         ) {
-            return games.filter {
-                !fp.ownedIGDBIDs.contains($0.id) &&
-                !fp.ownedTitles.contains($0.name.lowercased())
+            var seenCanonicals = Set<String>()
+            var filtered: [IGDBGame] = []
+            for g in games {
+                guard !fp.isAlreadyInLibraryOrEdition(g, seenCanonicalTitles: seenCanonicals) else { continue }
+                let canonical = IGDBGame.canonicalBaseTitle(g.name)
+                if !canonical.isEmpty { seenCanonicals.insert(canonical) }
+                filtered.append(g)
             }
+            return filtered
         }
         return []
     }
@@ -629,12 +655,14 @@ final class ForYouEngine: ObservableObject {
             limit: 12
         ) {
             var items: [IGDBGame] = []
+            var seenCanonicals = Set<String>()
             for g in devGames {
-                guard !fp.ownedIGDBIDs.contains(g.id),
-                      !fp.ownedTitles.contains(g.name.lowercased()),
+                guard !fp.isAlreadyInLibraryOrEdition(g, seenCanonicalTitles: seenCanonicals),
                       !seenIDs.contains(g.id) else { continue }
                 items.append(g)
                 seenIDs.insert(g.id)
+                let canonical = IGDBGame.canonicalBaseTitle(g.name)
+                if !canonical.isEmpty { seenCanonicals.insert(canonical) }
             }
             return items
         }
@@ -691,12 +719,14 @@ final class ForYouEngine: ObservableObject {
             limit: 16
         ) {
             var items: [IGDBGame] = []
+            var seenCanonicals = Set<String>()
             for g in results {
-                guard !fp.ownedIGDBIDs.contains(g.id),
-                      !fp.ownedTitles.contains(g.name.lowercased()),
+                guard !fp.isAlreadyInLibraryOrEdition(g, seenCanonicalTitles: seenCanonicals),
                       !seenIDs.contains(g.id) else { continue }
                 items.append(g)
                 seenIDs.insert(g.id)
+                let canonical = IGDBGame.canonicalBaseTitle(g.name)
+                if !canonical.isEmpty { seenCanonicals.insert(canonical) }
                 if items.count >= 12 { break }
             }
             return items
@@ -738,6 +768,7 @@ final class ForYouEngine: ObservableObject {
 
         isLoadingHomeRecommendations = true
         let libraryTitles = Set(games.map { $0.title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) })
+        let libraryCanonicalTitles = Set(games.map { IGDBGame.canonicalBaseTitle($0.title) }.filter { !$0.isEmpty })
         let libraryIDs = Set(games.compactMap { $0.igdbID })
 
         // Bestäm användarens aktiva plattformar
@@ -768,16 +799,35 @@ final class ForYouEngine: ObservableObject {
         // Senaste konsollgenerationen lanserades 2020: fokusera på spel släppta från och med 2020
         let minReleaseYear = hasModernPlatform ? 2020 : 1970
 
-        var allCurated: [CuratedRecommendation] = []
         var seenIDs = Set<Int>()
+        var seenCanonicals = Set<String>()
 
         func isEligibleGame(_ game: IGDBGame) -> Bool {
-            if game.isDLC { return false }
-            let trimmedTitle = game.name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-            if libraryIDs.contains(game.id) || libraryTitles.contains(trimmedTitle) {
+            if game.isDLC || game.isSpecialEditionOrBundle { return false }
+            if libraryIDs.contains(game.id) || seenIDs.contains(game.id) {
                 return false
             }
-            if seenIDs.contains(game.id) { return false }
+            if let parent = game.parentGame, libraryIDs.contains(parent) {
+                return false
+            }
+            if let vParent = game.versionParent, libraryIDs.contains(vParent) {
+                return false
+            }
+
+            let trimmedTitle = game.name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            if libraryTitles.contains(trimmedTitle) {
+                return false
+            }
+
+            let canonical = IGDBGame.canonicalBaseTitle(game.name)
+            if !canonical.isEmpty && (libraryCanonicalTitles.contains(canonical) || seenCanonicals.contains(canonical)) {
+                return false
+            }
+
+            // Kvalitetsspärr så att inte obskyra eller svagt rankade utgåvor rekommenderas
+            if let r = game.totalRating, r < 72 {
+                return false
+            }
 
             // Fokus på nyare spel (senaste konsollgenerationen: >= 2020)
             if let year = game.releaseYear {
@@ -795,20 +845,31 @@ final class ForYouEngine: ObservableObject {
             )
         }
 
+        // Exkludera spel som användaren lagt bort med lågt betyg från att styra rekommendationerna
+        let positiveGames = games.filter { g in
+            guard g.isOwned else { return false }
+            if g.status == .abandoned && (g.rating ?? 0) < 7 {
+                return false
+            }
+            return true
+        }
+
         // 1. Primär signal: Användarens Favoritspel från profilen
         let favoriteGames: [Game] = profile.favoriteGameIDs.compactMap { favID in
             let lower = favID.lowercased()
-            return games.first(where: {
+            return positiveGames.first(where: {
                 $0.id.uuidString.lowercased() == lower ||
                 ($0.igdbID != nil && String($0.igdbID!) == favID)
             })
         }
 
         // 2. Aktiva spel som spelas just nu
-        let activeGames = games.filter { $0.status == .playing }
+        let activeGames = positiveGames.filter { $0.status == .playing }
 
-        // 3. Högt betygsatta spel (>= 7)
-        let rated = games.filter { ($0.rating ?? 0) >= 7 }.sorted { ($0.rating ?? 0) > ($1.rating ?? 0) }
+        // 3. Högt betygsatta eller klarade spel (>= 7)
+        let ratedOrCompleted = positiveGames
+            .filter { ($0.rating ?? 0) >= 7 || $0.status == .completed }
+            .sorted { ($0.rating ?? 7) > ($1.rating ?? 7) }
 
         var referenceItems: [(game: Game, badgePrefix: String)] = []
         for fav in favoriteGames.prefix(3) {
@@ -819,28 +880,34 @@ final class ForYouEngine: ObservableObject {
                 referenceItems.append((act, "Passar"))
             }
         }
-        for r in rated.prefix(2) {
+        for r in ratedOrCompleted.prefix(3) {
             if !referenceItems.contains(where: { $0.game.id == r.id }) {
                 referenceItems.append((r, "Toppval"))
             }
         }
         if referenceItems.isEmpty {
-            for g in games.prefix(2) {
+            for g in positiveGames.prefix(2) {
                 referenceItems.append((g, "Liknar"))
             }
         }
 
         let platformIDList = Array(userPlatformIDs)
+        var bucketedRecommendations: [[CuratedRecommendation]] = []
 
         // Kurerar rekommendationer för varje referensspel
         for ref in referenceItems {
             let refGame = ref.game
+            let refGenres = Set(refGame.genres.map { $0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) })
             var candidateResults: [IGDBGame] = []
 
-            // A. Hämta officiellt liknande spel från IGDB
+            // A. Hämta officiellt liknande spel från IGDB med krav på genreöverlapp
             if let igdbID = refGame.igdbID {
-                if let similar = try? await IGDBService.shared.fetchSimilarGames(forGameID: igdbID, limit: 16) {
+                if let similar = try? await IGDBService.shared.fetchSimilarGames(forGameID: igdbID, limit: 18) {
                     for g in similar where isEligibleGame(g) {
+                        let simGenres = Set(g.genres?.map { $0.name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) } ?? [])
+                        if !refGenres.isEmpty && !simGenres.isEmpty && refGenres.isDisjoint(with: simGenres) {
+                            continue
+                        }
                         candidateResults.append(g)
                     }
                 }
@@ -855,12 +922,14 @@ final class ForYouEngine: ObservableObject {
                         startYear: minReleaseYear,
                         platformIDs: platformIDList,
                         genres: Array(genres.prefix(2)),
-                        minRating: 75,
+                        minRating: 76,
                         sortOption: .rating,
                         limit: 12
                     ) {
                         for g in discovered where isEligibleGame(g) {
-                            candidateResults.append(g)
+                            if !candidateResults.contains(where: { $0.id == g.id }) {
+                                candidateResults.append(g)
+                            }
                         }
                     }
                 }
@@ -869,17 +938,34 @@ final class ForYouEngine: ObservableObject {
             let shortTitle = refGame.title.components(separatedBy: ":").first?.trimmingCharacters(in: .whitespaces) ?? refGame.title
             let badgeText = "\(ref.badgePrefix): \(shortTitle)"
 
+            var bucket: [CuratedRecommendation] = []
             for g in candidateResults.prefix(4) {
                 seenIDs.insert(g.id)
-                allCurated.append(CuratedRecommendation(game: g, matchedReason: badgeText))
+                let canonical = IGDBGame.canonicalBaseTitle(g.name)
+                if !canonical.isEmpty { seenCanonicals.insert(canonical) }
+                bucket.append(CuratedRecommendation(game: g, matchedReason: badgeText))
+            }
+            if !bucket.isEmpty {
+                bucketedRecommendations.append(bucket)
+            }
+        }
+
+        // Blanda (round-robin) mellan referensspelen så att hyllan får maximal variation direkt från första kortet
+        var allCurated: [CuratedRecommendation] = []
+        let maxBucketCount = bucketedRecommendations.map(\.count).max() ?? 0
+        for row in 0..<maxBucketCount {
+            for bucket in bucketedRecommendations {
+                if row < bucket.count {
+                    allCurated.append(bucket[row])
+                }
             }
         }
 
         // Fallback om för få hittades - prioritera profilens favoritgenrer och topprankade nyare spel på användarens konsoler
-        if allCurated.count < 8 {
+        if allCurated.count < 10 {
             let profileGenres = Array(profile.favoriteGenres)
             var counts: [String: Int] = [:]
-            for game in games {
+            for game in positiveGames {
                 for g in game.genres where !g.isEmpty {
                     counts[g, default: 0] += 1
                 }
@@ -891,12 +977,14 @@ final class ForYouEngine: ObservableObject {
                 startYear: minReleaseYear,
                 platformIDs: platformIDList,
                 genres: Array(fallbackGenres.prefix(3)),
-                minRating: 75,
+                minRating: 76,
                 sortOption: .popularity,
-                limit: 16
+                limit: 20
             ) {
                 for g in fallback where isEligibleGame(g) {
                     seenIDs.insert(g.id)
+                    let canonical = IGDBGame.canonicalBaseTitle(g.name)
+                    if !canonical.isEmpty { seenCanonicals.insert(canonical) }
                     allCurated.append(CuratedRecommendation(game: g, matchedReason: "Toppval i din smak"))
                     if allCurated.count >= 16 { break }
                 }
@@ -960,9 +1048,13 @@ final class ForYouEngine: ObservableObject {
                 limit: 36
             )
 
-            let missingGames = fetched.filter { game in
-                !fp.ownedIGDBIDs.contains(game.id) &&
-                !fp.ownedTitles.contains(game.name.lowercased())
+            var seenCanonicals = Set<String>()
+            var missingGames: [IGDBGame] = []
+            for game in fetched {
+                guard !fp.isAlreadyInLibraryOrEdition(game, seenCanonicalTitles: seenCanonicals) else { continue }
+                let canonical = IGDBGame.canonicalBaseTitle(game.name)
+                if !canonical.isEmpty { seenCanonicals.insert(canonical) }
+                missingGames.append(game)
             }
 
             var items: [NostalgiaGameItem] = []
@@ -1031,9 +1123,13 @@ final class ForYouEngine: ObservableObject {
                 limit: 30
             )
 
-            let filtered = results.filter {
-                !fp.ownedIGDBIDs.contains($0.id) &&
-                !fp.ownedTitles.contains($0.name.lowercased())
+            var seenCanonicals = Set<String>()
+            var filtered: [IGDBGame] = []
+            for g in results {
+                guard !fp.isAlreadyInLibraryOrEdition(g, seenCanonicalTitles: seenCanonicals) else { continue }
+                let canonical = IGDBGame.canonicalBaseTitle(g.name)
+                if !canonical.isEmpty { seenCanonicals.insert(canonical) }
+                filtered.append(g)
             }
 
             self.compassResults = filtered
@@ -1091,9 +1187,13 @@ final class ForYouEngine: ObservableObject {
                 results = []
             }
 
-            let filtered = results.filter {
-                !fp.ownedIGDBIDs.contains($0.id) &&
-                !fp.ownedTitles.contains($0.name.lowercased())
+            var seenCanonicals = Set<String>()
+            var filtered: [IGDBGame] = []
+            for g in results {
+                guard !fp.isAlreadyInLibraryOrEdition(g, seenCanonicalTitles: seenCanonicals) else { continue }
+                let canonical = IGDBGame.canonicalBaseTitle(g.name)
+                if !canonical.isEmpty { seenCanonicals.insert(canonical) }
+                filtered.append(g)
             }
 
             self.compassResults = filtered

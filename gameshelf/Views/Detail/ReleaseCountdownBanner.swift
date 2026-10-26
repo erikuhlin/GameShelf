@@ -46,17 +46,17 @@ struct ReleaseCountdownBanner: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
             } else {
-                (
+                HStack(spacing: 0) {
                     Text(days == 1 ? "Om 1 dag" : "Om \(days) dagar")
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                         .fontWeight(.bold)
-                    + Text(" · ")
-                        .foregroundColor(.secondary)
+                    Text(" · ")
+                        .foregroundStyle(.secondary)
                         .fontWeight(.bold)
-                    + Text(shortDateText(targetDate))
-                        .foregroundColor(.secondary)
+                    Text(shortDateText(targetDate))
+                        .foregroundStyle(.secondary)
                         .fontWeight(.medium)
-                )
+                }
                 .font(.subheadline)
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)

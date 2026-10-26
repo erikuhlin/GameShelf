@@ -60,6 +60,35 @@ final class LibraryStore: ObservableObject {
     private var checkedGameIDsForDates = Set<UUID>()
     private var isEnrichingDates = false
 
+    // MARK: - Offline Synkkö & Konflikthantering
+    private var pendingSyncGameIDs: Set<UUID> = {
+        let array = UserDefaults.standard.stringArray(forKey: "pending_sync_game_ids") ?? []
+        return Set(array.compactMap { UUID(uuidString: $0) })
+    }() {
+        didSet {
+            let array = pendingSyncGameIDs.map(\.uuidString)
+            UserDefaults.standard.set(array, forKey: "pending_sync_game_ids")
+        }
+    }
+
+    private var pendingDeletedGameIDs: Set<UUID> = {
+        let array = UserDefaults.standard.stringArray(forKey: "pending_deleted_game_ids") ?? []
+        return Set(array.compactMap { UUID(uuidString: $0) })
+    }() {
+        didSet {
+            let array = pendingDeletedGameIDs.map(\.uuidString)
+            UserDefaults.standard.set(array, forKey: "pending_deleted_game_ids")
+        }
+    }
+
+    private func markForSync(gameID: UUID) {
+        pendingSyncGameIDs.insert(gameID)
+    }
+
+    private func didSyncSuccessfully(gameID: UUID) {
+        pendingSyncGameIDs.remove(gameID)
+    }
+
     init() {
         do {
             try loadGames()
@@ -143,36 +172,79 @@ final class LibraryStore: ObservableObject {
             UserDefaults.standard.set(true, forKey: initialMigrationKey)
         }
 
-        // 1. Synka spel från servern (speglar ändringar och bevarar lokala spel)
+        // 1. Bearbeta eventuella lokalt borttagna spel som ännu inte raderats i molnet
+        if !pendingDeletedGameIDs.isEmpty {
+            for delID in pendingDeletedGameIDs {
+                do {
+                    try await SupabaseSyncService.shared.deleteGame(id: delID)
+                    pendingDeletedGameIDs.remove(delID)
+                } catch {
+                    // Kvar i kön för nästa synk
+                }
+            }
+        }
+
+        // 2. Synka spel från servern (speglar ändringar och bevarar lokala offline-ändringar)
         do {
             let remoteGames = try await SupabaseSyncService.shared.fetchRemoteGames()
             if !remoteGames.isEmpty {
-                // Bevara kända lanseringsdatum från befintliga lokala spel så de inte skrivs över
-                let localDateMap = Dictionary(uniqueKeysWithValues: self.games.compactMap { g in
-                    g.firstReleaseDate.map { (g.id, $0) }
-                })
-                let remoteMap = Dictionary(uniqueKeysWithValues: remoteGames.map { ($0.id, $0) })
+                // Filtrera bort spel som användaren raderat lokalt
+                let filteredRemote = remoteGames.filter { !pendingDeletedGameIDs.contains($0.id) }
 
-                // Identifiera eventuella lokala spel som inte finns på servern än
-                let localOnlyGames = self.games.filter { remoteMap[$0.id] == nil }
+                let localMap = Dictionary(uniqueKeysWithValues: self.games.map { ($0.id, $0) })
+                let remoteMap = Dictionary(uniqueKeysWithValues: filteredRemote.map { ($0.id, $0) })
 
-                // Skapa en sammanslagen lista: remote-spel först, plus eventuella lokala spel som saknas i molnet
-                var mergedGames = remoteGames.map { r in
-                    var merged = r
-                    if merged.firstReleaseDate == nil, let cachedDate = localDateMap[merged.id] {
-                        merged.firstReleaseDate = cachedDate
+                var mergedGames: [Game] = []
+                var gamesToPushToCloud: [Game] = []
+
+                for r in filteredRemote {
+                    if let local = localMap[r.id] {
+                        if pendingSyncGameIDs.contains(local.id) {
+                            // Lokalt spel ändrades offline och har ännu inte synkats till molnet -> behåll lokala ändringen!
+                            mergedGames.append(local)
+                            gamesToPushToCloud.append(local)
+                        } else {
+                            // Molnet är uppdaterat -> använd remote men bevara lokala datum om de saknas
+                            var merged = r
+                            if merged.firstReleaseDate == nil {
+                                merged.firstReleaseDate = local.firstReleaseDate
+                            }
+                            if merged.startedPlayingDate == nil {
+                                merged.startedPlayingDate = local.startedPlayingDate
+                            }
+                            if merged.pausedDate == nil {
+                                merged.pausedDate = local.pausedDate
+                            }
+                            mergedGames.append(merged)
+                        }
+                    } else {
+                        mergedGames.append(r)
                     }
-                    return merged
                 }
+
+                // Identifiera lokala spel som inte finns i molnet än
+                let localOnlyGames = self.games.filter { remoteMap[$0.id] == nil && !pendingDeletedGameIDs.contains($0.id) }
                 if !localOnlyGames.isEmpty {
                     mergedGames.append(contentsOf: localOnlyGames)
-                    Task {
-                        try? await SupabaseSyncService.shared.upsertGames(localOnlyGames)
-                    }
+                    gamesToPushToCloud.append(contentsOf: localOnlyGames)
                 }
 
                 self.games = mergedGames
                 try? saveGames()
+
+                // Skicka upp alla lokala offline-ändringar till Supabase
+                if !gamesToPushToCloud.isEmpty {
+                    Task { [weak self] in
+                        for g in gamesToPushToCloud {
+                            do {
+                                try await SupabaseSyncService.shared.upsertGame(g)
+                                self?.didSyncSuccessfully(gameID: g.id)
+                            } catch {
+                                // Fortsätt behålla i pendingSyncGameIDs
+                            }
+                        }
+                    }
+                }
             } else if !self.games.isEmpty {
                 // Om servern var tom men vi har lokala spel: ladda upp alla lokala spel till servern i batch
                 try? await SupabaseSyncService.shared.upsertGames(self.games)
@@ -275,11 +347,23 @@ final class LibraryStore: ObservableObject {
 
     // MARK: - Game Public API
     func add(_ game: Game) {
-        games.insert(game, at: 0)
-        Task {
-            try? await SupabaseSyncService.shared.upsertGame(game)
-            if game.firstReleaseDate == nil {
-                await enrichMissingReleaseDates()
+        var toAdd = game
+        if toAdd.status == .playing && toAdd.startedPlayingDate == nil {
+            toAdd.startedPlayingDate = Date()
+        } else if toAdd.status == .paused && toAdd.pausedDate == nil {
+            toAdd.pausedDate = Date()
+        }
+        games.insert(toAdd, at: 0)
+        markForSync(gameID: toAdd.id)
+        Task { [weak self] in
+            do {
+                try await SupabaseSyncService.shared.upsertGame(toAdd)
+                self?.didSyncSuccessfully(gameID: toAdd.id)
+            } catch {
+                // Kvar i synkkön
+            }
+            if toAdd.firstReleaseDate == nil {
+                await self?.enrichMissingReleaseDates()
             }
         }
     }
@@ -290,8 +374,15 @@ final class LibraryStore: ObservableObject {
             games.remove(at: idx)
             removeGameFromAllCollections(gameId)
         }
-        Task {
-            try? await SupabaseSyncService.shared.deleteGame(id: gameId)
+        pendingSyncGameIDs.remove(gameId)
+        pendingDeletedGameIDs.insert(gameId)
+        Task { [weak self] in
+            do {
+                try await SupabaseSyncService.shared.deleteGame(id: gameId)
+                self?.pendingDeletedGameIDs.remove(gameId)
+            } catch {
+                // Kvar i pendingDeletedGameIDs för att raderas när nätverket är tillbaka
+            }
         }
     }
 
@@ -300,26 +391,55 @@ final class LibraryStore: ObservableObject {
         games.remove(atOffsets: offsets)
         for id in removedIDs {
             removeGameFromAllCollections(id)
-            Task {
-                try? await SupabaseSyncService.shared.deleteGame(id: id)
+            pendingSyncGameIDs.remove(id)
+            pendingDeletedGameIDs.insert(id)
+            Task { [weak self] in
+                do {
+                    try await SupabaseSyncService.shared.deleteGame(id: id)
+                    self?.pendingDeletedGameIDs.remove(id)
+                } catch {
+                    // Kvar i pendingDeletedGameIDs
+                }
             }
         }
     }
 
     func update(_ game: Game) {
         var updated = game
+        let previous = games.first(where: { $0.id == updated.id })
+
+        // Bevara "Spelar sedan" från tidigare sparad post om det redan sattes en gång
+        if updated.startedPlayingDate == nil, let prevStart = previous?.startedPlayingDate {
+            updated.startedPlayingDate = prevStart
+        }
+
         if updated.status == .playing {
             updated.isBacklog = false
             if updated.lastPlayedDate == nil {
                 updated.lastPlayedDate = Date()
             }
+            if updated.startedPlayingDate == nil {
+                updated.startedPlayingDate = Date()
+            }
+        } else if updated.status == .paused {
+            if previous?.status != .paused || updated.pausedDate == nil {
+                updated.pausedDate = Date()
+            }
+        } else if updated.status == .completed || updated.status == .abandoned {
+            ProfileStore.shared.removeTargetGoal(gameID: updated.id)
         }
 
         if let idx = games.firstIndex(where: { $0.id == updated.id }) {
             games[idx] = updated
             try? saveGames()
-            Task {
-                try? await SupabaseSyncService.shared.upsertGame(updated)
+            markForSync(gameID: updated.id)
+            Task { [weak self] in
+                do {
+                    try await SupabaseSyncService.shared.upsertGame(updated)
+                    self?.didSyncSuccessfully(gameID: updated.id)
+                } catch {
+                    // Kvar i synkkön så det sparas i molnet vid nästa anslutning
+                }
             }
         }
     }

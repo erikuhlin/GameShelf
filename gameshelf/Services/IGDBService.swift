@@ -77,7 +77,7 @@ actor IGDBService {
         
         let bodyString = """
         where id = \(id);
-        fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, total_rating, aggregated_rating, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, collection.name, collection.games.name, collection.games.cover.image_id, collection.games.first_release_date, franchises.name, franchises.games.name, franchises.games.cover.image_id, franchises.games.first_release_date, similar_games.name, similar_games.cover.image_id, similar_games.first_release_date, similar_games.total_rating, similar_games.rating, dlcs.name, dlcs.cover.image_id, dlcs.first_release_date, expansions.name, expansions.cover.image_id, expansions.first_release_date, screenshots.image_id, artworks.image_id, videos.name, videos.video_id, game_modes.name, themes.name, age_ratings.category, age_ratings.rating, category, game_type, parent_game;
+        fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, total_rating, aggregated_rating, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, collection.name, collection.games.name, collection.games.cover.image_id, collection.games.first_release_date, franchises.name, franchises.games.name, franchises.games.cover.image_id, franchises.games.first_release_date, similar_games.name, similar_games.cover.image_id, similar_games.first_release_date, similar_games.total_rating, similar_games.rating, dlcs.name, dlcs.cover.image_id, dlcs.first_release_date, expansions.name, expansions.cover.image_id, expansions.first_release_date, screenshots.image_id, artworks.image_id, videos.name, videos.video_id, game_modes.name, themes.name, age_ratings.category, age_ratings.rating, category, game_type, parent_game, version_parent;
         """
         
         // Hämta speldetaljer och speltid (HowLongToBeat) parallellt för att halvera laddtiden
@@ -117,6 +117,7 @@ actor IGDBService {
                 category: game.category,
                 gameType: game.gameType,
                 parentGame: game.parentGame,
+                versionParent: game.versionParent,
                 hypes: game.hypes,
                 franchises: game.franchises
             )
@@ -516,13 +517,13 @@ struct TrendingGameResult: Sendable {
         let token = try await IGDBAuthManager.shared.getValidToken()
         guard let url = URL(string: "https://api.igdb.com/v4/games") else { throw URLError(.badURL) }
         let body = """
-        fields name, summary, first_release_date, cover.image_id, platforms.id, platforms.name, genres.name, total_rating, total_rating_count;
-        where id = (\(ids)) & cover != null & (total_rating = null | total_rating >= 68);
+        fields name, summary, first_release_date, cover.image_id, platforms.id, platforms.name, genres.name, total_rating, total_rating_count, category, game_type, parent_game, version_parent;
+        where id = (\(ids)) & cover != null & version_parent = null & (total_rating = null | total_rating >= 70);
         sort total_rating desc;
         limit \(limit);
         """
         let games = try await requestGames(body: body, url: url, token: token)
-        return games.filter { !$0.isDLC }
+        return games.filter { !$0.isDLC && !$0.isSpecialEditionOrBundle }
     }
 
     /// Avancerad sökning och upptäckt med årtal, tidsperiod, plattform, genre, utvecklare och sortering
@@ -652,13 +653,17 @@ struct TrendingGameResult: Sendable {
             conditions.append("total_rating >= \(minRating)")
         }
 
-        // 6. Exkludera mods, forks och DLC från officiella spelkataloger
-        conditions.append("game_type != (1, 5, 12, 14)")
+        // 6. Exkludera mods, forks, bundles, specialutgåvor och DLC från officiella spelkataloger
+        let trimmedQuery = query?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmedQuery.isEmpty {
+            conditions.append("game_type != (1, 2, 3, 5, 11, 12, 13, 14) & version_parent = null")
+        } else {
+            conditions.append("game_type != (1, 5, 12, 14)")
+        }
 
         let whereClause = conditions.isEmpty ? "" : "where \(conditions.joined(separator: " & "));"
 
         // 6. Fritext vs filter query
-        let trimmedQuery = query?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         var bodyString = ""
 
         if !trimmedQuery.isEmpty {
@@ -666,14 +671,14 @@ struct TrendingGameResult: Sendable {
             let safeQuery = resolvedQuery.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
             bodyString = """
             search "\(safeQuery)";
-            fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, total_rating, total_rating_count, involved_companies.company.name, involved_companies.developer, category, game_type, parent_game;
+            fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, total_rating, total_rating_count, involved_companies.company.name, involved_companies.developer, category, game_type, parent_game, version_parent;
             \(whereClause)
             offset \(offset);
             limit \(limit);
             """
         } else {
             bodyString = """
-            fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, total_rating, total_rating_count, involved_companies.company.name, involved_companies.developer, category, game_type, parent_game;
+            fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, total_rating, total_rating_count, involved_companies.company.name, involved_companies.developer, category, game_type, parent_game, version_parent;
             \(whereClause)
             sort \(sortOption.igdbSortClause);
             offset \(offset);
@@ -682,6 +687,9 @@ struct TrendingGameResult: Sendable {
         }
 
         let results = try await requestGames(body: bodyString, url: url, token: token)
+        if trimmedQuery.isEmpty {
+            return results.filter { !$0.isDLC && !$0.isSpecialEditionOrBundle }
+        }
         return results.filter { !$0.isDLC }
     }
 

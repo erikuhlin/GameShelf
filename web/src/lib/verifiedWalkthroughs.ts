@@ -27,7 +27,8 @@ export function normalizeWalkthroughTitle(title: string): string {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/\b(remake|remastered|definitive edition|gold edition|nintendo switch 2 edition|shadow of the erdtree edition)\b/gi, '')
-    .replace(/[:\-–—'’]/g, ' ')
+    .replace(/['’]/g, '')
+    .replace(/[:\-–—()\[\]]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }

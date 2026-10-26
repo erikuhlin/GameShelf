@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "tsx --test src/lib/*.test.ts",
     "sync:ratings": "npx tsx scripts/sync-igdb-ratings.ts",
     "seed:walkthroughs": "npx tsx scripts/seed-game-walkthroughs.ts"
   },

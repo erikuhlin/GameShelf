@@ -86,7 +86,7 @@ struct GameCardStatusBadgeConfig: Equatable {
         } else if game.status == .paused {
             return GameCardStatusBadgeConfig(icon: "pause.fill", color: Color(hex: "#FF9500"))
         } else if game.status == .abandoned {
-            return GameCardStatusBadgeConfig(icon: "xmark", color: Color(hex: "#AF52DE"))
+            return GameCardStatusBadgeConfig(icon: "flag.checkered", color: Color(hex: "#AF52DE"))
         } else if game.isBacklog {
             return GameCardStatusBadgeConfig(icon: "archivebox.fill", color: Color(hex: "#007AFF"))
         } else if !game.isOwned {
@@ -118,6 +118,7 @@ struct GameCard: View {
     var statusBadgeConfig: GameCardStatusBadgeConfig? = nil
     var showWishlistInfo: Bool = false
     var deal: GameDealInfo? = nil
+    var pausedProgressRatio: Double? = nil
 
     static func shortPlatform(from platforms: [String]) -> String {
         guard let first = platforms.first, !first.isEmpty else {
@@ -154,7 +155,8 @@ struct GameCard: View {
         ratingText: String? = nil,
         statusBadgeConfig: GameCardStatusBadgeConfig? = nil,
         showWishlistInfo: Bool = false,
-        deal: GameDealInfo? = nil
+        deal: GameDealInfo? = nil,
+        pausedProgressRatio: Double? = nil
     ) {
         self.title = title
         self.subtitle = subtitle
@@ -171,6 +173,7 @@ struct GameCard: View {
         self.statusBadgeConfig = statusBadgeConfig
         self.showWishlistInfo = showWishlistInfo
         self.deal = deal
+        self.pausedProgressRatio = pausedProgressRatio
     }
 
     // Convenience Init from standard Game model
@@ -204,6 +207,16 @@ struct GameCard: View {
         self.platform = GameCard.shortPlatform(from: game.platforms)
         self.statusBadgeConfig = GameCardStatusBadgeConfig.from(game: game)
         self.deal = PriceWatcherService.shared.deal(for: game)
+        if game.status == .paused && !game.isMultiplayerOrOngoing {
+            let progressInfo = GamingGoalEngine.calculateProgress(for: game)
+            if progressInfo.hasTasks && progressInfo.percentage > 0 {
+                self.pausedProgressRatio = min(max(Double(progressInfo.percentage) / 100.0, 0.0), 1.0)
+            } else {
+                self.pausedProgressRatio = nil
+            }
+        } else {
+            self.pausedProgressRatio = nil
+        }
         self.width = width
         self.coverHeight = coverHeight
         self.cornerRadius = cornerRadius
@@ -356,6 +369,23 @@ struct GameCard: View {
                                     }
                                 } else {
                                     placeholderFallback
+                                }
+
+                                // Tunn 3.5 px progressbar längst ned på omslaget för pausade spel med progress > 0 %
+                                if let ratio = pausedProgressRatio, ratio > 0 {
+                                    ZStack(alignment: .leading) {
+                                        Rectangle()
+                                            .fill(Color.black.opacity(0.45))
+                                            .frame(width: geo.size.width, height: 3.5)
+
+                                        Rectangle()
+                                            .fill(Color(hex: "#FF9500").opacity(0.88))
+                                            .frame(
+                                                width: max(4, min(geo.size.width, geo.size.width * ratio)),
+                                                height: 3.5
+                                            )
+                                    }
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                                 }
                             }
                         }

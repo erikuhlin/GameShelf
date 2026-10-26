@@ -50,7 +50,7 @@ struct StoreQuickLink: Identifiable, Hashable, Sendable {
 }
 
 // MARK: - CheapShark Raw DTOs
-private struct CheapSharkDealDTO: Decodable, Sendable {
+nonisolated private struct CheapSharkDealDTO: Decodable, Sendable {
     let title: String?
     let dealID: String?
     let storeID: String?
@@ -62,8 +62,8 @@ private struct CheapSharkDealDTO: Decodable, Sendable {
     let steamAppID: String?
 }
 
-private struct CheapSharkGameLookupDTO: Decodable, Sendable {
-    struct CheapestPriceEverDTO: Decodable, Sendable {
+nonisolated private struct CheapSharkGameLookupDTO: Decodable, Sendable {
+    nonisolated struct CheapestPriceEverDTO: Decodable, Sendable {
         let price: String?
         let date: Int?
     }

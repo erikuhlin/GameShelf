@@ -142,6 +142,8 @@ struct LibraryView: View {
     @State private var collapsedYears: Set<Int> = []
     @State private var isSearching = false
     @State private var filterOnlyOnSale = false
+    @State private var selectedGameForDetail: Game? = nil
+    @State private var gameForFinishSheet: Game? = nil
     @ObservedObject private var priceWatcher = PriceWatcherService.shared
 
     /// Avgör om årsvy ska vara aktiv:
@@ -512,7 +514,7 @@ struct LibraryView: View {
                                                 .strokeBorder(isSelected ? Color.white : Color.secondary, lineWidth: 1.2)
                                                 .frame(width: 6, height: 6)
                                         } else if filter == .abandoned {
-                                            Image(systemName: "xmark")
+                                            Image(systemName: "flag.checkered")
                                                 .font(.system(size: 7, weight: .bold))
                                                 .foregroundStyle(isSelected ? Color.white : Color.purple)
                                         }
@@ -591,6 +593,16 @@ struct LibraryView: View {
         }
         .sheet(isPresented: $showingCreateCollectionSheet) {
             CreateOrEditCollectionSheet()
+        }
+        .sheet(item: $gameForFinishSheet) { game in
+            GameFinishChoiceSheet(game: game)
+                .environmentObject(store)
+                .environmentObject(profile)
+        }
+        .navigationDestination(item: $selectedGameForDetail) { game in
+            GameDetailView(game: game)
+                .environmentObject(store)
+                .environmentObject(profile)
         }
             .onAppear {
                 if store.games.isEmpty {
@@ -935,98 +947,215 @@ struct LibraryView: View {
         }
     }
 
-    // MARK: - Sektion: I ägo (Poster Grid)
+    // MARK: - Sektion: I ägo (Poster Grid & Spelar nu-översikt)
     @ViewBuilder
     private var ownedSection: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            // Spelmål 2026 Toppkort
-            if !isSearching && searchText.isEmpty && selectedStatusFilter == .all && selectedPlatformIDs.isEmpty {
-                LibraryGameGoalsBanner()
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 2)
-            }
-
-            // Huvudrutnät: Mina spel i ägo
-            VStack(alignment: .leading, spacing: 10) {
-                if !ownedGames.isEmpty || isSearching || !searchText.isEmpty {
-                    subToolbar(gameCount: ownedGames.count)
+        if selectedStatusFilter == .playing {
+            playingNowOverviewSection
+        } else {
+            VStack(alignment: .leading, spacing: 18) {
+                // Spelmål 2026 Toppkort
+                if !isSearching && searchText.isEmpty && selectedStatusFilter == .all && selectedPlatformIDs.isEmpty {
+                    LibraryGameGoalsBanner()
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 2)
                 }
 
-                if !ownedGames.isEmpty {
-                    if effectiveGroupByYear {
-                        // Årsvy med tidslinjesektioner
-                        LazyVStack(alignment: .leading, spacing: 20) {
-                            ForEach(groupedOwnedGames) { group in
-                                let isCollapsed = collapsedYears.contains(group.year)
-                                VStack(alignment: .leading, spacing: 10) {
-                                    Button {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                            if isCollapsed {
-                                                collapsedYears.remove(group.year)
-                                            } else {
-                                                collapsedYears.insert(group.year)
+                // Huvudrutnät: Mina spel i ägo
+                VStack(alignment: .leading, spacing: 10) {
+                    if !ownedGames.isEmpty || isSearching || !searchText.isEmpty {
+                        subToolbar(gameCount: ownedGames.count)
+                    }
+
+                    if !ownedGames.isEmpty {
+                        if effectiveGroupByYear {
+                            // Årsvy med tidslinjesektioner
+                            LazyVStack(alignment: .leading, spacing: 20) {
+                                ForEach(groupedOwnedGames) { group in
+                                    let isCollapsed = collapsedYears.contains(group.year)
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        Button {
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                                if isCollapsed {
+                                                    collapsedYears.remove(group.year)
+                                                } else {
+                                                    collapsedYears.insert(group.year)
+                                                }
                                             }
+                                        } label: {
+                                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                                Text(group.title)
+                                                    .font(.headline.weight(.bold))
+                                                    .foregroundStyle(.primary)
+
+                                                Text("• \(group.games.count) spel")
+                                                    .font(.caption.weight(.semibold))
+                                                    .foregroundStyle(.secondary)
+
+                                                Spacer()
+
+                                                Image(systemName: isCollapsed ? "chevron.down" : "chevron.up")
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundStyle(.secondary)
+                                                    .padding(6)
+                                                    .background(Color(.secondarySystemGroupedBackground), in: Circle())
+                                            }
+                                            .padding(.horizontal, 16)
                                         }
-                                    } label: {
-                                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                            Text(group.title)
-                                                .font(.headline.weight(.bold))
-                                                .foregroundStyle(.primary)
+                                        .buttonStyle(.plain)
 
-                                            Text("• \(group.games.count) spel")
-                                                .font(.caption.weight(.semibold))
-                                                .foregroundStyle(.secondary)
-
-                                            Spacer()
-
-                                            Image(systemName: isCollapsed ? "chevron.down" : "chevron.up")
-                                                .font(.system(size: 10, weight: .bold))
-                                                .foregroundStyle(.secondary)
-                                                .padding(6)
-                                                .background(Color(.secondarySystemGroupedBackground), in: Circle())
+                                        if !isCollapsed {
+                                            LazyVGrid(columns: posterGridColumns, spacing: 14) {
+                                                ForEach(group.games) { game in
+                                                    NavigationLink(destination: GameDetailView(game: game)) {
+                                                        GameCard(game: game, style: .libraryGrid)
+                                                    }
+                                                    .buttonStyle(.plain)
+                                                    .contextMenu {
+                                                        gameContextMenu(for: game)
+                                                    }
+                                                }
+                                            }
+                                            .padding(.horizontal, 16)
                                         }
-                                        .padding(.horizontal, 16)
+                                    }
+                                }
+                            }
+                        } else {
+                            // Platt rutnät
+                            LazyVGrid(columns: posterGridColumns, spacing: 14) {
+                                ForEach(ownedGames) { game in
+                                    NavigationLink(destination: GameDetailView(game: game)) {
+                                        GameCard(game: game, style: .libraryGrid)
                                     }
                                     .buttonStyle(.plain)
-
-                                    if !isCollapsed {
-                                        LazyVGrid(columns: posterGridColumns, spacing: 14) {
-                                            ForEach(group.games) { game in
-                                                NavigationLink(destination: GameDetailView(game: game)) {
-                                                    GameCard(game: game, style: .libraryGrid)
-                                                }
-                                                .buttonStyle(.plain)
-                                                .contextMenu {
-                                                    gameContextMenu(for: game)
-                                                }
-                                            }
-                                        }
-                                        .padding(.horizontal, 16)
+                                    .contextMenu {
+                                        gameContextMenu(for: game)
                                     }
                                 }
                             }
+                            .padding(.horizontal, 16)
                         }
                     } else {
-                        // Platt rutnät
-                        LazyVGrid(columns: posterGridColumns, spacing: 14) {
-                            ForEach(ownedGames) { game in
-                                NavigationLink(destination: GameDetailView(game: game)) {
-                                    GameCard(game: game, style: .libraryGrid)
-                                }
-                                .buttonStyle(.plain)
-                                .contextMenu {
-                                    gameContextMenu(for: game)
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 16)
+                        emptyState(
+                            title: searchText.isEmpty ? "Inga spel funna" : "Inga träffar för \"\(searchText)\"",
+                            subtitle: searchText.isEmpty ? "Hitta och lägg till spel via Sök-fliken." : "Prova ett annat sökord eller ändra plattformsfilter."
+                        )
                     }
-                } else {
-                    emptyState(
-                        title: searchText.isEmpty ? "Inga spel funna" : "Inga träffar för \"\(searchText)\"",
-                        subtitle: searchText.isEmpty ? "Hitta och lägg till spel via Sök-fliken." : "Prova ett annat sökord eller ändra plattformsfilter."
-                    )
                 }
+            }
+        }
+    }
+
+    // MARK: - Spelar nu-översikt i Bibliotek
+    @ViewBuilder
+    private var playingNowOverviewSection: some View {
+        let sortedPlayingGames = ownedGames.sorted { g1, g2 in
+            let m1 = g1.isMultiplayerOrOngoing
+            let m2 = g2.isMultiplayerOrOngoing
+            // 1. Löpande multiplayer-spel ligger alltid sist
+            if m1 != m2 {
+                return !m1 && m2
+            }
+            // Om båda är löpande multiplayer-spel: sortera på senast påbörjat
+            if m1 && m2 {
+                return g1.effectiveStartedPlayingDate > g2.effectiveStartedPlayingDate
+            }
+
+            // 2. För singleplayer/story-spel: spel med progress först, närmast klart (högst %) överst
+            let p1 = GamingGoalEngine.calculateProgress(for: g1)
+            let p2 = GamingGoalEngine.calculateProgress(for: g2)
+            let hasProg1 = p1.percentage > 0 || p1.hasTasks
+            let hasProg2 = p2.percentage > 0 || p2.hasTasks
+            if hasProg1 != hasProg2 {
+                return hasProg1 && !hasProg2
+            }
+            if p1.percentage != p2.percentage {
+                return p1.percentage > p2.percentage
+            }
+            if p1.hasTasks && p2.hasTasks && p1.remainingTasks != p2.remainingTasks {
+                return p1.remainingTasks < p2.remainingTasks
+            }
+            // 3. Annars senast påbörjat
+            return g1.effectiveStartedPlayingDate > g2.effectiveStartedPlayingDate
+        }
+
+        let progressGames = sortedPlayingGames.filter { !$0.isMultiplayerOrOngoing }
+        let ongoingGames = sortedPlayingGames.filter { $0.isMultiplayerOrOngoing }
+
+        VStack(alignment: .leading, spacing: 18) {
+            if !sortedPlayingGames.isEmpty {
+                if !progressGames.isEmpty {
+                    VStack(spacing: 12) {
+                        ForEach(progressGames) { game in
+                            ActiveGameProgressCard(
+                                game: game,
+                                mode: .libraryPlaying,
+                                onOpenDetail: {
+                                    selectedGameForDetail = game
+                                },
+                                onContinueOrResume: {
+                                    selectedGameForDetail = game
+                                },
+                                onPause: {
+                                    var copy = game
+                                    copy.status = .paused
+                                    copy.pausedDate = Date()
+                                    store.update(copy)
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                },
+                                onFinish: {
+                                    gameForFinishSheet = game
+                                }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+
+                if !ongoingGames.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "infinity")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.secondary)
+
+                            Text("Löpande spel")
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 4)
+
+                        ForEach(ongoingGames) { game in
+                            ActiveGameProgressCard(
+                                game: game,
+                                mode: .libraryPlaying,
+                                onOpenDetail: {
+                                    selectedGameForDetail = game
+                                },
+                                onContinueOrResume: {
+                                    selectedGameForDetail = game
+                                },
+                                onPause: {
+                                    var copy = game
+                                    copy.status = .paused
+                                    copy.pausedDate = Date()
+                                    store.update(copy)
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                },
+                                onFinish: {
+                                    gameForFinishSheet = game
+                                }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+            } else {
+                emptyState(
+                    title: "Inga spel i Spelar nu",
+                    subtitle: "Sätt status till \"Spelar nu\" på ett spel för att följa din progress här."
+                )
             }
         }
     }
@@ -1435,7 +1564,7 @@ struct LibraryView: View {
         case .notStarted: return "circle"
         case .paused: return "pause.fill"
         case .completed: return "checkmark"
-        case .abandoned: return "xmark.circle"
+        case .abandoned: return "flag.checkered"
         }
     }
 

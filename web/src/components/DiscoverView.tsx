@@ -205,9 +205,34 @@ export function DiscoverView({
   const [internalActiveTab, setInternalActiveTab] = useState<'discover' | 'calendar' | 'toplist' | 'news'>('discover');
   const activeTab = controlledActiveTab !== undefined ? controlledActiveTab : internalActiveTab;
 
+  const scrollToSection = (sectionId: string) => {
+    const el = document.getElementById(`section-${sectionId}`);
+    if (el) {
+      const yOffset = -70;
+      const y = el.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }
+  };
+
+  useEffect(() => {
+    if (controlledActiveTab === 'news') {
+      setTimeout(() => scrollToSection('news'), 100);
+    } else if (controlledActiveTab === 'calendar') {
+      setTimeout(() => scrollToSection('upcoming'), 100);
+    } else if (controlledActiveTab === 'toplist') {
+      setTimeout(() => scrollToSection('toplist'), 100);
+    } else if (controlledActiveTab === 'discover') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [controlledActiveTab]);
+
   const handleTabChange = (tab: 'discover' | 'calendar' | 'toplist' | 'news') => {
     setInternalActiveTab(tab);
     onTabChange?.(tab);
+    if (tab === 'news') scrollToSection('news');
+    else if (tab === 'calendar') scrollToSection('upcoming');
+    else if (tab === 'toplist') scrollToSection('toplist');
+    else if (tab === 'discover') window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Spelmål modal state
@@ -217,6 +242,7 @@ export function DiscoverView({
   const [trendingGames, setTrendingGames] = useState<Game[]>([]);
   const [trendingSort, setTrendingSort] = useState<'popularity' | 'rating' | 'newest'>('popularity');
   const [upcomingGames, setUpcomingGames] = useState<Game[]>([]);
+  const [visibleNewsCount, setVisibleNewsCount] = useState<number>(12);
 
   // Genre State
   const [selectedGenre, setSelectedGenre] = useState<string>('Action');
@@ -316,10 +342,8 @@ export function DiscoverView({
   };
 
   useEffect(() => {
-    if (activeTab === 'calendar') {
-      loadCalendarGames();
-    }
-  }, [activeTab, selectedMonthID, selectedCalendarPlatform]);
+    loadCalendarGames();
+  }, [selectedMonthID, selectedCalendarPlatform]);
 
   const displayedCalendarGames = useMemo(() => {
     if (currentMonthOption.isMostHyped || showAllInMonth || calendarGames.length <= 15) {
@@ -769,9 +793,6 @@ export function DiscoverView({
   };
 
   useEffect(() => {
-    if (activeTab !== 'news') return;
-
-    // 1. Läs in från lokalt arkiv omedelbart så att användaren ser sparade och tidigare artiklar direkt
     if (typeof window !== 'undefined') {
       try {
         const cached = localStorage.getItem('gameshelf_news_archive');
@@ -783,9 +804,8 @@ export function DiscoverView({
         }
       } catch (e) {}
     }
-
     handleFetchNews(false);
-  }, [activeTab]);
+  }, []);
 
   // Kör spelsnurran
   const handleSpinRoulette = () => {
@@ -1055,63 +1075,74 @@ export function DiscoverView({
 
   const currentGenreLabel = GENRE_LIST.find((g) => g.id === selectedGenre)?.label || selectedGenre;
 
+
   return (
     <div className="space-y-8 pb-12 animate-in fade-in duration-200">
-      {/* 1. Ren Tab Switcher: Upptäck vs Releasekalender vs Nyheter */}
-      <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
-        <div className="flex items-center bg-zinc-900 border border-zinc-800 p-1 rounded-2xl overflow-x-auto scrollbar-none max-w-full">
+      {/* 1. Snabb-navigering (Quick Jump Bar) */}
+      <div className="sticky top-[57px] z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2.5 bg-[#0d0e12]/95 backdrop-blur-xl border-b border-zinc-800/80 flex items-center justify-between gap-3 overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <button
-            onClick={() => handleTabChange('discover')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition whitespace-nowrap cursor-pointer ${
-              activeTab === 'discover'
-                ? 'bg-brand-red text-white shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
+            onClick={() => scrollToSection('trending')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 transition whitespace-nowrap cursor-pointer active:scale-95 shadow-sm"
           >
-            <Sparkles className="w-4 h-4" />
-            <span>För dig & Upptäck</span>
+            <Flame className="w-3.5 h-3.5 text-brand-red" />
+            <span>Hetast just nu</span>
           </button>
 
           <button
-            onClick={() => handleTabChange('toplist')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition whitespace-nowrap cursor-pointer ${
-              activeTab === 'toplist'
-                ? 'bg-brand-red text-white shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
+            onClick={() => scrollToSection('news')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 transition whitespace-nowrap cursor-pointer active:scale-95 shadow-sm"
           >
-            <Trophy className="w-4 h-4" />
+            <Newspaper className="w-3.5 h-3.5 text-brand-red" />
+            <span>Spelnyheter</span>
+            {newsItems.length > 0 && (
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-red animate-pulse" />
+            )}
+          </button>
+
+          <button
+            onClick={() => scrollToSection('upcoming')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 transition whitespace-nowrap cursor-pointer active:scale-95 shadow-sm"
+          >
+            <Calendar className="w-3.5 h-3.5 text-brand-red" />
+            <span>Kommande spelsläpp</span>
+          </button>
+
+          <button
+            onClick={() => scrollToSection('toplist')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 transition whitespace-nowrap cursor-pointer active:scale-95 shadow-sm"
+          >
+            <Trophy className="w-3.5 h-3.5 text-amber-400" />
             <span>Topplistor</span>
           </button>
 
           <button
-            onClick={() => handleTabChange('calendar')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition whitespace-nowrap cursor-pointer ${
-              activeTab === 'calendar'
-                ? 'bg-brand-red text-white shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
+            onClick={() => scrollToSection('genres')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 transition whitespace-nowrap cursor-pointer active:scale-95 shadow-sm"
           >
-            <Calendar className="w-4 h-4" />
-            <span>Releasekalender</span>
+            <Gamepad className="w-3.5 h-3.5 text-zinc-400" />
+            <span>Genrer</span>
           </button>
 
           <button
-            onClick={() => handleTabChange('news')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition whitespace-nowrap cursor-pointer ${
-              activeTab === 'news'
-                ? 'bg-brand-red text-white shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
+            onClick={() => scrollToSection('roulette')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 transition whitespace-nowrap cursor-pointer active:scale-95 shadow-sm"
           >
-            <Newspaper className="w-4 h-4" />
-            <span>Spelnyheter & Recensioner</span>
+            <Dices className="w-3.5 h-3.5 text-brand-red" />
+            <span>Spelsnurra</span>
           </button>
+        </div>
+
+        <div className="hidden lg:flex items-center gap-2 text-xs text-zinc-500 font-medium shrink-0">
+          <span>{newsItems.length} artiklar</span>
+          <span>•</span>
+          <span>{upcomingGames.length} kommande</span>
         </div>
       </div>
 
-      {activeTab === 'discover' ? (
-        <div className="space-y-8">
+      <div className="space-y-12">
+        {/* Välkomstzon (Hero / Gamer greeting + Spelar nu + Fokusmål + Önskelista) */}
+                <div className="space-y-8">
           {/* 1. Välkomsthälsning (Inloggad vs Utloggad Hero) */}
           {!isLoggedIn ? (
             /* Utloggad Hero: Upptäcktsportal & Välkomnande */
@@ -1609,99 +1640,645 @@ export function DiscoverView({
             </div>
           )}
 
-          {/* Om användaren INTE har några spel i Spelar nu: visa Spelsnurran här */}
-          {currentlyPlaying.length === 0 && (
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-900/90 via-zinc-950/95 to-black border border-zinc-800/80 p-5 sm:p-7 shadow-xl">
-              <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-                <div className="max-w-md text-center md:text-left">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-red/10 border border-brand-red/30 text-rose-300 text-xs font-bold uppercase tracking-wider mb-2.5">
-                    <Dices className="w-3.5 h-3.5 text-brand-red" />
-                    <span>Smart Spelsnurra</span>
-                  </div>
-                  <h3 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
-                    Vad ska du spela ikväll?
-                  </h3>
-                  <p className="text-xs sm:text-sm text-zinc-400 mt-1 leading-relaxed">
-                    Låt slumpen välja bland dina ospelade spel i backloggen eller upptäck nya rekommendationer.
-                  </p>
+        </div>
 
-                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-3.5">
-                    <button
-                      onClick={() => setRouletteMode('library')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
-                        rouletteMode === 'library'
-                          ? 'bg-white text-zinc-950 border-white'
-                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                      }`}
-                    >
-                      Mina spel ({games.length})
-                    </button>
-                    <button
-                      onClick={() => setRouletteMode('igdb')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
-                        rouletteMode === 'igdb'
-                          ? 'bg-white text-zinc-950 border-white'
-                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                      }`}
-                    >
-                      Upptäck från IGDB
-                    </button>
-                  </div>
-                </div>
+        {/* 1. 🔥 Trendar just nu i spelvärlden */}
+        <section id="section-trending" className="space-y-4 pt-2">
+                    {/* 5. 🔥 Trendar just nu */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Flame className="w-4 h-4 text-brand-red" />
+                <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">Trendar just nu</h3>
+              </div>
 
-                <div className="flex flex-col items-center gap-3.5 w-full sm:w-auto">
-                  {winnerGame ? (
+              <select
+                value={trendingSort}
+                onChange={(e) => setTrendingSort(e.target.value as any)}
+                className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-[11px] sm:text-xs rounded-xl px-2.5 py-1 focus:outline-none focus:border-brand-red cursor-pointer"
+              >
+                <option value="popularity">Mest omtalade</option>
+                <option value="rating">Högst betyg</option>
+                <option value="newest">Senast släppta</option>
+              </select>
+            </div>
+
+            {isLoadingDiscover && trendingGames.length === 0 ? (
+              <div className="flex gap-3.5 overflow-x-auto pb-2.5 scrollbar-none">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div
+                    key={i}
+                    className="flex-shrink-0 w-32 sm:w-40 h-52 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 animate-pulse flex flex-col p-2"
+                  >
+                    <div className="w-full aspect-[3/4] rounded-xl bg-zinc-800/60 mb-2" />
+                    <div className="w-3/4 h-3 bg-zinc-800 rounded mb-1.5" />
+                    <div className="w-1/2 h-2.5 bg-zinc-800/60 rounded" />
+                  </div>
+                ))}
+              </div>
+            ) : trendingGames.length > 0 ? (
+              <div className="flex gap-3.5 overflow-x-auto pb-2.5 scrollbar-thin scrollbar-thumb-zinc-800">
+              {trendingGames.map((game, idx) => {
+                const inLibrary = isGameInLibrary(game.igdb_id, game.title);
+                return (
+                  <div
+                    key={game.id}
+                    className="flex-shrink-0 w-32 sm:w-40 flex flex-col group bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden p-2 transition hover:border-zinc-700 relative"
+                  >
+                    {/* Rank Badge */}
                     <div
-                      onClick={() => onSelectGame(winnerGame)}
-                      className="flex items-center gap-3.5 p-2.5 bg-zinc-900/90 border border-zinc-700/80 rounded-2xl cursor-pointer hover:border-zinc-500 transition shadow-lg w-full max-w-sm group"
+                      className={`absolute top-3.5 left-3.5 z-10 px-1.5 py-0.5 rounded-md text-[9px] font-black shadow-md backdrop-blur-md border ${
+                        idx === 0
+                          ? 'bg-amber-400/90 text-zinc-950 border-amber-300'
+                          : idx === 1
+                          ? 'bg-zinc-300/90 text-zinc-950 border-white'
+                          : idx === 2
+                          ? 'bg-amber-700/90 text-white border-amber-500'
+                          : 'bg-black/80 text-zinc-300 border-zinc-700'
+                      }`}
                     >
-                      <div className="w-14 h-18 rounded-xl overflow-hidden bg-zinc-950 flex-shrink-0 relative border border-zinc-800">
-                        {winnerGame.cover_url ? (
+                      #{idx + 1}
+                    </div>
+
+                    <div
+                      onClick={() => onSelectGame(game)}
+                      className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-zinc-950 mb-2 relative cursor-pointer"
+                    >
+                      {game.cover_url ? (
+                        <img
+                          src={game.cover_url}
+                          alt={game.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Gamepad className="w-6 h-6 text-zinc-600" />
+                        </div>
+                      )}
+                      {(() => {
+                        const r = normalizeIgdbRating(game.igdb_rating);
+                        return r ? (
+                          <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md text-[10px] font-bold text-amber-300 border border-amber-500/30">
+                            ⭐ {r}
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
+
+                    <h4
+                      onClick={() => onSelectGame(game)}
+                      className="text-xs font-bold text-zinc-100 line-clamp-2 leading-snug min-h-[2rem] cursor-pointer hover:text-red-400 transition"
+                    >
+                      {game.title}
+                    </h4>
+
+                    {game.badge_text && (
+                      <div className={`my-1 px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-extrabold border truncate text-center shadow-sm ${getBadgeStyle(game.badge_text)}`}>
+                        {game.badge_text}
+                      </div>
+                    )}
+
+                    <span className="text-[10px] text-zinc-400 mt-0.5 truncate block">
+                      {game.release_year ? `${game.release_year} • ` : ''}
+                      {getPrimaryGenre(game.genres)}
+                    </span>
+
+                    <button
+                      onClick={() =>
+                        onAddGame({ ...game, is_owned: true, is_backlog: true, status: 'notStarted' })
+                      }
+                      disabled={inLibrary}
+                      className={`mt-2 w-full py-1 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 transition ${
+                        inLibrary
+                          ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-default'
+                          : 'bg-zinc-800 hover:bg-brand-red text-zinc-200 hover:text-white border border-zinc-700 hover:border-brand-red'
+                      }`}
+                    >
+                      {inLibrary ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-400" />
+                          <span>Sparat</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-3 h-3" />
+                          <span>Lägg till</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="py-6 px-4 rounded-2xl bg-zinc-900/40 border border-dashed border-zinc-800 text-center flex flex-col items-center justify-center gap-2">
+              <p className="text-xs text-zinc-400">Inga trendande spel kunde hämtas just nu.</p>
+              <button
+                onClick={() => {
+                  setIsLoadingDiscover(true);
+                  fetch(`/api/games/discover?category=trending&sort=${trendingSort}&era=recent&limit=25`)
+                    .then((r) => r.json())
+                    .then((d) => {
+                      if (Array.isArray(d.results)) setTrendingGames(d.results);
+                    })
+                    .finally(() => setIsLoadingDiscover(false));
+                }}
+                className="px-3 py-1.5 rounded-xl bg-zinc-800 text-xs font-semibold text-white hover:bg-zinc-700 transition"
+              >
+                Försök igen
+              </button>
+            </div>
+          )}
+        </div>
+
+        </section>
+
+        {/* 2. 📰 Spelvärlden idag (Nyheter & Recensioner) */}
+        <section id="section-news" className="space-y-5 pt-6 border-t border-zinc-800/80">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-brand-red/10 border border-brand-red/20 flex items-center justify-center text-brand-red">
+                <Newspaper className="w-4 h-4 text-brand-red" />
+              </div>
+              <div>
+                <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">Spelvärlden idag</h3>
+                <p className="text-[11px] sm:text-xs text-zinc-400">Senaste nyheterna och recensionerna från FZ, SweClockers & IGN</p>
+              </div>
+            </div>
+          </div>
+                  <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Top Controls: Search, Category Tabs, Platform & Source Selectors */}
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              {/* Sökfält */}
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                <input
+                  type="text"
+                  value={newsSearch}
+                  onChange={(e) => setNewsSearch(e.target.value)}
+                  placeholder="Sök bland recensioner, speltitlar och nyheter..."
+                  className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-2xl pl-10 pr-4 py-2.5 text-xs sm:text-sm focus:outline-none focus:border-red-500 shadow-inner"
+                />
+              </div>
+
+              {/* Plattformar & Källor Dropdowns */}
+              <div className="flex items-center gap-2">
+                <select
+                  value={selectedNewsPlatform}
+                  onChange={(e) => setSelectedNewsPlatform(e.target.value)}
+                  className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-brand-red cursor-pointer"
+                >
+                  {PLATFORMS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Anpassa källor Modal Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsSourcesModalOpen(true)}
+                  className={`flex items-center gap-1.5 px-3 py-2 border rounded-xl text-xs font-semibold transition cursor-pointer ${
+                    enabledNewsSources.length > 0 && enabledNewsSources.length < rawNewsSources.length
+                      ? 'bg-brand-red/20 text-white border-brand-red/50 shadow-sm'
+                      : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border-zinc-800'
+                  }`}
+                  title="Anpassa vilka nyhetskällor du vill följa"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-brand-red" />
+                  <span className="hidden sm:inline">Källor</span>
+                  {enabledNewsSources.length > 0 && enabledNewsSources.length < rawNewsSources.length && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-brand-red text-[10px] font-bold text-white">
+                      {enabledNewsSources.length}
+                    </span>
+                  )}
+                </button>
+
+                <select
+                  value={selectedNewsSource}
+                  onChange={(e) => setSelectedNewsSource(e.target.value)}
+                  className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-brand-red cursor-pointer"
+                >
+                  {newsSources.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Tidsfilter Dropdown */}
+                <select
+                  value={selectedNewsTimeRange}
+                  onChange={(e) => setSelectedNewsTimeRange(e.target.value as any)}
+                  className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-brand-red cursor-pointer"
+                  title="Välj tidsintervall"
+                >
+                  <option value="all">Alla tider</option>
+                  <option value="24h">Senaste 24h</option>
+                  <option value="7d">Senaste veckan</option>
+                  <option value="30d">Senaste månaden</option>
+                  <option value="older">Äldre än 30d</option>
+                </select>
+
+                {/* Uppdatera nyheter */}
+                <button
+                  type="button"
+                  onClick={() => handleFetchNews(true)}
+                  disabled={isLoadingNews}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 rounded-xl text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
+                  title="Hämta senaste nyheterna nu"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingNews ? 'animate-spin text-red-500' : ''}`} />
+                  <span className="hidden sm:inline">{isLoadingNews ? 'Hämtar...' : 'Uppdatera'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Kategori-flikar (med Uppdateringar och Förhandstittar) */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+              {[
+                { id: 'all', label: 'Alla artiklar' },
+                { id: 'reviews', label: '⭐ Recensioner' },
+                { id: 'my_games', label: '🎮 Från mina spel' },
+                { id: 'updates', label: '🔄 Uppdateringar' },
+                { id: 'trailers', label: '🎬 Trailers & Videor' },
+                { id: 'previews', label: '👁️ Förhandstittar' },
+                { id: 'saved', label: `🔖 Sparade (${savedNewsIds.length})` },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setSelectedNewsCategory(f.id as any)}
+                  className={`px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+                    selectedNewsCategory === f.id
+                      ? 'bg-brand-red text-white shadow-md shadow-brand-red/20'
+                      : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Hetaste nyheterna just nu karusell i nyhetsflödet */}
+          {hotNewsItems.length > 0 && !newsSearch.trim() && selectedNewsCategory === 'all' && (
+            <div className="p-4 rounded-3xl bg-zinc-900/40 border border-zinc-800/70 space-y-3 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Flame className="w-4 h-4 text-brand-red" />
+                  <span className="text-xs sm:text-sm font-bold text-white">Hetaste nyheterna just nu</span>
+                </div>
+              </div>
+
+              <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-zinc-800">
+                {hotNewsItems.map((item) => {
+                  const matched = findMatchingLibraryGame(item.title);
+                  return (
+                    <a
+                      key={item.id}
+                      href={item.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-shrink-0 w-52 sm:w-56 group space-y-2 block"
+                    >
+                      <div className="w-full h-28 rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 relative">
+                        {item.image ? (
                           <img
-                            src={winnerGame.cover_url}
-                            alt={winnerGame.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition"
+                            src={item.image}
+                            alt={item.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                            loading="lazy"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
-                            <Gamepad className="w-6 h-6 text-zinc-600" />
+                            <Newspaper className="w-5 h-5 text-zinc-600" />
                           </div>
                         )}
+                        <div className="absolute top-2 left-2 flex items-center gap-1.5 max-w-[90%]">
+                          {item.category && (
+                            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-black/70 backdrop-blur-md text-zinc-200 border border-white/10">
+                              {item.category}
+                            </span>
+                          )}
+                          {matched && (
+                            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-600/90 text-white truncate max-w-[100px]">
+                              🎮 {matched.title}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider block">
-                          Utvalt spel!
-                        </span>
-                        <h4 className="text-sm font-bold text-white truncate group-hover:text-red-400 transition">
-                          {winnerGame.title}
-                        </h4>
-                        <p className="text-[11px] text-zinc-400 mt-0.5">
-                          {winnerGame.release_year ? `${winnerGame.release_year} • ` : ''}
-                          {winnerGame.genres?.[0] || 'Spel'}
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold text-zinc-200 line-clamp-2 leading-snug min-h-[2rem] group-hover:text-red-400 transition">
+                          {cleanArticleTitle(item.title)}
                         </p>
+                        <div className="flex items-center gap-1.5 text-[10px] text-zinc-400">
+                          <span className="font-bold text-brand-red">{item.source}</span>
+                          <span>•</span>
+                          <span>
+                            {new Date(item.published).toLocaleDateString('sv-SE', {
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                          </span>
+                        </div>
                       </div>
-                      <ArrowRight className="w-4 h-4 text-zinc-400 group-hover:text-white transition mr-1" />
-                    </div>
-                  ) : (
-                    <div className="w-full max-w-sm h-20 border border-dashed border-zinc-800 rounded-2xl flex items-center justify-center text-zinc-500 text-xs px-4 text-center">
-                      Klicka nedan för att slumpa fram ett spel
-                    </div>
-                  )}
-
-                  <button
-                    onClick={handleSpinRoulette}
-                    disabled={isSpinning || (rouletteMode === 'library' && games.length === 0)}
-                    className="w-full sm:w-auto px-7 py-2.5 bg-gradient-to-r from-brand-red to-rose-600 hover:from-brand-redPressed hover:to-rose-700 disabled:opacity-50 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg transition flex items-center justify-center gap-2"
-                  >
-                    <Dices className={`w-4 h-4 ${isSpinning ? 'animate-spin' : ''}`} />
-                    <span>{isSpinning ? 'Snurrar hjulet...' : '🎲 Snurra fram ett spel!'}</span>
-                  </button>
-                </div>
+                    </a>
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* 4. 📅 Kommande spelsläpp (Releasekalender från IGDB) */}
+          {isLoadingNews ? (
+            <div className="flex flex-col items-center justify-center py-24 text-zinc-400 gap-3">
+              <RefreshCw className="w-6 h-6 animate-spin text-brand-red" />
+              <span className="text-sm font-medium">Hämtar och matchar spelnyheter & recensioner...</span>
+            </div>
+          ) : filteredNews.length === 0 ? (
+            <div className="text-center py-20 text-zinc-500 border border-dashed border-zinc-800 rounded-3xl p-8">
+              <Newspaper className="w-10 h-10 mx-auto mb-3 opacity-40 text-brand-red" />
+              <p className="text-sm font-semibold text-zinc-300">Inga nyheter matchar din sökning eller filter.</p>
+              <p className="text-xs text-zinc-500 mt-1">Prova att välja en annan kategori, plattform eller rensa sökningen.</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* 1. Hero / Featured Top Story */}
+              {!newsSearch.trim() && filteredNews[0] && (
+                <div className="relative overflow-hidden rounded-3xl bg-gradient-to-tr from-zinc-950 via-zinc-900 to-zinc-900 border border-zinc-800 group hover:border-zinc-700 transition shadow-2xl">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-0">
+                    {filteredNews[0].image && (
+                      <a
+                        href={filteredNews[0].link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="lg:col-span-7 aspect-video sm:aspect-[16/9] lg:aspect-auto h-64 sm:h-80 lg:h-full relative overflow-hidden bg-black block"
+                      >
+                        <img
+                          src={filteredNews[0].image}
+                          alt={filteredNews[0].title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-transparent to-transparent lg:hidden" />
+                      </a>
+                    )}
+
+                    <div className="lg:col-span-5 p-6 sm:p-8 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-red text-white">
+                              {filteredNews[0].source}
+                            </span>
+                            {filteredNews[0].category && (
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                                  filteredNews[0].category === 'Recension'
+                                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                    : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                                }`}
+                              >
+                                {filteredNews[0].category}
+                              </span>
+                            )}
+                          </div>
+
+                          <button
+                            onClick={(e) => toggleSaveArticle(e, filteredNews[0].id)}
+                            className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition"
+                            title="Spara artikel"
+                          >
+                            {savedNewsIds.includes(filteredNews[0].id) ? (
+                              <BookmarkCheck className="w-4 h-4 text-emerald-400" />
+                            ) : (
+                              <Bookmark className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Matchat biblioteksspel badge */}
+                        {(() => {
+                          const matched = findMatchingLibraryGame(filteredNews[0].title);
+                          if (!matched) return null;
+                          return (
+                            <div
+                              onClick={() => onSelectGame(matched)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold mb-3 cursor-pointer hover:bg-emerald-500/20 transition"
+                            >
+                              <Gamepad className="w-3.5 h-3.5" />
+                              <span>
+                                Finns i ditt bibliotek (
+                                {getStatusDisplayTitle(
+                                  matched.status,
+                                  isMultiplayerOrOngoing(matched)
+                                )}
+                                )
+                              </span>
+                            </div>
+                          );
+                        })()}
+
+                        <a
+                          href={filteredNews[0].link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block"
+                        >
+                          <h3 className="text-xl sm:text-2xl font-bold text-white leading-tight hover:text-red-400 transition">
+                            {cleanArticleTitle(filteredNews[0].title)}
+                          </h3>
+                        </a>
+
+                        {filteredNews[0].summary && (
+                          <p className="text-xs sm:text-sm text-zinc-400 mt-3 line-clamp-3 leading-relaxed">
+                            {filteredNews[0].summary}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between pt-6 mt-4 border-t border-zinc-800/80">
+                        <span className="text-xs text-zinc-500">
+                          {new Date(filteredNews[0].published).toLocaleDateString('sv-SE', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+
+                        <a
+                          href={filteredNews[0].link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 text-xs font-bold text-red-400 hover:text-red-300 transition"
+                        >
+                          <span>Läs hela artikeln</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 2. Grid of other articles */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+                {(newsSearch.trim() ? filteredNews.slice(0, visibleNewsCount) : filteredNews.slice(1, visibleNewsCount)).map((item) => {
+                  const matchedLibraryGame = findMatchingLibraryGame(item.title);
+                  const isSaved = savedNewsIds.includes(item.id);
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex flex-col bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden hover:border-zinc-700 group transition shadow-md"
+                    >
+                      {item.image && (
+                        <a
+                          href={item.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="aspect-video w-full overflow-hidden bg-black relative block"
+                        >
+                          <img
+                            src={item.image}
+                            alt={item.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                            loading="lazy"
+                          />
+                          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/80 backdrop-blur-md text-[10px] font-bold text-zinc-200 border border-zinc-700/60">
+                            {item.source}
+                          </span>
+
+                          {item.category === 'Recension' && (
+                            <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-amber-500/90 text-zinc-950 font-bold text-[10px] shadow-sm">
+                              ⭐ Recension
+                            </span>
+                          )}
+                        </a>
+                      )}
+
+                      <div className="p-4 flex-1 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between gap-2 mb-2 text-[11px] text-zinc-500">
+                            <div className="flex items-center gap-1.5">
+                              {!item.image && (
+                                <span className="font-bold text-zinc-300">{item.source} •</span>
+                              )}
+                              <span>
+                                {new Date(item.published).toLocaleDateString('sv-SE', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                })}
+                              </span>
+                              {item.category && (
+                                <span
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                                    item.category === 'Recension'
+                                      ? 'bg-amber-500/20 text-amber-300'
+                                      : 'bg-zinc-800 text-zinc-400'
+                                  }`}
+                                >
+                                  {item.category}
+                                </span>
+                              )}
+                            </div>
+
+                            <button
+                              onClick={(e) => toggleSaveArticle(e, item.id)}
+                              className="p-1 rounded-lg text-zinc-500 hover:text-white transition"
+                              title={isSaved ? 'Ta bort bokmärke' : 'Spara artikel'}
+                            >
+                              {isSaved ? (
+                                <BookmarkCheck className="w-3.5 h-3.5 text-emerald-400" />
+                              ) : (
+                                <Bookmark className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+
+                          {/* Matchat biblioteksspel pill */}
+                          {matchedLibraryGame && (
+                            <div
+                              onClick={() => onSelectGame(matchedLibraryGame)}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] font-semibold mb-2 cursor-pointer hover:bg-emerald-500/20 transition"
+                            >
+                              <Gamepad className="w-3 h-3" />
+                              <span className="truncate">
+                                I ditt bibliotek (
+                                {getStatusDisplayTitle(
+                                  matchedLibraryGame.status,
+                                  isMultiplayerOrOngoing(matchedLibraryGame)
+                                )}
+                                )
+                              </span>
+                            </div>
+                          )}
+
+                          <a
+                            href={item.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block"
+                          >
+                            <h4 className="text-sm font-bold text-zinc-100 group-hover:text-red-400 transition leading-snug line-clamp-2">
+                              {cleanArticleTitle(item.title)}
+                            </h4>
+                          </a>
+
+                          {item.summary && (
+                            <p className="text-xs text-zinc-400 mt-2 line-clamp-2 leading-relaxed">
+                              {item.summary}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between pt-3 mt-3 border-t border-zinc-800/60 text-[11px]">
+                          <a
+                            href={item.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-zinc-500 group-hover:text-red-400 font-semibold transition"
+                          >
+                            <span>Läs artikel</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+
+                          {item.platform && item.platform !== 'Multi' && (
+                            <span className="text-[10px] text-zinc-500 font-medium">
+                              {item.platform}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        
+            {/* Visa fler nyheter knapp */}
+            {filteredNews.length > visibleNewsCount && (
+              <div className="flex justify-center pt-3">
+                <button
+                  type="button"
+                  onClick={() => setVisibleNewsCount((prev) => prev + 12)}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-xs font-bold text-zinc-300 hover:text-white border border-zinc-800 transition cursor-pointer shadow-sm active:scale-95"
+                >
+                  <span>Visa fler artiklar ({filteredNews.length - visibleNewsCount} kvar)</span>
+                  <ChevronDown className="w-4 h-4 text-zinc-500" />
+                </button>
+              </div>
+            )}
+</div>
+        </section>
+
+        {/* 3. 📅 Kommande spelsläpp & Releasekalender */}
+        <section id="section-upcoming" className="space-y-6 pt-6 border-t border-zinc-800/80">
+          {/* Närmaste kommande släpp */}
+                    {/* 4. 📅 Kommande spelsläpp (Releasekalender från IGDB) */}
           <div className="space-y-3.5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
@@ -1872,432 +2449,9 @@ export function DiscoverView({
             )}
           </div>
 
-          {/* 5. 🔥 Trendar just nu */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Flame className="w-4 h-4 text-brand-red" />
-                <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">Trendar just nu</h3>
-              </div>
 
-              <select
-                value={trendingSort}
-                onChange={(e) => setTrendingSort(e.target.value as any)}
-                className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-[11px] sm:text-xs rounded-xl px-2.5 py-1 focus:outline-none focus:border-brand-red cursor-pointer"
-              >
-                <option value="popularity">Mest omtalade</option>
-                <option value="rating">Högst betyg</option>
-                <option value="newest">Senast släppta</option>
-              </select>
-            </div>
-
-            {isLoadingDiscover && trendingGames.length === 0 ? (
-              <div className="flex gap-3.5 overflow-x-auto pb-2.5 scrollbar-none">
-                {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <div
-                    key={i}
-                    className="flex-shrink-0 w-32 sm:w-40 h-52 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 animate-pulse flex flex-col p-2"
-                  >
-                    <div className="w-full aspect-[3/4] rounded-xl bg-zinc-800/60 mb-2" />
-                    <div className="w-3/4 h-3 bg-zinc-800 rounded mb-1.5" />
-                    <div className="w-1/2 h-2.5 bg-zinc-800/60 rounded" />
-                  </div>
-                ))}
-              </div>
-            ) : trendingGames.length > 0 ? (
-              <div className="flex gap-3.5 overflow-x-auto pb-2.5 scrollbar-thin scrollbar-thumb-zinc-800">
-              {trendingGames.map((game, idx) => {
-                const inLibrary = isGameInLibrary(game.igdb_id, game.title);
-                return (
-                  <div
-                    key={game.id}
-                    className="flex-shrink-0 w-32 sm:w-40 flex flex-col group bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden p-2 transition hover:border-zinc-700 relative"
-                  >
-                    {/* Rank Badge */}
-                    <div
-                      className={`absolute top-3.5 left-3.5 z-10 px-1.5 py-0.5 rounded-md text-[9px] font-black shadow-md backdrop-blur-md border ${
-                        idx === 0
-                          ? 'bg-amber-400/90 text-zinc-950 border-amber-300'
-                          : idx === 1
-                          ? 'bg-zinc-300/90 text-zinc-950 border-white'
-                          : idx === 2
-                          ? 'bg-amber-700/90 text-white border-amber-500'
-                          : 'bg-black/80 text-zinc-300 border-zinc-700'
-                      }`}
-                    >
-                      #{idx + 1}
-                    </div>
-
-                    <div
-                      onClick={() => onSelectGame(game)}
-                      className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-zinc-950 mb-2 relative cursor-pointer"
-                    >
-                      {game.cover_url ? (
-                        <img
-                          src={game.cover_url}
-                          alt={game.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Gamepad className="w-6 h-6 text-zinc-600" />
-                        </div>
-                      )}
-                      {(() => {
-                        const r = normalizeIgdbRating(game.igdb_rating);
-                        return r ? (
-                          <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md text-[10px] font-bold text-amber-300 border border-amber-500/30">
-                            ⭐ {r}
-                          </div>
-                        ) : null;
-                      })()}
-                    </div>
-
-                    <h4
-                      onClick={() => onSelectGame(game)}
-                      className="text-xs font-bold text-zinc-100 line-clamp-2 leading-snug min-h-[2rem] cursor-pointer hover:text-red-400 transition"
-                    >
-                      {game.title}
-                    </h4>
-
-                    {game.badge_text && (
-                      <div className={`my-1 px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-extrabold border truncate text-center shadow-sm ${getBadgeStyle(game.badge_text)}`}>
-                        {game.badge_text}
-                      </div>
-                    )}
-
-                    <span className="text-[10px] text-zinc-400 mt-0.5 truncate block">
-                      {game.release_year ? `${game.release_year} • ` : ''}
-                      {getPrimaryGenre(game.genres)}
-                    </span>
-
-                    <button
-                      onClick={() =>
-                        onAddGame({ ...game, is_owned: true, is_backlog: true, status: 'notStarted' })
-                      }
-                      disabled={inLibrary}
-                      className={`mt-2 w-full py-1 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 transition ${
-                        inLibrary
-                          ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-default'
-                          : 'bg-zinc-800 hover:bg-brand-red text-zinc-200 hover:text-white border border-zinc-700 hover:border-brand-red'
-                      }`}
-                    >
-                      {inLibrary ? (
-                        <>
-                          <Check className="w-3 h-3 text-emerald-400" />
-                          <span>Sparat</span>
-                        </>
-                      ) : (
-                        <>
-                          <Plus className="w-3 h-3" />
-                          <span>Lägg till</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="py-6 px-4 rounded-2xl bg-zinc-900/40 border border-dashed border-zinc-800 text-center flex flex-col items-center justify-center gap-2">
-              <p className="text-xs text-zinc-400">Inga trendande spel kunde hämtas just nu.</p>
-              <button
-                onClick={() => {
-                  setIsLoadingDiscover(true);
-                  fetch(`/api/games/discover?category=trending&sort=${trendingSort}&era=recent&limit=25`)
-                    .then((r) => r.json())
-                    .then((d) => {
-                      if (Array.isArray(d.results)) setTrendingGames(d.results);
-                    })
-                    .finally(() => setIsLoadingDiscover(false));
-                }}
-                className="px-3 py-1.5 rounded-xl bg-zinc-800 text-xs font-semibold text-white hover:bg-zinc-700 transition"
-              >
-                Försök igen
-              </button>
-            </div>
-          )}
-        </div>
-
-          {/* 5. 🎮 Utforska per genre */}
-          <div className="space-y-3.5 pt-2">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Layers className="w-4 h-4 text-brand-red" />
-                <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">Utforska per genre</h3>
-              </div>
-
-              <select
-                value={genreSort}
-                onChange={(e) => setGenreSort(e.target.value as any)}
-                className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-[11px] sm:text-xs rounded-xl px-2.5 py-1 focus:outline-none focus:border-brand-red cursor-pointer"
-              >
-                <option value="popularity">Mest populära</option>
-                <option value="rating">Högst betyg</option>
-                <option value="newest">Nyast först</option>
-              </select>
-            </div>
-
-            {/* Enkel horisontell rad med Genrer */}
-            <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-none">
-              {GENRE_LIST.map((g) => (
-                <button
-                  key={g.id}
-                  onClick={() => setSelectedGenre(g.id)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
-                    selectedGenre === g.id
-                      ? 'bg-brand-red text-white shadow-sm'
-                      : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
-                  }`}
-                >
-                  {g.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Spelrutnät för vald genre */}
-            {isLoadingGenre && genreGames.length === 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((i) => (
-                  <div
-                    key={i}
-                    className="h-56 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 animate-pulse flex flex-col p-2.5"
-                  >
-                    <div className="w-full aspect-[3/4] rounded-xl bg-zinc-800/60 mb-2" />
-                    <div className="w-3/4 h-3 bg-zinc-800 rounded mb-1.5" />
-                    <div className="w-1/2 h-2.5 bg-zinc-800/60 rounded" />
-                  </div>
-                ))}
-              </div>
-            ) : genreGames.length === 0 ? (
-              <div className="text-center py-10 text-zinc-500 border border-dashed border-zinc-800 rounded-2xl space-y-2">
-                <p className="text-xs">Inga spel hittades inom {currentGenreLabel}.</p>
-                <button
-                  onClick={() => {
-                    setIsLoadingGenre(true);
-                    fetch(
-                      `/api/games/discover?genre=${encodeURIComponent(selectedGenre)}&sort=${genreSort}&era=recent&limit=12`
-                    )
-                      .then((r) => r.json())
-                      .then((d) => {
-                        if (d.results) setGenreGames(d.results);
-                      })
-                      .finally(() => setIsLoadingGenre(false));
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-800 text-xs text-white font-semibold hover:bg-zinc-700 transition cursor-pointer"
-                >
-                  Försök igen
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
-                  {genreGames.map((game) => {
-                    const inLibrary = isGameInLibrary(game.igdb_id, game.title);
-                    return (
-                      <div
-                        key={game.id}
-                        className="flex flex-col group bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden p-2.5 transition hover:border-zinc-700 shadow-sm"
-                      >
-                        <div
-                          onClick={() => onSelectGame(game)}
-                          className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-zinc-950 mb-2 relative cursor-pointer"
-                        >
-                          {game.cover_url ? (
-                            <img
-                              src={game.cover_url}
-                              alt={game.title}
-                              className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Gamepad className="w-6 h-6 text-zinc-600" />
-                            </div>
-                          )}
-                          {(() => {
-                            const r = normalizeIgdbRating(game.igdb_rating);
-                            return r ? (
-                              <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md text-[10px] font-bold text-amber-300 border border-amber-500/30">
-                                ⭐ {r}
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-
-                        <h4
-                          onClick={() => onSelectGame(game)}
-                          className="text-xs sm:text-sm font-bold text-zinc-100 line-clamp-2 leading-snug min-h-[2.25rem] cursor-pointer hover:text-red-400 transition"
-                        >
-                          {game.title}
-                        </h4>
-
-                        <span className="text-[10px] text-zinc-400 mt-0.5 truncate">
-                          {game.release_year ? `${game.release_year} • ` : ''}
-                          {getPrimaryGenre(game.genres, selectedGenre)}
-                        </span>
-
-                        <button
-                          onClick={() =>
-                            onAddGame({ ...game, is_owned: true, is_backlog: true, status: 'notStarted' })
-                          }
-                          disabled={inLibrary}
-                          className={`mt-2 w-full py-1.5 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 transition ${
-                            inLibrary
-                              ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-default'
-                              : 'bg-zinc-800 hover:bg-brand-red text-zinc-200 hover:text-white border border-zinc-700 hover:border-brand-red'
-                          }`}
-                        >
-                          {inLibrary ? (
-                            <>
-                              <Check className="w-3 h-3 text-emerald-400" />
-                              <span>Sparat</span>
-                            </>
-                          ) : (
-                            <>
-                              <Plus className="w-3 h-3" />
-                              <span>Lägg till</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Sömlös "Visa fler"-knapp med egen laddningsindikator */}
-                {genreLimit < 48 && (
-                  <div className="flex justify-center pt-2">
-                    <button
-                      onClick={handleLoadMoreGenre}
-                      disabled={isLoadingMoreGenre}
-                      className="px-5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white transition shadow-sm flex items-center gap-1.5 disabled:opacity-50"
-                    >
-                      {isLoadingMoreGenre ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-brand-red" />
-                          <span>Laddar fler {currentGenreLabel}-spel...</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>Visa fler {currentGenreLabel}-spel</span>
-                          <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* 6. 🎲 Smart Spelsnurra (Inspiration & Slumpare när man har aktiva spel) */}
-          {currentlyPlaying.length > 0 && (
-            <div
-              id="roulette-section"
-              className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-900/90 via-zinc-950/95 to-black border border-zinc-800/80 p-5 sm:p-7 shadow-xl"
-            >
-              <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-                <div className="max-w-md text-center md:text-left">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-red/10 border border-brand-red/30 text-rose-300 text-xs font-bold uppercase tracking-wider mb-2.5">
-                    <Dices className="w-3.5 h-3.5 text-brand-red" />
-                    <span>Smart Spelsnurra</span>
-                  </div>
-                  <h3 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
-                    Behöver du inspiration?
-                  </h3>
-                  <p className="text-xs sm:text-sm text-zinc-400 mt-1 leading-relaxed">
-                    Låt slumpen välja vad du ska spela härnäst bland dina ospelade spel i backloggen eller upptäck nya rekommendationer.
-                  </p>
-
-                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-3.5">
-                    <button
-                      onClick={() => setRouletteMode('library')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
-                        rouletteMode === 'library'
-                          ? 'bg-white text-zinc-950 border-white font-bold'
-                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                      }`}
-                    >
-                      Mina spel ({games.length})
-                    </button>
-                    <button
-                      onClick={() => setRouletteMode('igdb')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
-                        rouletteMode === 'igdb'
-                          ? 'bg-white text-zinc-950 border-white font-bold'
-                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                      }`}
-                    >
-                      Upptäck från IGDB
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex flex-col items-center gap-3.5 w-full sm:w-auto">
-                  {winnerGame ? (
-                    <div
-                      onClick={() => onSelectGame(winnerGame)}
-                      className="flex items-center gap-3.5 p-2.5 bg-zinc-900/90 border border-zinc-700/80 rounded-2xl cursor-pointer hover:border-zinc-500 transition shadow-lg w-full max-w-sm group"
-                    >
-                      <div className="w-14 h-18 rounded-xl overflow-hidden bg-zinc-950 flex-shrink-0 relative border border-zinc-800">
-                        {winnerGame.cover_url ? (
-                          <img
-                            src={winnerGame.cover_url}
-                            alt={winnerGame.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Gamepad className="w-6 h-6 text-zinc-600" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider block">
-                          Utvalt spel!
-                        </span>
-                        <h4 className="text-sm font-bold text-white truncate group-hover:text-red-400 transition">
-                          {winnerGame.title}
-                        </h4>
-                        <p className="text-[11px] text-zinc-400 mt-0.5">
-                          {winnerGame.release_year ? `${winnerGame.release_year} • ` : ''}
-                          {winnerGame.genres?.[0] || 'Spel'}
-                        </p>
-                      </div>
-                      <ArrowRight className="w-4 h-4 text-zinc-400 group-hover:text-white transition mr-1" />
-                    </div>
-                  ) : (
-                    <div className="w-full max-w-sm h-20 border border-dashed border-zinc-800 rounded-2xl flex items-center justify-center text-zinc-500 text-xs px-4 text-center">
-                      Klicka nedan för att slumpa fram ett spel
-                    </div>
-                  )}
-
-                  <button
-                    onClick={handleSpinRoulette}
-                    disabled={isSpinning || (rouletteMode === 'library' && games.length === 0)}
-                    className="w-full sm:w-auto px-7 py-2.5 bg-gradient-to-r from-brand-red to-rose-600 hover:from-brand-redPressed hover:to-rose-700 disabled:opacity-50 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Dices className={`w-4 h-4 ${isSpinning ? 'animate-spin' : ''}`} />
-                    <span>{isSpinning ? 'Snurrar hjulet...' : '🎲 Snurra fram ett spel!'}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      ) : activeTab === 'toplist' ? (
-        <div className="animate-in fade-in duration-200">
-          <ToplistView
-            onSelectGame={onSelectGame}
-            onAddGame={onAddGame}
-            libraryGames={games}
-          />
-        </div>
-      ) : activeTab === 'calendar' ? (
-        /* --- DEDIKERAD RELEASEKALENDER (Motsvarande iOS UpcomingReleasesView.swift) --- */
-        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Hela månadskalendern */}
+                  <div className="space-y-6 animate-in fade-in duration-200">
           {/* Kalender Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-zinc-900/90 via-zinc-900/60 to-zinc-950 border border-zinc-800/80 rounded-3xl p-5 sm:p-6 shadow-lg">
             <div className="flex items-center gap-4">
@@ -2667,462 +2821,306 @@ export function DiscoverView({
             </div>
           )}
         </div>
-      ) : (
-        /* --- Avancerad Spelnyhets- & Recensionshub --- */
-        <div className="space-y-6 animate-in fade-in duration-200">
-          {/* Top Controls: Search, Category Tabs, Platform & Source Selectors */}
-          <div className="space-y-3">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-              {/* Sökfält */}
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                <input
-                  type="text"
-                  value={newsSearch}
-                  onChange={(e) => setNewsSearch(e.target.value)}
-                  placeholder="Sök bland recensioner, speltitlar och nyheter..."
-                  className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-2xl pl-10 pr-4 py-2.5 text-xs sm:text-sm focus:outline-none focus:border-red-500 shadow-inner"
-                />
+        </section>
+
+        {/* 4. 🏆 Topplistor & Högst betygsatta */}
+        <section id="section-toplist" className="space-y-4 pt-6 border-t border-zinc-800/80">
+          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                <Trophy className="w-4 h-4 text-amber-400" />
               </div>
-
-              {/* Plattformar & Källor Dropdowns */}
-              <div className="flex items-center gap-2">
-                <select
-                  value={selectedNewsPlatform}
-                  onChange={(e) => setSelectedNewsPlatform(e.target.value)}
-                  className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-brand-red cursor-pointer"
-                >
-                  {PLATFORMS.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-
-                {/* Anpassa källor Modal Button */}
-                <button
-                  type="button"
-                  onClick={() => setIsSourcesModalOpen(true)}
-                  className={`flex items-center gap-1.5 px-3 py-2 border rounded-xl text-xs font-semibold transition cursor-pointer ${
-                    enabledNewsSources.length > 0 && enabledNewsSources.length < rawNewsSources.length
-                      ? 'bg-brand-red/20 text-white border-brand-red/50 shadow-sm'
-                      : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border-zinc-800'
-                  }`}
-                  title="Anpassa vilka nyhetskällor du vill följa"
-                >
-                  <SlidersHorizontal className="w-3.5 h-3.5 text-brand-red" />
-                  <span className="hidden sm:inline">Källor</span>
-                  {enabledNewsSources.length > 0 && enabledNewsSources.length < rawNewsSources.length && (
-                    <span className="px-1.5 py-0.2 rounded-full bg-brand-red text-[10px] font-bold text-white">
-                      {enabledNewsSources.length}
-                    </span>
-                  )}
-                </button>
-
-                <select
-                  value={selectedNewsSource}
-                  onChange={(e) => setSelectedNewsSource(e.target.value)}
-                  className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-brand-red cursor-pointer"
-                >
-                  {newsSources.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-
-                {/* Tidsfilter Dropdown */}
-                <select
-                  value={selectedNewsTimeRange}
-                  onChange={(e) => setSelectedNewsTimeRange(e.target.value as any)}
-                  className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-brand-red cursor-pointer"
-                  title="Välj tidsintervall"
-                >
-                  <option value="all">Alla tider</option>
-                  <option value="24h">Senaste 24h</option>
-                  <option value="7d">Senaste veckan</option>
-                  <option value="30d">Senaste månaden</option>
-                  <option value="older">Äldre än 30d</option>
-                </select>
-
-                {/* Uppdatera nyheter */}
-                <button
-                  type="button"
-                  onClick={() => handleFetchNews(true)}
-                  disabled={isLoadingNews}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 rounded-xl text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
-                  title="Hämta senaste nyheterna nu"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingNews ? 'animate-spin text-red-500' : ''}`} />
-                  <span className="hidden sm:inline">{isLoadingNews ? 'Hämtar...' : 'Uppdatera'}</span>
-                </button>
+              <div>
+                <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">Topplistor & Högst betygsatta</h3>
+                <p className="text-[11px] sm:text-xs text-zinc-400">De bäst rankade spelen genom tiderna och per plattform från IGDB</p>
               </div>
             </div>
+          </div>
+                  <div className="animate-in fade-in duration-200">
+          <ToplistView
+            onSelectGame={onSelectGame}
+            onAddGame={onAddGame}
+            libraryGames={games}
+          />
+        </div>
+        </section>
 
-            {/* Kategori-flikar (med Uppdateringar och Förhandstittar) */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-              {[
-                { id: 'all', label: 'Alla artiklar' },
-                { id: 'reviews', label: '⭐ Recensioner' },
-                { id: 'my_games', label: '🎮 Från mina spel' },
-                { id: 'updates', label: '🔄 Uppdateringar' },
-                { id: 'trailers', label: '🎬 Trailers & Videor' },
-                { id: 'previews', label: '👁️ Förhandstittar' },
-                { id: 'saved', label: `🔖 Sparade (${savedNewsIds.length})` },
-              ].map((f) => (
+        {/* 5. 🎮 Utforska per genre */}
+        <section id="section-genres" className="space-y-4 pt-6 border-t border-zinc-800/80">
+                    {/* 5. 🎮 Utforska per genre */}
+          <div className="space-y-3.5 pt-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-brand-red" />
+                <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">Utforska per genre</h3>
+              </div>
+
+              <select
+                value={genreSort}
+                onChange={(e) => setGenreSort(e.target.value as any)}
+                className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-[11px] sm:text-xs rounded-xl px-2.5 py-1 focus:outline-none focus:border-brand-red cursor-pointer"
+              >
+                <option value="popularity">Mest populära</option>
+                <option value="rating">Högst betyg</option>
+                <option value="newest">Nyast först</option>
+              </select>
+            </div>
+
+            {/* Enkel horisontell rad med Genrer */}
+            <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-none">
+              {GENRE_LIST.map((g) => (
                 <button
-                  key={f.id}
-                  onClick={() => setSelectedNewsCategory(f.id as any)}
-                  className={`px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
-                    selectedNewsCategory === f.id
-                      ? 'bg-brand-red text-white shadow-md shadow-brand-red/20'
+                  key={g.id}
+                  onClick={() => setSelectedGenre(g.id)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
+                    selectedGenre === g.id
+                      ? 'bg-brand-red text-white shadow-sm'
                       : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
                   }`}
                 >
-                  {f.label}
+                  {g.label}
                 </button>
               ))}
             </div>
+
+            {/* Spelrutnät för vald genre */}
+            {isLoadingGenre && genreGames.length === 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((i) => (
+                  <div
+                    key={i}
+                    className="h-56 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 animate-pulse flex flex-col p-2.5"
+                  >
+                    <div className="w-full aspect-[3/4] rounded-xl bg-zinc-800/60 mb-2" />
+                    <div className="w-3/4 h-3 bg-zinc-800 rounded mb-1.5" />
+                    <div className="w-1/2 h-2.5 bg-zinc-800/60 rounded" />
+                  </div>
+                ))}
+              </div>
+            ) : genreGames.length === 0 ? (
+              <div className="text-center py-10 text-zinc-500 border border-dashed border-zinc-800 rounded-2xl space-y-2">
+                <p className="text-xs">Inga spel hittades inom {currentGenreLabel}.</p>
+                <button
+                  onClick={() => {
+                    setIsLoadingGenre(true);
+                    fetch(
+                      `/api/games/discover?genre=${encodeURIComponent(selectedGenre)}&sort=${genreSort}&era=recent&limit=12`
+                    )
+                      .then((r) => r.json())
+                      .then((d) => {
+                        if (d.results) setGenreGames(d.results);
+                      })
+                      .finally(() => setIsLoadingGenre(false));
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-zinc-800 text-xs text-white font-semibold hover:bg-zinc-700 transition cursor-pointer"
+                >
+                  Försök igen
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+                  {genreGames.map((game) => {
+                    const inLibrary = isGameInLibrary(game.igdb_id, game.title);
+                    return (
+                      <div
+                        key={game.id}
+                        className="flex flex-col group bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden p-2.5 transition hover:border-zinc-700 shadow-sm"
+                      >
+                        <div
+                          onClick={() => onSelectGame(game)}
+                          className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-zinc-950 mb-2 relative cursor-pointer"
+                        >
+                          {game.cover_url ? (
+                            <img
+                              src={game.cover_url}
+                              alt={game.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Gamepad className="w-6 h-6 text-zinc-600" />
+                            </div>
+                          )}
+                          {(() => {
+                            const r = normalizeIgdbRating(game.igdb_rating);
+                            return r ? (
+                              <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md text-[10px] font-bold text-amber-300 border border-amber-500/30">
+                                ⭐ {r}
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
+
+                        <h4
+                          onClick={() => onSelectGame(game)}
+                          className="text-xs sm:text-sm font-bold text-zinc-100 line-clamp-2 leading-snug min-h-[2.25rem] cursor-pointer hover:text-red-400 transition"
+                        >
+                          {game.title}
+                        </h4>
+
+                        <span className="text-[10px] text-zinc-400 mt-0.5 truncate">
+                          {game.release_year ? `${game.release_year} • ` : ''}
+                          {getPrimaryGenre(game.genres, selectedGenre)}
+                        </span>
+
+                        <button
+                          onClick={() =>
+                            onAddGame({ ...game, is_owned: true, is_backlog: true, status: 'notStarted' })
+                          }
+                          disabled={inLibrary}
+                          className={`mt-2 w-full py-1.5 rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1 transition ${
+                            inLibrary
+                              ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-default'
+                              : 'bg-zinc-800 hover:bg-brand-red text-zinc-200 hover:text-white border border-zinc-700 hover:border-brand-red'
+                          }`}
+                        >
+                          {inLibrary ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-400" />
+                              <span>Sparat</span>
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="w-3 h-3" />
+                              <span>Lägg till</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Sömlös "Visa fler"-knapp med egen laddningsindikator */}
+                {genreLimit < 48 && (
+                  <div className="flex justify-center pt-2">
+                    <button
+                      onClick={handleLoadMoreGenre}
+                      disabled={isLoadingMoreGenre}
+                      className="px-5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white transition shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {isLoadingMoreGenre ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-brand-red" />
+                          <span>Laddar fler {currentGenreLabel}-spel...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Visa fler {currentGenreLabel}-spel</span>
+                          <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Hetaste nyheterna just nu karusell i nyhetsflödet */}
-          {hotNewsItems.length > 0 && !newsSearch.trim() && selectedNewsCategory === 'all' && (
-            <div className="p-4 rounded-3xl bg-zinc-900/40 border border-zinc-800/70 space-y-3 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Flame className="w-4 h-4 text-brand-red" />
-                  <span className="text-xs sm:text-sm font-bold text-white">Hetaste nyheterna just nu</span>
-                </div>
-              </div>
+        </section>
 
-              <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-zinc-800">
-                {hotNewsItems.map((item) => {
-                  const matched = findMatchingLibraryGame(item.title);
-                  return (
-                    <a
-                      key={item.id}
-                      href={item.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-shrink-0 w-52 sm:w-56 group space-y-2 block"
+        {/* 6. 🎲 Smart Spelsnurra */}
+        <section id="section-roulette" className="pt-6 border-t border-zinc-800/80">
+                    {/* 6. 🎲 Smart Spelsnurra (Inspiration & Slumpare när man har aktiva spel) */}
+          {currentlyPlaying.length > 0 && (
+            <div
+              id="roulette-section"
+              className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-900/90 via-zinc-950/95 to-black border border-zinc-800/80 p-5 sm:p-7 shadow-xl"
+            >
+              <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="max-w-md text-center md:text-left">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-red/10 border border-brand-red/30 text-rose-300 text-xs font-bold uppercase tracking-wider mb-2.5">
+                    <Dices className="w-3.5 h-3.5 text-brand-red" />
+                    <span>Smart Spelsnurra</span>
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
+                    Behöver du inspiration?
+                  </h3>
+                  <p className="text-xs sm:text-sm text-zinc-400 mt-1 leading-relaxed">
+                    Låt slumpen välja vad du ska spela härnäst bland dina ospelade spel i backloggen eller upptäck nya rekommendationer.
+                  </p>
+
+                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-3.5">
+                    <button
+                      onClick={() => setRouletteMode('library')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                        rouletteMode === 'library'
+                          ? 'bg-white text-zinc-950 border-white font-bold'
+                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                      }`}
                     >
-                      <div className="w-full h-28 rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 relative">
-                        {item.image ? (
+                      Mina spel ({games.length})
+                    </button>
+                    <button
+                      onClick={() => setRouletteMode('igdb')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                        rouletteMode === 'igdb'
+                          ? 'bg-white text-zinc-950 border-white font-bold'
+                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      Upptäck från IGDB
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-center gap-3.5 w-full sm:w-auto">
+                  {winnerGame ? (
+                    <div
+                      onClick={() => onSelectGame(winnerGame)}
+                      className="flex items-center gap-3.5 p-2.5 bg-zinc-900/90 border border-zinc-700/80 rounded-2xl cursor-pointer hover:border-zinc-500 transition shadow-lg w-full max-w-sm group"
+                    >
+                      <div className="w-14 h-18 rounded-xl overflow-hidden bg-zinc-950 flex-shrink-0 relative border border-zinc-800">
+                        {winnerGame.cover_url ? (
                           <img
-                            src={item.image}
-                            alt={item.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                            loading="lazy"
+                            src={winnerGame.cover_url}
+                            alt={winnerGame.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
-                            <Newspaper className="w-5 h-5 text-zinc-600" />
+                            <Gamepad className="w-6 h-6 text-zinc-600" />
                           </div>
                         )}
-                        <div className="absolute top-2 left-2 flex items-center gap-1.5 max-w-[90%]">
-                          {item.category && (
-                            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-black/70 backdrop-blur-md text-zinc-200 border border-white/10">
-                              {item.category}
-                            </span>
-                          )}
-                          {matched && (
-                            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-600/90 text-white truncate max-w-[100px]">
-                              🎮 {matched.title}
-                            </span>
-                          )}
-                        </div>
                       </div>
-                      <div className="space-y-1">
-                        <p className="text-xs font-semibold text-zinc-200 line-clamp-2 leading-snug min-h-[2rem] group-hover:text-red-400 transition">
-                          {cleanArticleTitle(item.title)}
-                        </p>
-                        <div className="flex items-center gap-1.5 text-[10px] text-zinc-400">
-                          <span className="font-bold text-brand-red">{item.source}</span>
-                          <span>•</span>
-                          <span>
-                            {new Date(item.published).toLocaleDateString('sv-SE', {
-                              month: 'short',
-                              day: 'numeric',
-                            })}
-                          </span>
-                        </div>
-                      </div>
-                    </a>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {isLoadingNews ? (
-            <div className="flex flex-col items-center justify-center py-24 text-zinc-400 gap-3">
-              <RefreshCw className="w-6 h-6 animate-spin text-brand-red" />
-              <span className="text-sm font-medium">Hämtar och matchar spelnyheter & recensioner...</span>
-            </div>
-          ) : filteredNews.length === 0 ? (
-            <div className="text-center py-20 text-zinc-500 border border-dashed border-zinc-800 rounded-3xl p-8">
-              <Newspaper className="w-10 h-10 mx-auto mb-3 opacity-40 text-brand-red" />
-              <p className="text-sm font-semibold text-zinc-300">Inga nyheter matchar din sökning eller filter.</p>
-              <p className="text-xs text-zinc-500 mt-1">Prova att välja en annan kategori, plattform eller rensa sökningen.</p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* 1. Hero / Featured Top Story */}
-              {!newsSearch.trim() && filteredNews[0] && (
-                <div className="relative overflow-hidden rounded-3xl bg-gradient-to-tr from-zinc-950 via-zinc-900 to-zinc-900 border border-zinc-800 group hover:border-zinc-700 transition shadow-2xl">
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-0">
-                    {filteredNews[0].image && (
-                      <a
-                        href={filteredNews[0].link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="lg:col-span-7 aspect-video sm:aspect-[16/9] lg:aspect-auto h-64 sm:h-80 lg:h-full relative overflow-hidden bg-black block"
-                      >
-                        <img
-                          src={filteredNews[0].image}
-                          alt={filteredNews[0].title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-transparent to-transparent lg:hidden" />
-                      </a>
-                    )}
-
-                    <div className="lg:col-span-5 p-6 sm:p-8 flex flex-col justify-between">
-                      <div>
-                        <div className="flex items-center justify-between gap-2 mb-3">
-                          <div className="flex items-center gap-2">
-                            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-red text-white">
-                              {filteredNews[0].source}
-                            </span>
-                            {filteredNews[0].category && (
-                              <span
-                                className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                                  filteredNews[0].category === 'Recension'
-                                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                                    : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
-                                }`}
-                              >
-                                {filteredNews[0].category}
-                              </span>
-                            )}
-                          </div>
-
-                          <button
-                            onClick={(e) => toggleSaveArticle(e, filteredNews[0].id)}
-                            className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition"
-                            title="Spara artikel"
-                          >
-                            {savedNewsIds.includes(filteredNews[0].id) ? (
-                              <BookmarkCheck className="w-4 h-4 text-emerald-400" />
-                            ) : (
-                              <Bookmark className="w-4 h-4" />
-                            )}
-                          </button>
-                        </div>
-
-                        {/* Matchat biblioteksspel badge */}
-                        {(() => {
-                          const matched = findMatchingLibraryGame(filteredNews[0].title);
-                          if (!matched) return null;
-                          return (
-                            <div
-                              onClick={() => onSelectGame(matched)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold mb-3 cursor-pointer hover:bg-emerald-500/20 transition"
-                            >
-                              <Gamepad className="w-3.5 h-3.5" />
-                              <span>
-                                Finns i ditt bibliotek (
-                                {getStatusDisplayTitle(
-                                  matched.status,
-                                  isMultiplayerOrOngoing(matched)
-                                )}
-                                )
-                              </span>
-                            </div>
-                          );
-                        })()}
-
-                        <a
-                          href={filteredNews[0].link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block"
-                        >
-                          <h3 className="text-xl sm:text-2xl font-bold text-white leading-tight hover:text-red-400 transition">
-                            {cleanArticleTitle(filteredNews[0].title)}
-                          </h3>
-                        </a>
-
-                        {filteredNews[0].summary && (
-                          <p className="text-xs sm:text-sm text-zinc-400 mt-3 line-clamp-3 leading-relaxed">
-                            {filteredNews[0].summary}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="flex items-center justify-between pt-6 mt-4 border-t border-zinc-800/80">
-                        <span className="text-xs text-zinc-500">
-                          {new Date(filteredNews[0].published).toLocaleDateString('sv-SE', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider block">
+                          Utvalt spel!
                         </span>
-
-                        <a
-                          href={filteredNews[0].link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1.5 text-xs font-bold text-red-400 hover:text-red-300 transition"
-                        >
-                          <span>Läs hela artikeln</span>
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
+                        <h4 className="text-sm font-bold text-white truncate group-hover:text-red-400 transition">
+                          {winnerGame.title}
+                        </h4>
+                        <p className="text-[11px] text-zinc-400 mt-0.5">
+                          {winnerGame.release_year ? `${winnerGame.release_year} • ` : ''}
+                          {winnerGame.genres?.[0] || 'Spel'}
+                        </p>
                       </div>
+                      <ArrowRight className="w-4 h-4 text-zinc-400 group-hover:text-white transition mr-1" />
                     </div>
-                  </div>
+                  ) : (
+                    <div className="w-full max-w-sm h-20 border border-dashed border-zinc-800 rounded-2xl flex items-center justify-center text-zinc-500 text-xs px-4 text-center">
+                      Klicka nedan för att slumpa fram ett spel
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleSpinRoulette}
+                    disabled={isSpinning || (rouletteMode === 'library' && games.length === 0)}
+                    className="w-full sm:w-auto px-7 py-2.5 bg-gradient-to-r from-brand-red to-rose-600 hover:from-brand-redPressed hover:to-rose-700 disabled:opacity-50 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Dices className={`w-4 h-4 ${isSpinning ? 'animate-spin' : ''}`} />
+                    <span>{isSpinning ? 'Snurrar hjulet...' : '🎲 Snurra fram ett spel!'}</span>
+                  </button>
                 </div>
-              )}
-
-              {/* 2. Grid of other articles */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-                {(newsSearch.trim() ? filteredNews : filteredNews.slice(1)).map((item) => {
-                  const matchedLibraryGame = findMatchingLibraryGame(item.title);
-                  const isSaved = savedNewsIds.includes(item.id);
-
-                  return (
-                    <div
-                      key={item.id}
-                      className="flex flex-col bg-zinc-900/60 border border-zinc-800/80 rounded-2xl overflow-hidden hover:border-zinc-700 group transition shadow-md"
-                    >
-                      {item.image && (
-                        <a
-                          href={item.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="aspect-video w-full overflow-hidden bg-black relative block"
-                        >
-                          <img
-                            src={item.image}
-                            alt={item.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                            loading="lazy"
-                          />
-                          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/80 backdrop-blur-md text-[10px] font-bold text-zinc-200 border border-zinc-700/60">
-                            {item.source}
-                          </span>
-
-                          {item.category === 'Recension' && (
-                            <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-amber-500/90 text-zinc-950 font-bold text-[10px] shadow-sm">
-                              ⭐ Recension
-                            </span>
-                          )}
-                        </a>
-                      )}
-
-                      <div className="p-4 flex-1 flex flex-col justify-between">
-                        <div>
-                          <div className="flex items-center justify-between gap-2 mb-2 text-[11px] text-zinc-500">
-                            <div className="flex items-center gap-1.5">
-                              {!item.image && (
-                                <span className="font-bold text-zinc-300">{item.source} •</span>
-                              )}
-                              <span>
-                                {new Date(item.published).toLocaleDateString('sv-SE', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                })}
-                              </span>
-                              {item.category && (
-                                <span
-                                  className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                                    item.category === 'Recension'
-                                      ? 'bg-amber-500/20 text-amber-300'
-                                      : 'bg-zinc-800 text-zinc-400'
-                                  }`}
-                                >
-                                  {item.category}
-                                </span>
-                              )}
-                            </div>
-
-                            <button
-                              onClick={(e) => toggleSaveArticle(e, item.id)}
-                              className="p-1 rounded-lg text-zinc-500 hover:text-white transition"
-                              title={isSaved ? 'Ta bort bokmärke' : 'Spara artikel'}
-                            >
-                              {isSaved ? (
-                                <BookmarkCheck className="w-3.5 h-3.5 text-emerald-400" />
-                              ) : (
-                                <Bookmark className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                          </div>
-
-                          {/* Matchat biblioteksspel pill */}
-                          {matchedLibraryGame && (
-                            <div
-                              onClick={() => onSelectGame(matchedLibraryGame)}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] font-semibold mb-2 cursor-pointer hover:bg-emerald-500/20 transition"
-                            >
-                              <Gamepad className="w-3 h-3" />
-                              <span className="truncate">
-                                I ditt bibliotek (
-                                {getStatusDisplayTitle(
-                                  matchedLibraryGame.status,
-                                  isMultiplayerOrOngoing(matchedLibraryGame)
-                                )}
-                                )
-                              </span>
-                            </div>
-                          )}
-
-                          <a
-                            href={item.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="block"
-                          >
-                            <h4 className="text-sm font-bold text-zinc-100 group-hover:text-red-400 transition leading-snug line-clamp-2">
-                              {cleanArticleTitle(item.title)}
-                            </h4>
-                          </a>
-
-                          {item.summary && (
-                            <p className="text-xs text-zinc-400 mt-2 line-clamp-2 leading-relaxed">
-                              {item.summary}
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="flex items-center justify-between pt-3 mt-3 border-t border-zinc-800/60 text-[11px]">
-                          <a
-                            href={item.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-zinc-500 group-hover:text-red-400 font-semibold transition"
-                          >
-                            <span>Läs artikel</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-
-                          {item.platform && item.platform !== 'Multi' && (
-                            <span className="text-[10px] text-zinc-500 font-medium">
-                              {item.platform}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
             </div>
           )}
-        </div>
-      )}
-      <GamingGoalModal
+        </section>
+      </div>
+
+            <GamingGoalModal
         isOpen={isGoalModalOpen}
         onClose={() => setIsGoalModalOpen(false)}
         annualGoal={userProfile?.annualGamingGoal || 12}

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Game, GameCollection, PlayStatus, PLAY_STATUSES } from '@/types/game';
 import { supabase, mapSupabaseGame, mapSupabaseCollection, normalizeIgdbRating, sanitizeUserGamePayload, normalizeLocalGame } from '@/lib/supabase';
-import { getStatusDisplayTitle, inferPlayTypes } from '@/lib/statusHelper';
+import { getStatusDisplayTitle, inferPlayTypes, isMultiplayerOrOngoing } from '@/lib/statusHelper';
 import { Header, ViewMode } from '@/components/Header';
 import { ShelfView } from '@/components/ShelfView';
 import { GridView } from '@/components/GridView';

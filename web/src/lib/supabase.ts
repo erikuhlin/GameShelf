@@ -1,11 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 import { Game, GameCollection } from '@/types/game';
 import { normalizePlayStatus, inferPlayTypes } from './statusHelper';
+import {
+  unpackGameNotes,
+  packGameNotes,
+  sanitizeUserGamePayload,
+  normalizeIgdbRating,
+  type GameMetadataPayload,
+  META_REGEX,
+} from './gamePayload';
+
+export * from './gamePayload';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:54321';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'dummy_key';
-
-export * from './gamePayload';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

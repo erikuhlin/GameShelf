@@ -75,6 +75,7 @@ export async function GET(request: NextRequest) {
   const startDateParam = searchParams.get('start_date');
   const endDateParam = searchParams.get('end_date');
   const isHypedParam = searchParams.get('is_hyped') === 'true';
+  const isRecentParam = searchParams.get('is_recent') === 'true';
   const minHypeParam = searchParams.get('min_hype') ? Number(searchParams.get('min_hype')) : null;
   const limitParam = Math.min(Number(searchParams.get('limit')) || (category === 'upcoming' ? 60 : 25), 200);
   const excludeIdsParam = searchParams.get('exclude_ids') || '';
@@ -83,7 +84,7 @@ export async function GET(request: NextRequest) {
   const nowSeconds = Math.floor(Date.now() / 1000);
   const now = new Date();
   const todayStartTs = Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0) / 1000);
-  const cacheKey = `${category}_${genreParam || ''}_${sortParam}_${eraParam}_${platformParam}_${startDateParam || ''}_${endDateParam || ''}_${isHypedParam}_${limitParam}`;
+  const cacheKey = `${category}_${genreParam || ''}_${sortParam}_${eraParam}_${platformParam}_${startDateParam || ''}_${endDateParam || ''}_${isHypedParam}_${isRecentParam}_${limitParam}`;
 
   // 1. Svara omedelbart om cachat i minnet
   const cached = DISCOVER_CACHE.get(cacheKey);
@@ -347,7 +348,11 @@ export async function GET(request: NextRequest) {
         conditions.push(`platforms = (${PLATFORM_MAP[platformParam].join(',')})`);
       }
 
-      const sortClause = isHypedParam ? 'sort hypes desc;' : 'sort first_release_date asc;';
+      const sortClause = isHypedParam
+        ? 'sort hypes desc;'
+        : isRecentParam
+        ? 'sort first_release_date desc;'
+        : 'sort first_release_date asc;';
       const upcomingQuery = `
         fields name, summary, first_release_date, cover.url, cover.image_id, platforms.id, platforms.name, genres.name, involved_companies.company.name, involved_companies.developer, total_rating, rating, hypes, category, game_type, parent_game;
         where ${conditions.join(' & ')};

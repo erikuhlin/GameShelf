@@ -693,12 +693,13 @@ struct TrendingGameResult: Sendable {
         return results.filter { !$0.isDLC }
     }
 
-    /// Hämtar kommande spelsläpp från IGDB
+    /// Hämtar kommande eller nyligen släppta spelsläpp från IGDB
     func fetchUpcomingReleases(
         platformIDs: [Int] = [],
         fromDate: Date = Date(),
         toDate: Date? = nil,
         sortByHype: Bool = false,
+        sortByRecent: Bool = false,
         minHype: Int? = nil,
         limit: Int = 50
     ) async throws -> [IGDBGame] {
@@ -743,7 +744,9 @@ struct TrendingGameResult: Sendable {
         }
 
         let whereClause = "where \(conditions.joined(separator: " & "));"
-        let sortClause = sortByHype ? "sort hypes desc;" : "sort first_release_date asc;"
+        let sortClause = sortByHype
+            ? "sort hypes desc;"
+            : (sortByRecent ? "sort first_release_date desc;" : "sort first_release_date asc;")
 
         let bodyString = """
         fields name, summary, first_release_date, cover.image_id, platforms.id, platforms.name, genres.name, themes.id, themes.name, hypes, total_rating, total_rating_count, involved_companies.company.name, involved_companies.developer, category, game_type, parent_game;

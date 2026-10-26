@@ -14,6 +14,7 @@ struct MonthOption: Identifiable, Hashable {
     let startDate: Date?
     let endDate: Date?
     let isMostHyped: Bool
+    var isRecent: Bool = false
 }
 
 // MARK: - Plattformsalternativ
@@ -48,23 +49,36 @@ struct UpcomingReleasesView: View {
         UpcomingPlatformOption(id: "xbox", name: "Xbox Series", igdbIDs: [169], icon: "xbox.logo")
     ]
 
-    // Generera dynamiska månader för de kommande 6 månaderna med Mest Hypade först
+    // Generera dynamiska månader för de kommande 6 månaderna med Mest Hypade och Senaste Månaden
     private var monthOptions: [MonthOption] {
         var options: [MonthOption] = []
         let cal = Calendar.current
         let now = Date()
         let startOfToday = cal.startOfDay(for: now)
+        let endOfToday = cal.date(bySettingHour: 23, minute: 59, second: 59, of: now) ?? now
+        let thirtyDaysAgo = cal.date(byAdding: .day, value: -30, to: startOfToday) ?? startOfToday
 
-        // 1. Startsida: Mest hypade & största kommande spelen
+        // 1. Senaste månaden: Nyligen släppta spel under de senaste 30 dagarna
+        options.append(MonthOption(
+            id: "recent_releases",
+            title: "✨ Senaste månaden",
+            startDate: thirtyDaysAgo,
+            endDate: endOfToday,
+            isMostHyped: false,
+            isRecent: true
+        ))
+
+        // 2. Startsida: Mest hypade & största kommande spelen
         options.append(MonthOption(
             id: "most_hyped",
             title: "🔥 Mest hypade",
             startDate: startOfToday,
             endDate: nil,
-            isMostHyped: true
+            isMostHyped: true,
+            isRecent: false
         ))
 
-        // 2. De kommande 6 enskilda månaderna
+        // 3. De kommande 6 enskilda månaderna
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "sv_SE")
         formatter.dateFormat = "MMM yyyy"
@@ -83,7 +97,8 @@ struct UpcomingReleasesView: View {
                     title: title,
                     startDate: offset == 0 ? startOfToday : startOfMonth,
                     endDate: endOfMonth,
-                    isMostHyped: false
+                    isMostHyped: false,
+                    isRecent: false
                 ))
             }
         }
@@ -97,6 +112,10 @@ struct UpcomingReleasesView: View {
 
     private var isViewingMostHyped: Bool {
         currentOption?.isMostHyped ?? true
+    }
+
+    private var isViewingRecent: Bool {
+        currentOption?.isRecent ?? false
     }
 
     // Filtrerade spel: I månadsvyn visar vi alla spelsläpp så att alla datum syns i kalendern
@@ -145,8 +164,13 @@ struct UpcomingReleasesView: View {
             }
         }
 
+        let isRecent = currentOption?.isRecent ?? false
         let sortedKeys = groups.keys.sorted { (key1, key2) in
-            (dateOrder[key1] ?? now) < (dateOrder[key2] ?? now)
+            if isRecent {
+                return (dateOrder[key1] ?? now) > (dateOrder[key2] ?? now)
+            } else {
+                return (dateOrder[key1] ?? now) < (dateOrder[key2] ?? now)
+            }
         }
 
         return sortedKeys.map { key in
@@ -154,16 +178,20 @@ struct UpcomingReleasesView: View {
             let isPlaceholder = date.isYearPlaceholderDate
             let displayDate = isPlaceholder ? key : titleFormatter.string(from: date).capitalized
 
-            // Beräkna nedräkning
+            // Beräkna nedräkning / tid sedan release
             let countdown: String
             if isPlaceholder {
                 countdown = ""
             } else {
                 let daysUntil = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: date)).day ?? 0
-                if daysUntil < 0 {
+                if daysUntil == 0 {
+                    countdown = "Släpptes idag!"
+                } else if daysUntil == -1 {
+                    countdown = "Igår"
+                } else if daysUntil < -1 && daysUntil >= -30 {
+                    countdown = "\(-daysUntil) dagar sedan"
+                } else if daysUntil < -30 {
                     countdown = "Släppt"
-                } else if daysUntil == 0 {
-                    countdown = "Idag"
                 } else if daysUntil == 1 {
                     countdown = "Imorgon"
                 } else if daysUntil > 1 && daysUntil <= 30 {
@@ -268,7 +296,7 @@ struct UpcomingReleasesView: View {
                 Text("Releasekalender")
                     .font(.headline.bold())
                     .foregroundStyle(.primary)
-                Text(isViewingMostHyped ? "Mest efterlängtade spelen" : (currentOption?.title ?? "Kommande släpp"))
+                Text(isViewingMostHyped ? "Mest efterlängtade spelen" : (isViewingRecent ? "Nyligen släppta spel (senaste 30 dagarna)" : (currentOption?.title ?? "Kommande släpp")))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -356,11 +384,18 @@ struct UpcomingReleasesView: View {
         .overlay(Divider(), alignment: .bottom)
     }
 
-    // MARK: - 3.5 Filterläge (Mest hypade vs Månadens största vs Alla)
+    // MARK: - 3.5 Filterläge (Mest hypade vs Senaste månaden vs Månadens största vs Alla)
     private var filterModeBar: some View {
         HStack {
             HStack(spacing: 5) {
-                if isViewingMostHyped {
+                if isViewingRecent {
+                    Image(systemName: "sparkles")
+                        .font(.caption2)
+                        .foregroundStyle(Color.cyan)
+                    Text(showAllInMonth ? "Nyligen släppta spel (\(games.count))" : "Populäraste nya spelen (\(displayedGames.count) av \(games.count))")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                } else if isViewingMostHyped {
                     Image(systemName: "flame.fill")
                         .font(.caption2)
                         .foregroundStyle(Color.orange)
@@ -426,7 +461,7 @@ struct UpcomingReleasesView: View {
                             // Dag-rubrik med nedräkning
                             HStack(alignment: .center, spacing: 8) {
                                 Circle()
-                                    .fill(Color.red)
+                                    .fill(isViewingRecent ? Color.cyan : Color.red)
                                     .frame(width: 8, height: 8)
 
                                 Text(group.displayDate)
@@ -439,8 +474,8 @@ struct UpcomingReleasesView: View {
                                     .font(.caption.bold())
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 3)
-                                    .background(Color.red.opacity(0.12))
-                                    .foregroundStyle(.red)
+                                    .background((isViewingRecent ? Color.cyan : Color.red).opacity(0.12))
+                                    .foregroundStyle(isViewingRecent ? Color.cyan : Color.red)
                                     .clipShape(Capsule())
                             }
                             .padding(.horizontal, 4)
@@ -810,6 +845,7 @@ struct UpcomingReleasesView: View {
         }
 
         let isHyped = currentOption?.isMostHyped ?? true
+        let isRecent = currentOption?.isRecent ?? false
         let startOfToday = Calendar.current.startOfDay(for: Date())
         let startDate = currentOption?.startDate ?? startOfToday
         let endDate = currentOption?.endDate
@@ -823,6 +859,7 @@ struct UpcomingReleasesView: View {
                 fromDate: isHyped ? startOfToday : startDate,
                 toDate: isHyped ? nil : endDate,
                 sortByHype: isHyped,
+                sortByRecent: isRecent,
                 minHype: isHyped ? 2 : nil,
                 limit: isHyped ? 40 : 500
             )

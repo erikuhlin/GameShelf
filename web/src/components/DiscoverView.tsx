@@ -180,6 +180,7 @@ export interface MonthOption {
   startDate?: number;
   endDate?: number;
   isMostHyped: boolean;
+  isRecent?: boolean;
 }
 
 export const CALENDAR_PLATFORMS = [
@@ -278,8 +279,18 @@ export function DiscoverView({
   const monthOptions: MonthOption[] = useMemo(() => {
     const now = new Date();
     const startOfToday = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0) / 1000);
+    const endOfToday = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59) / 1000);
+    const thirtyDaysAgo = startOfToday - 30 * 24 * 3600;
 
     const options: MonthOption[] = [
+      {
+        id: 'recent_releases',
+        title: '✨ Senaste månaden',
+        startDate: thirtyDaysAgo,
+        endDate: endOfToday,
+        isMostHyped: false,
+        isRecent: true,
+      },
       {
         id: 'most_hyped',
         title: '🔥 Mest hypade',
@@ -322,12 +333,15 @@ export function DiscoverView({
   const loadCalendarGames = async () => {
     const opt = currentMonthOption;
     const isHyped = opt.isMostHyped;
+    const isRecent = opt.isRecent;
     const startTs = opt.startDate;
     const endTs = opt.endDate;
 
     let url = `/api/games/discover?category=upcoming&platform=${selectedCalendarPlatform}`;
     if (isHyped) {
       url += '&is_hyped=true&limit=40';
+    } else if (isRecent) {
+      url += `&is_recent=true&start_date=${startTs}&end_date=${endTs}&limit=60`;
     } else {
       if (startTs) url += `&start_date=${startTs}`;
       if (endTs) url += `&end_date=${endTs}`;
@@ -397,7 +411,11 @@ export function DiscoverView({
       groups[key].push(game);
     }
 
-    const sortedKeys = Object.keys(groups).sort((a, b) => (orderMap[a] || 0) - (orderMap[b] || 0));
+    const isRecent = currentMonthOption.isRecent;
+    const sortedKeys = Object.keys(groups).sort((a, b) => {
+      const diff = (orderMap[a] || 0) - (orderMap[b] || 0);
+      return isRecent ? -diff : diff;
+    });
 
     const dateFormatter = new Intl.DateTimeFormat('sv-SE', {
       weekday: 'long',
@@ -424,8 +442,9 @@ export function DiscoverView({
       const diffDays = Math.round((groupStart - todayStart) / (1000 * 60 * 60 * 24));
 
       let countdown = '';
-      if (diffDays < 0) countdown = 'Släppt';
-      else if (diffDays === 0) countdown = 'Idag';
+      if (diffDays < -1) countdown = `${Math.abs(diffDays)} dagar sedan`;
+      else if (diffDays === -1) countdown = 'Igår';
+      else if (diffDays === 0) countdown = 'Släpptes idag!';
       else if (diffDays === 1) countdown = 'Imorgon';
       else if (diffDays > 1 && diffDays <= 30) countdown = `Om ${diffDays} dagar`;
       else if (diffDays > 30) {
@@ -443,7 +462,7 @@ export function DiscoverView({
         games: gamesInGroup,
       };
     });
-  }, [displayedCalendarGames]);
+  }, [displayedCalendarGames, currentMonthOption.isRecent]);
 
   // --- News State ---
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
@@ -2318,10 +2337,14 @@ export function DiscoverView({
               </div>
               <div>
                 <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
-                  Releasekalender & Kommande spelsläpp
+                  {currentMonthOption.isRecent
+                    ? 'Nyligen släppta spel'
+                    : 'Releasekalender & Kommande spelsläpp'}
                 </h3>
                 <p className="text-xs text-zinc-400">
-                  {currentMonthOption.isMostHyped
+                  {currentMonthOption.isRecent
+                    ? 'Spel som släppts under de senaste 30 dagarna'
+                    : currentMonthOption.isMostHyped
                     ? 'Årets mest efterlängtade och hypade spelsläpp'
                     : `Spelsläpp under ${currentMonthOption.title}`}
                 </p>
@@ -2445,12 +2468,17 @@ export function DiscoverView({
                         const daysUntil = targetMs
                           ? Math.ceil((targetMs - Date.now()) / (1000 * 60 * 60 * 24))
                           : null;
+                        const isPast = daysUntil !== null && daysUntil < 0 && !isToday;
                         const countdownText = isToday
                           ? 'Idag!'
                           : daysUntil === 1
                           ? 'Imorgon'
+                          : daysUntil === -1
+                          ? 'Igår'
                           : daysUntil !== null && daysUntil > 1 && daysUntil <= 60
                           ? `Om ${daysUntil}d`
+                          : daysUntil !== null && daysUntil < -1 && daysUntil >= -30
+                          ? `${Math.abs(daysUntil)}d sen`
                           : null;
                         const relDate = targetMs
                           ? new Date(targetMs).toLocaleDateString('sv-SE', {
@@ -2488,6 +2516,8 @@ export function DiscoverView({
                                     className={`absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded text-[9px] font-black shadow-md backdrop-blur-md ${
                                       isToday
                                         ? 'bg-emerald-600 text-white animate-pulse'
+                                        : isPast
+                                        ? 'bg-cyan-600/90 text-white'
                                         : countdownText
                                         ? 'bg-red-600/90 text-white'
                                         : 'bg-black/75 text-zinc-200'
@@ -2560,12 +2590,17 @@ export function DiscoverView({
                       const daysUntil = targetMs
                         ? Math.ceil((targetMs - Date.now()) / (1000 * 60 * 60 * 24))
                         : null;
+                      const isPast = daysUntil !== null && daysUntil < 0 && !isToday;
                       const countdownText = isToday
                         ? 'Släpps idag!'
                         : daysUntil === 1
                         ? 'Imorgon'
+                        : daysUntil === -1
+                        ? 'Igår'
                         : daysUntil !== null && daysUntil > 1 && daysUntil <= 60
                         ? `Om ${daysUntil} dagar`
+                        : daysUntil !== null && daysUntil < -1 && daysUntil >= -30
+                        ? `För ${Math.abs(daysUntil)} dagar sedan`
                         : null;
                       const relDate = targetMs
                         ? new Date(targetMs).toLocaleDateString('sv-SE', {
@@ -2603,6 +2638,8 @@ export function DiscoverView({
                                 className={`absolute top-2 left-2 z-10 px-2 py-0.5 rounded-md text-[10px] font-black shadow-md backdrop-blur-md ${
                                   isToday
                                     ? 'bg-emerald-600 text-white animate-pulse'
+                                    : isPast
+                                    ? 'bg-cyan-600/90 text-white'
                                     : countdownText
                                     ? 'bg-red-600/90 text-white'
                                     : 'bg-black/75 text-zinc-200'

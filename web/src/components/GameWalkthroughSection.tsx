@@ -197,7 +197,7 @@ export function GameWalkthroughSection({
         majorAct: getMajorActName(key),
         items: list,
         done,
-        total: list.count ?? list.length,
+        total: list.length,
         isCompleted: done === list.length && list.length > 0,
       };
     });

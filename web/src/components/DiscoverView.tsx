@@ -46,6 +46,10 @@ interface DiscoverViewProps {
   onOpenProfileModal?: () => void;
   onUpdateProfile?: (updated: UserProfile) => void;
   onToggleTargetGoal?: (gameId: string) => void;
+  isLoggedIn?: boolean;
+  onOpenLoginModal?: () => void;
+  activeTab?: 'discover' | 'calendar' | 'toplist' | 'news';
+  onTabChange?: (tab: 'discover' | 'calendar' | 'toplist' | 'news') => void;
 }
 
 interface NewsItem {
@@ -193,8 +197,18 @@ export function DiscoverView({
   onOpenProfileModal,
   onUpdateProfile,
   onToggleTargetGoal,
+  isLoggedIn = false,
+  onOpenLoginModal,
+  activeTab: controlledActiveTab,
+  onTabChange,
 }: DiscoverViewProps) {
-  const [activeTab, setActiveTab] = useState<'discover' | 'calendar' | 'toplist' | 'news'>('discover');
+  const [internalActiveTab, setInternalActiveTab] = useState<'discover' | 'calendar' | 'toplist' | 'news'>('discover');
+  const activeTab = controlledActiveTab !== undefined ? controlledActiveTab : internalActiveTab;
+
+  const handleTabChange = (tab: 'discover' | 'calendar' | 'toplist' | 'news') => {
+    setInternalActiveTab(tab);
+    onTabChange?.(tab);
+  };
 
   // Spelmål modal state
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
@@ -1047,7 +1061,7 @@ export function DiscoverView({
       <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
         <div className="flex items-center bg-zinc-900 border border-zinc-800 p-1 rounded-2xl overflow-x-auto scrollbar-none max-w-full">
           <button
-            onClick={() => setActiveTab('discover')}
+            onClick={() => handleTabChange('discover')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition whitespace-nowrap cursor-pointer ${
               activeTab === 'discover'
                 ? 'bg-brand-red text-white shadow-sm'
@@ -1059,7 +1073,7 @@ export function DiscoverView({
           </button>
 
           <button
-            onClick={() => setActiveTab('toplist')}
+            onClick={() => handleTabChange('toplist')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition whitespace-nowrap cursor-pointer ${
               activeTab === 'toplist'
                 ? 'bg-brand-red text-white shadow-sm'
@@ -1071,7 +1085,7 @@ export function DiscoverView({
           </button>
 
           <button
-            onClick={() => setActiveTab('calendar')}
+            onClick={() => handleTabChange('calendar')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition whitespace-nowrap cursor-pointer ${
               activeTab === 'calendar'
                 ? 'bg-brand-red text-white shadow-sm'
@@ -1083,7 +1097,7 @@ export function DiscoverView({
           </button>
 
           <button
-            onClick={() => setActiveTab('news')}
+            onClick={() => handleTabChange('news')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition whitespace-nowrap cursor-pointer ${
               activeTab === 'news'
                 ? 'bg-brand-red text-white shadow-sm'
@@ -1098,105 +1112,202 @@ export function DiscoverView({
 
       {activeTab === 'discover' ? (
         <div className="space-y-8">
-          {/* 1. Välkomsthälsning & Spelmål 2026 */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Välkomstkort */}
-            <div className="md:col-span-2 bg-gradient-to-r from-zinc-900/90 via-zinc-900/60 to-zinc-950 border border-zinc-800/80 rounded-3xl p-5 sm:p-6 flex items-center gap-4 sm:gap-5 shadow-lg">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl sm:text-3xl shadow-xl overflow-hidden border border-white/10 bg-zinc-800">
-                {userProfile?.avatarCustomImage ? (
-                  <img src={userProfile.avatarCustomImage} alt="Avatar" className="w-full h-full object-cover" />
-                ) : avatarPreset ? (
-                  <div
-                    className="w-full h-full flex items-center justify-center text-2xl sm:text-3xl"
-                    style={{
-                      background: `linear-gradient(135deg, ${avatarPreset.gradientColors[0]}, ${avatarPreset.gradientColors[1]})`,
-                    }}
-                  >
-                    <span>{avatarPreset.icon}</span>
-                  </div>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-brand-red to-rose-700 text-white font-black text-xl">
-                    {userProfile?.username ? userProfile.username.charAt(0).toUpperCase() : 'G'}
-                  </div>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight">
-                    Hej {userProfile?.username || 'Gamer'}!
-                  </h2>
-                  <span className="text-xl">👋</span>
+          {/* 1. Välkomsthälsning (Inloggad vs Utloggad Hero) */}
+          {!isLoggedIn ? (
+            /* Utloggad Hero: Upptäcktsportal & Välkomnande */
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-900 via-zinc-950 to-black border border-zinc-800/80 p-6 sm:p-8 shadow-2xl">
+              {/* Bakgrundsglöd */}
+              <div className="absolute -top-24 -right-24 w-80 h-80 bg-brand-red/15 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-rose-600/10 rounded-full blur-3xl pointer-events-none" />
+
+              <div className="relative z-10 max-w-3xl space-y-4">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-red/10 border border-brand-red/30 text-rose-300 text-xs font-bold uppercase tracking-wider">
+                  <Sparkles className="w-3.5 h-3.5 text-brand-red" />
+                  <span>Utforska Gameshelf</span>
                 </div>
-                <p className="text-xs sm:text-sm text-zinc-400 mt-1 leading-relaxed">
-                  Håll koll på dina spel, kommande släpp och utforska nya världar.
+
+                <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight leading-tight">
+                  Upptäck ditt nästa spel. <br className="hidden sm:inline" />
+                  <span className="bg-gradient-to-r from-white via-zinc-200 to-rose-300 bg-clip-text text-transparent">
+                    Bygg och håll koll på din personliga hylla.
+                  </span>
+                </h1>
+
+                <p className="text-xs sm:text-sm md:text-base text-zinc-400 leading-relaxed max-w-2xl">
+                  Bläddra bland tusentals spel, läs de senaste nyheterna från FZ, SweClockers och IGN, och spåra dina framsteg – helt gratis i webbläsaren eller synkat sömlöst med iPhone-appen.
                 </p>
-              </div>
-            </div>
 
-            {/* Spelmål 2026 kort */}
-            <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-3xl p-5 flex flex-col justify-between shadow-lg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-400">
-                  <Trophy className="w-4 h-4 text-amber-400" />
-                  <span>Spelmål 2026</span>
+                {/* CTAs */}
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  {onOpenLoginModal && (
+                    <button
+                      onClick={onOpenLoginModal}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-red hover:bg-brand-redPressed text-white text-xs sm:text-sm font-bold shadow-lg shadow-brand-red/25 transition active:scale-95 cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>Skapa gratis konto</span>
+                    </button>
+                  )}
+
+                  {onOpenSearchWithQuery ? (
+                    <button
+                      onClick={() => onOpenSearchWithQuery('')}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs sm:text-sm font-semibold border border-zinc-700/80 transition active:scale-95 cursor-pointer"
+                    >
+                      <Search className="w-4 h-4 text-zinc-400" />
+                      <span>Sök bland spel (⌘K)</span>
+                    </button>
+                  ) : null}
+
+                  {onOpenLoginModal && (
+                    <button
+                      onClick={onOpenLoginModal}
+                      className="text-xs sm:text-sm text-zinc-400 hover:text-white px-3 py-2 font-medium transition cursor-pointer"
+                    >
+                      Redan ett konto? <span className="underline decoration-zinc-600 underline-offset-4">Logga in</span>
+                    </button>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setIsGoalModalOpen(true)}
-                  className="text-[11px] font-semibold text-zinc-400 hover:text-white transition cursor-pointer"
-                >
-                  Ändra mål →
-                </button>
-              </div>
 
-              <div className="my-2">
-                <div className="flex items-baseline justify-between mb-1.5">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xl font-black text-white font-mono">
-                      {completedGamesCount >= annualGoal
-                        ? `${completedGamesCount} klara`
-                        : `${completedGamesCount} / ${annualGoal}`}
-                    </span>
-                    {completedGamesCount >= annualGoal && (
-                      <span className="text-[11px] font-bold text-emerald-400 font-mono">
-                        (Mål: {annualGoal})
-                      </span>
+                {/* Snabb-badges med mervärden */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-zinc-800/80">
+                  <div className="flex items-center gap-2.5 text-xs text-zinc-300">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span>Över 10 000+ spel från IGDB</span>
+                  </div>
+                  <div className="flex items-center gap-2.5 text-xs text-zinc-300">
+                    <span className="w-2 h-2 rounded-full bg-brand-red" />
+                    <span>Nyhetsflöden från FZ & IGN</span>
+                  </div>
+                  <div className="flex items-center gap-2.5 text-xs text-zinc-300">
+                    <span className="w-2 h-2 rounded-full bg-amber-400" />
+                    <span>Fungerar direkt i webbläsaren</span>
+                  </div>
+                </div>
+
+                {/* Gästläge notis om besökaren redan lagt till spel lokalt */}
+                {games.length > 0 && (
+                  <div className="mt-2 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-base">💡</span>
+                      <div>
+                        <span className="font-bold">Gästläge aktivt: </span>
+                        <span>Du har {games.length} {games.length === 1 ? 'spel sparat' : 'spel sparade'} lokalt i webbläsaren.</span>
+                      </div>
+                    </div>
+                    {onOpenLoginModal && (
+                      <button
+                        onClick={onOpenLoginModal}
+                        className="font-bold underline text-amber-200 hover:text-white transition whitespace-nowrap self-start sm:self-auto cursor-pointer"
+                      >
+                        Skapa konto för att spara permanent →
+                      </button>
                     )}
                   </div>
-                  <span
-                    className={`text-xs font-bold font-mono ${
-                      completedGamesCount >= annualGoal ? 'text-emerald-400' : 'text-zinc-400'
-                    }`}
-                  >
-                    {completedGamesCount >= annualGoal ? '100% 🏆' : `${goalProgressPct}%`}
-                  </span>
-                </div>
-                <div className="w-full h-2.5 rounded-full bg-zinc-950 border border-zinc-800 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      completedGamesCount >= annualGoal
-                        ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
-                        : 'bg-gradient-to-r from-amber-500 to-emerald-400'
-                    }`}
-                    style={{ width: `${goalProgressPct}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium">
-                <span>
-                  {completedGamesCount >= annualGoal
-                    ? 'Målet uppnått! Fantastiskt spelår! 🎉'
-                    : `${Math.max(0, annualGoal - completedGamesCount)} spel kvar till målet`}
-                </span>
-                {targetGames.length > 0 && (
-                  <span className="text-amber-400 font-semibold">
-                    🎯 {targetGames.length} fokusmål ({completedTargetCount} {completedTargetCount === 1 ? 'klart' : 'klara'})
-                  </span>
                 )}
               </div>
             </div>
-          </div>
+          ) : (
+            /* Inloggad vy: Personligt välkomstkort och Spelmål 2026 */
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Välkomstkort */}
+              <div className="md:col-span-2 bg-gradient-to-r from-zinc-900/90 via-zinc-900/60 to-zinc-950 border border-zinc-800/80 rounded-3xl p-5 sm:p-6 flex items-center gap-4 sm:gap-5 shadow-lg">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl sm:text-3xl shadow-xl overflow-hidden border border-white/10 bg-zinc-800">
+                  {userProfile?.avatarCustomImage ? (
+                    <img src={userProfile.avatarCustomImage} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : avatarPreset ? (
+                    <div
+                      className="w-full h-full flex items-center justify-center text-2xl sm:text-3xl"
+                      style={{
+                        background: `linear-gradient(135deg, ${avatarPreset.gradientColors[0]}, ${avatarPreset.gradientColors[1]})`,
+                      }}
+                    >
+                      <span>{avatarPreset.icon}</span>
+                    </div>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-brand-red to-rose-700 text-white font-black text-xl">
+                      {userProfile?.username ? userProfile.username.charAt(0).toUpperCase() : 'G'}
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight">
+                      Hej {userProfile?.username || 'Gamer'}!
+                    </h2>
+                    <span className="text-xl">👋</span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-zinc-400 mt-1 leading-relaxed">
+                    Håll koll på dina spel, kommande släpp och utforska nya världar.
+                  </p>
+                </div>
+              </div>
+
+              {/* Spelmål 2026 kort */}
+              <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-3xl p-5 flex flex-col justify-between shadow-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-400">
+                    <Trophy className="w-4 h-4 text-amber-400" />
+                    <span>Spelmål 2026</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsGoalModalOpen(true)}
+                    className="text-[11px] font-semibold text-zinc-400 hover:text-white transition cursor-pointer"
+                  >
+                    Ändra mål →
+                  </button>
+                </div>
+
+                <div className="my-2">
+                  <div className="flex items-baseline justify-between mb-1.5">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xl font-black text-white font-mono">
+                        {completedGamesCount >= annualGoal
+                          ? `${completedGamesCount} klara`
+                          : `${completedGamesCount} / ${annualGoal}`}
+                      </span>
+                      {completedGamesCount >= annualGoal && (
+                        <span className="text-[11px] font-bold text-emerald-400 font-mono">
+                          (Mål: {annualGoal})
+                        </span>
+                      )}
+                    </div>
+                    <span
+                      className={`text-xs font-bold font-mono ${
+                        completedGamesCount >= annualGoal ? 'text-emerald-400' : 'text-zinc-400'
+                      }`}
+                    >
+                      {completedGamesCount >= annualGoal ? '100% 🏆' : `${goalProgressPct}%`}
+                    </span>
+                  </div>
+                  <div className="w-full h-2.5 rounded-full bg-zinc-950 border border-zinc-800 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        completedGamesCount >= annualGoal
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                          : 'bg-gradient-to-r from-amber-500 to-emerald-400'
+                      }`}
+                      style={{ width: `${goalProgressPct}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium">
+                  <span>
+                    {completedGamesCount >= annualGoal
+                      ? 'Målet uppnått! Fantastiskt spelår! 🎉'
+                      : `${Math.max(0, annualGoal - completedGamesCount)} spel kvar till målet`}
+                  </span>
+                  {targetGames.length > 0 && (
+                    <span className="text-amber-400 font-semibold">
+                      🎯 {targetGames.length} fokusmål ({completedTargetCount} {completedTargetCount === 1 ? 'klart' : 'klara'})
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Fokusmål Spotlight */}
           {targetGames.length > 0 && (
@@ -1600,7 +1711,7 @@ export function DiscoverView({
                 </h3>
               </div>
               <button
-                onClick={() => setActiveTab('calendar')}
+                onClick={() => handleTabChange('calendar')}
                 className="flex items-center gap-1.5 text-xs font-semibold text-brand-red hover:text-red-400 transition cursor-pointer"
               >
                 <span>Öppna hela releasekalendern</span>

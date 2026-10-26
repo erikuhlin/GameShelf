@@ -229,10 +229,10 @@ export function PairingModal({ isOpen, onClose, onPaired }: PairingModalProps) {
             </div>
             <div>
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <span>Konto & Synkronisering</span>
+                <span>Logga in eller Skapa konto</span>
                 <Sparkles className="w-4 h-4 text-amber-400" />
               </h3>
-              <p className="text-xs text-zinc-400">Synka dina spel mellan iOS och webbläsaren</p>
+              <p className="text-xs text-zinc-400">Använd på webben eller synka sömlöst med iPhone</p>
             </div>
           </div>
 
@@ -260,7 +260,7 @@ export function PairingModal({ isOpen, onClose, onPaired }: PairingModalProps) {
               }`}
             >
               <Mail className="w-3.5 h-3.5 text-brand-red" />
-              <span>Logga in med konto</span>
+              <span>E-post & Lösenord</span>
             </button>
             <button
               type="button"

@@ -60,7 +60,8 @@ export type LibrarySortOption =
 export default function HomePage() {
   const [games, setGames] = useState<Game[]>([]);
   const [collections, setCollections] = useState<GameCollection[]>([]);
-  const [viewMode, setViewMode] = useState<ViewMode>('shelf');
+  const [viewMode, setViewMode] = useState<ViewMode>('discover');
+  const [discoverTab, setDiscoverTab] = useState<'discover' | 'calendar' | 'toplist' | 'news'>('discover');
   const [selectedStatus, setSelectedStatus] = useState<PlayStatus | 'Alla' | 'Backlog'>('Alla');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
@@ -157,14 +158,25 @@ export default function HomePage() {
           setProfileName(name);
           fetchRemoteProfile(uid);
           handlePairedAndMerge(uid, name);
+
+          // Inloggad användare: återställ senast använda vy eller standard till bibliotekshylla
+          const savedView = localStorage.getItem('gameshelf_view_mode') as ViewMode;
+          if (savedView) setViewMode(savedView);
+          else setViewMode('shelf');
         } else if (savedUserId) {
           setPairedUserId(savedUserId);
           const storedName = localStorage.getItem('gameshelf_profile_name') || loaded.username;
           setProfileName(storedName);
           fetchRemoteProfile(savedUserId);
+
+          const savedView = localStorage.getItem('gameshelf_view_mode') as ViewMode;
+          if (savedView) setViewMode(savedView);
+          else setViewMode('shelf');
         } else {
           setPairedUserId(null);
           setProfileName('');
+          // Utloggad / förstagångsbesökare landar alltid i Utforska-läget
+          setViewMode('discover');
         }
       });
 
@@ -179,6 +191,10 @@ export default function HomePage() {
           setProfileName(name);
           fetchRemoteProfile(uid);
           handlePairedAndMerge(uid, name);
+
+          const savedView = localStorage.getItem('gameshelf_view_mode') as ViewMode;
+          if (savedView) setViewMode(savedView);
+          else setViewMode('shelf');
         } else if (event === 'SIGNED_OUT') {
           handleLogout();
         }
@@ -1284,6 +1300,15 @@ export default function HomePage() {
     }
   };
 
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    if (pairedUserId || profileName) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('gameshelf_view_mode', mode);
+      }
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
@@ -1295,6 +1320,7 @@ export default function HomePage() {
       localStorage.removeItem('gameshelf_user_profile');
       localStorage.removeItem('gameshelf_local_games');
       localStorage.removeItem('gameshelf_local_collections');
+      localStorage.removeItem('gameshelf_view_mode');
     }
     setProfileName('');
     setUserProfile(DEFAULT_PROFILE);
@@ -1302,6 +1328,8 @@ export default function HomePage() {
     setGames([]);
     setCollections([]);
     setSelectedCollectionId(null);
+    setViewMode('discover');
+    setDiscoverTab('discover');
   };
 
   const handlePairedAndMerge = async (userId: string, username?: string) => {
@@ -1377,7 +1405,7 @@ export default function HomePage() {
       {/* Navigation Header */}
       <Header
         viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        onViewModeChange={handleViewModeChange}
         onOpenAddModal={() => setIsAddModalOpen(true)}
         onOpenSearchModal={() => setIsSearchModalOpen(true)}
         onOpenCollectionsModal={() => setIsCollectionsModalOpen(false)}
@@ -1395,16 +1423,18 @@ export default function HomePage() {
         totalGames={games.length}
         profileName={profileName}
         profile={userProfile}
+        discoverTab={discoverTab}
+        onDiscoverTabChange={setDiscoverTab}
       />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6 pb-28 md:pb-12">
-        {/* Guest Mode Banner (Visas enbart om man har spel lokalt men inte är inloggad) */}
-        {!profileName && games.length > 0 && (
+        {/* Guest Mode Banner (Visas enbart om man har spel lokalt i biblioteksläge men inte är inloggad) */}
+        {!profileName && games.length > 0 && viewMode !== 'discover' && (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800 shadow-md animate-in fade-in duration-200">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-400 shrink-0">
-                <Smartphone className="w-4 h-4 text-brand-red" />
+              <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                <Sparkles className="w-4 h-4" />
               </div>
               <div>
                 <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
@@ -1414,7 +1444,7 @@ export default function HomePage() {
                   </span>
                 </h4>
                 <p className="text-[11px] text-zinc-400 mt-0.5">
-                  Spelen sparas i din webbläsare. Logga in med iPhone för att synka dem till ditt konto.
+                  Spelen sparas temporärt i din webbläsare. Skapa ett gratis konto eller parkoppla med iPhone för att spara permanent i molnet.
                 </p>
               </div>
             </div>
@@ -1426,7 +1456,7 @@ export default function HomePage() {
                     handleLogout();
                   }
                 }}
-                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-zinc-400 hover:text-rose-400 text-xs font-medium border border-zinc-800 transition"
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-zinc-400 hover:text-rose-400 text-xs font-medium border border-zinc-800 transition cursor-pointer"
                 title="Rensa lokalt gästbibliotek"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -1435,10 +1465,10 @@ export default function HomePage() {
 
               <button
                 onClick={() => setIsPairingModalOpen(true)}
-                className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-red hover:bg-brand-redPressed text-white text-xs font-semibold shadow-md transition whitespace-nowrap"
+                className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-red hover:bg-brand-redPressed text-white text-xs font-semibold shadow-md transition whitespace-nowrap cursor-pointer"
               >
-                <Smartphone className="w-3.5 h-3.5" />
-                <span>Logga in</span>
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Skapa konto / Logga in</span>
               </button>
             </div>
           </div>
@@ -1763,10 +1793,18 @@ export default function HomePage() {
             onSelectGame={setSelectedGame}
             onAddGame={handleAddFromDiscover}
             onOpenRouletteModal={() => setIsRouletteModalOpen(true)}
+            onOpenSearchWithQuery={(query) => {
+              setSearchQuery(query);
+              setIsSearchModalOpen(true);
+            }}
             userProfile={userProfile}
             onOpenProfileModal={() => setIsProfileModalOpen(true)}
             onUpdateProfile={handleUpdateProfile}
             onToggleTargetGoal={handleToggleTargetGoal}
+            isLoggedIn={Boolean(pairedUserId || profileName)}
+            onOpenLoginModal={() => setIsPairingModalOpen(true)}
+            activeTab={discoverTab}
+            onTabChange={setDiscoverTab}
           />
         ) : viewMode === 'collections' ? (
           <CollectionsView

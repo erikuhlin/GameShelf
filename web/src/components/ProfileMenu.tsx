@@ -63,10 +63,10 @@ export function ProfileMenu({
     return (
       <button
         onClick={onOpenPairingModal}
-        className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 hover:border-zinc-600 rounded-xl transition shadow-sm active:scale-95"
-        title="Logga in med iPhone"
+        className="flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/80 hover:border-zinc-500 rounded-xl transition shadow-sm active:scale-95 cursor-pointer"
+        title="Logga in eller Skapa konto (Webb & iPhone)"
       >
-        <Smartphone className="w-3.5 h-3.5 text-brand-red" />
+        <User className="w-3.5 h-3.5 text-brand-red" />
         <span>Logga in</span>
       </button>
     );

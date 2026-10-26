@@ -17,6 +17,7 @@ import {
   Check,
   Search,
   RefreshCw,
+  RotateCw,
   Star,
   Gamepad,
   ArrowRight,
@@ -30,12 +31,15 @@ import {
   Trophy,
   Heart,
   SlidersHorizontal,
+  Lightbulb,
+  Clock,
 } from 'lucide-react';
 import { UserProfile } from '@/types/profile';
 import { AVATAR_PRESETS } from '@/lib/profileStore';
 import { GamingGoalModal } from './GamingGoalModal';
 import { NewsSourcesModal } from './NewsSourcesModal';
 import { ToplistView } from './ToplistView';
+import { getSmartRouletteReason, RouletteMood } from './GameRouletteModal';
 
 interface DiscoverViewProps {
   games: Game[];
@@ -256,10 +260,11 @@ export function DiscoverView({
   const [isLoadingDiscover, setIsLoadingDiscover] = useState(true);
 
   // --- In-view Roulette State ---
-  const [rouletteMode, setRouletteMode] = useState<'library' | 'igdb'>('library');
-  const [rouletteFilter, setRouletteFilter] = useState<'all' | 'backlog' | 'playing'>('all');
+  const hasOwnedGames = games.some((g) => g.is_owned);
+  const [rouletteMood, setRouletteMood] = useState<RouletteMood>(hasOwnedGames ? 'backlog' : 'discover');
   const [isSpinning, setIsSpinning] = useState(false);
   const [winnerGame, setWinnerGame] = useState<Game | null>(null);
+  const [winnerReason, setWinnerReason] = useState<string>('');
 
   // --- Releasekalender State (Identiskt med iOS UpcomingReleasesView) ---
   const [selectedMonthID, setSelectedMonthID] = useState<string>('most_hyped');
@@ -817,22 +822,41 @@ export function DiscoverView({
   const handleSpinRoulette = () => {
     setIsSpinning(true);
     setWinnerGame(null);
+    setWinnerReason('');
 
+    const owned = games.filter((g) => g.is_owned);
     let candidates: Game[] = [];
-    if (rouletteMode === 'library') {
-      if (rouletteFilter === 'backlog') {
-        candidates = games.filter((g) => g.is_backlog && g.is_owned);
-      } else if (rouletteFilter === 'playing') {
-        candidates = games.filter(
-          (g) =>
-            (g.status === 'playing' || (g.status as string) === 'Spelar nu') &&
-            g.is_owned
-        );
-      } else {
-        candidates = games.length > 0 ? games.filter((g) => g.is_owned) : [];
-      }
+
+    if (rouletteMood === 'discover' || owned.length === 0) {
+      candidates = trendingGames.length > 0 ? trendingGames : games;
+    } else if (rouletteMood === 'quick') {
+      const quick = owned.filter(
+        (g) =>
+          (g.estimated_hours && g.estimated_hours <= 10) ||
+          g.genres?.includes('Puzzle') ||
+          g.genres?.includes('Platform') ||
+          g.genres?.includes('Indie')
+      );
+      candidates = quick.length > 0 ? quick : owned;
+    } else if (rouletteMood === 'playing') {
+      const playing = owned.filter(
+        (g) =>
+          g.status === 'playing' ||
+          g.status === 'paused' ||
+          (g.status as string) === 'Spelar nu'
+      );
+      candidates = playing.length > 0 ? playing : owned;
+    } else if (rouletteMood === 'backlog') {
+      const backlog = owned.filter((g) => g.is_backlog || g.status === 'notStarted');
+      candidates = backlog.length > 0 ? backlog : owned;
+    } else if (rouletteMood === 'top') {
+      const top = owned.filter((g) => {
+        const r = g.igdb_rating || g.rating;
+        return r && Number(r) >= 80;
+      });
+      candidates = top.length > 0 ? top : owned;
     } else {
-      candidates = trendingGames;
+      candidates = owned;
     }
 
     if (candidates.length === 0) {
@@ -840,9 +864,9 @@ export function DiscoverView({
       return;
     }
 
-    let speed = 70;
+    let speed = 65;
     let iterations = 0;
-    const maxIterations = 24;
+    const maxIterations = 22;
 
     const interval = setInterval(() => {
       const randomIdx = Math.floor(Math.random() * candidates.length);
@@ -851,6 +875,9 @@ export function DiscoverView({
 
       if (iterations >= maxIterations) {
         clearInterval(interval);
+        const finalWinner = candidates[Math.floor(Math.random() * candidates.length)];
+        setWinnerGame(finalWinner);
+        setWinnerReason(getSmartRouletteReason(finalWinner, rouletteMood));
         setIsSpinning(false);
       }
     }, speed);
@@ -3060,100 +3087,184 @@ export function DiscoverView({
 
         {/* 6. 🎲 Smart Spelsnurra */}
         <section id="section-roulette" className="pt-6 border-t border-zinc-800/80">
-                    {/* 6. 🎲 Smart Spelsnurra (Inspiration & Slumpare när man har aktiva spel) */}
-          {currentlyPlaying.length > 0 && (
-            <div
-              id="roulette-section"
-              className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-900/90 via-zinc-950/95 to-black border border-zinc-800/80 p-5 sm:p-7 shadow-xl"
-            >
-              <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-                <div className="max-w-md text-center md:text-left">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-red/10 border border-brand-red/30 text-rose-300 text-xs font-bold uppercase tracking-wider mb-2.5">
+          <div
+            id="roulette-section"
+            className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-900/95 via-zinc-950 to-black border border-zinc-800/80 p-5 sm:p-7 shadow-2xl"
+          >
+            {/* Dekorativ röd glödeffekt */}
+            <div className="absolute top-0 right-0 w-96 h-96 bg-brand-red/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
+
+            <div className="relative z-10 space-y-5">
+              {/* Header med titel och modal-knapp */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-red/15 border border-brand-red/30 text-rose-300 text-xs font-bold uppercase tracking-wider mb-2">
                     <Dices className="w-3.5 h-3.5 text-brand-red" />
                     <span>Smart Spelsnurra</span>
                   </div>
                   <h3 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
-                    Behöver du inspiration?
+                    Vad ska du spela härnäst?
                   </h3>
-                  <p className="text-xs sm:text-sm text-zinc-400 mt-1 leading-relaxed">
-                    Låt slumpen välja vad du ska spela härnäst bland dina ospelade spel i backloggen eller upptäck nya rekommendationer.
+                  <p className="text-xs sm:text-sm text-zinc-400 mt-1 max-w-xl">
+                    Låt slumpen och våra smarta filter välja åt dig baserat på humör, tidsåtgång eller din backlog.
                   </p>
-
-                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-3.5">
-                    <button
-                      onClick={() => setRouletteMode('library')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
-                        rouletteMode === 'library'
-                          ? 'bg-white text-zinc-950 border-white font-bold'
-                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                      }`}
-                    >
-                      Mina spel ({games.length})
-                    </button>
-                    <button
-                      onClick={() => setRouletteMode('igdb')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
-                        rouletteMode === 'igdb'
-                          ? 'bg-white text-zinc-950 border-white font-bold'
-                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                      }`}
-                    >
-                      Upptäck från IGDB
-                    </button>
-                  </div>
                 </div>
 
-                <div className="flex flex-col items-center gap-3.5 w-full sm:w-auto">
-                  {winnerGame ? (
+                {onOpenRouletteModal && (
+                  <button
+                    onClick={onOpenRouletteModal}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-bold text-zinc-300 hover:text-white transition shadow-sm cursor-pointer self-start sm:self-auto"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Öppna stor spelsnurra</span>
+                    <ArrowRight className="w-3 h-3 text-zinc-500" />
+                  </button>
+                )}
+              </div>
+
+              {/* Humör-väljare (Pills) */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                {[
+                  { id: 'quick' as RouletteMood, label: '⚡ Kort & Gott (<10h)' },
+                  { id: 'backlog' as RouletteMood, label: '📦 Backloggen' },
+                  { id: 'playing' as RouletteMood, label: '🎯 Fortsätt spela' },
+                  { id: 'top' as RouletteMood, label: '🏆 Högst rankade' },
+                  { id: 'discover' as RouletteMood, label: '🌟 Upptäck nytt (IGDB)' },
+                  { id: 'all' as RouletteMood, label: '🎲 Ren slump' },
+                ].map((mood) => {
+                  const isActive = rouletteMood === mood.id;
+                  return (
+                    <button
+                      key={mood.id}
+                      disabled={isSpinning}
+                      onClick={() => setRouletteMood(mood.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
+                        isActive
+                          ? 'bg-brand-red text-white shadow-md shadow-brand-red/25 font-extrabold'
+                          : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      <span>{mood.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Resultat eller snurr-yta */}
+              <div className="pt-1">
+                {winnerGame ? (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-zinc-900/90 border border-zinc-700/80 shadow-lg">
                     <div
                       onClick={() => onSelectGame(winnerGame)}
-                      className="flex items-center gap-3.5 p-2.5 bg-zinc-900/90 border border-zinc-700/80 rounded-2xl cursor-pointer hover:border-zinc-500 transition shadow-lg w-full max-w-sm group"
+                      className="flex items-center gap-3.5 cursor-pointer group w-full sm:w-auto"
                     >
-                      <div className="w-14 h-18 rounded-xl overflow-hidden bg-zinc-950 flex-shrink-0 relative border border-zinc-800">
+                      <div className="w-16 h-22 sm:w-18 sm:h-24 rounded-xl overflow-hidden bg-zinc-950 flex-shrink-0 relative border border-zinc-800 shadow">
                         {winnerGame.cover_url ? (
                           <img
                             src={winnerGame.cover_url}
                             alt={winnerGame.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition"
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
                             <Gamepad className="w-6 h-6 text-zinc-600" />
                           </div>
                         )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider block">
-                          Utvalt spel!
+                        <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-500 text-zinc-950">
+                          Valt!
                         </span>
-                        <h4 className="text-sm font-bold text-white truncate group-hover:text-red-400 transition">
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-base font-bold text-white group-hover:text-red-400 transition line-clamp-1">
                           {winnerGame.title}
                         </h4>
-                        <p className="text-[11px] text-zinc-400 mt-0.5">
-                          {winnerGame.release_year ? `${winnerGame.release_year} • ` : ''}
-                          {winnerGame.genres?.[0] || 'Spel'}
+                        <div className="flex items-center gap-2 text-xs text-zinc-400 mt-0.5">
+                          {winnerGame.release_year && <span>{winnerGame.release_year}</span>}
+                          {winnerGame.genres?.[0] && <span>• {winnerGame.genres[0]}</span>}
+                          {winnerGame.platforms?.[0] && (
+                            <span className="truncate max-w-[120px] text-zinc-500">• {winnerGame.platforms.slice(0, 2).join(', ')}</span>
+                          )}
+                        </div>
+
+                        {winnerReason && (
+                          <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs font-medium">
+                            <Lightbulb className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <span>{winnerReason}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end">
+                      <button
+                        onClick={handleSpinRoulette}
+                        disabled={isSpinning}
+                        className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold border border-zinc-700 transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <RotateCw className={`w-3.5 h-3.5 ${isSpinning ? 'animate-spin text-brand-red' : ''}`} />
+                        <span>Snurra igen</span>
+                      </button>
+
+                      <button
+                        onClick={() => onSelectGame(winnerGame)}
+                        className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700 transition cursor-pointer"
+                      >
+                        Detaljer
+                      </button>
+
+                      {winnerGame.is_owned ? (
+                        <button
+                          onClick={() => {
+                            onSelectGame({ ...winnerGame, status: 'playing' });
+                          }}
+                          className="px-4 py-2 rounded-xl bg-brand-red hover:bg-brand-redPressed text-white text-xs font-bold transition shadow-md flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>Spela!</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() =>
+                            onAddGame({ ...winnerGame, status: 'notStarted', is_owned: false, is_backlog: false })
+                          }
+                          className="px-4 py-2 rounded-xl bg-brand-red hover:bg-brand-redPressed text-white text-xs font-bold transition shadow-md flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Bookmark className="w-3.5 h-3.5" />
+                          <span>Önskelista</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-5 rounded-2xl bg-zinc-900/50 border border-dashed border-zinc-800">
+                    <div className="flex items-center gap-3 text-center sm:text-left">
+                      <div className="w-10 h-10 rounded-xl bg-zinc-800/80 flex items-center justify-center text-zinc-400 shrink-0">
+                        <Dices className="w-5 h-5 text-brand-red" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-zinc-200">
+                          Redo att slumpa nästa spel?
+                        </h4>
+                        <p className="text-xs text-zinc-400 mt-0.5">
+                          Klicka på knappen för att låta algoritmen välja bland dina filtrerade titlar.
                         </p>
                       </div>
-                      <ArrowRight className="w-4 h-4 text-zinc-400 group-hover:text-white transition mr-1" />
                     </div>
-                  ) : (
-                    <div className="w-full max-w-sm h-20 border border-dashed border-zinc-800 rounded-2xl flex items-center justify-center text-zinc-500 text-xs px-4 text-center">
-                      Klicka nedan för att slumpa fram ett spel
-                    </div>
-                  )}
 
-                  <button
-                    onClick={handleSpinRoulette}
-                    disabled={isSpinning || (rouletteMode === 'library' && games.length === 0)}
-                    className="w-full sm:w-auto px-7 py-2.5 bg-gradient-to-r from-brand-red to-rose-600 hover:from-brand-redPressed hover:to-rose-700 disabled:opacity-50 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Dices className={`w-4 h-4 ${isSpinning ? 'animate-spin' : ''}`} />
-                    <span>{isSpinning ? 'Snurrar hjulet...' : '🎲 Snurra fram ett spel!'}</span>
-                  </button>
-                </div>
+                    <button
+                      onClick={handleSpinRoulette}
+                      disabled={isSpinning}
+                      className="w-full sm:w-auto px-7 py-3 bg-gradient-to-r from-brand-red to-rose-600 hover:from-brand-redPressed hover:to-rose-700 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-lg shadow-brand-red/25 transition flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                    >
+                      <Dices className={`w-4 h-4 ${isSpinning ? 'animate-spin' : ''}`} />
+                      <span>{isSpinning ? 'Snurrar hjulet...' : '🎲 Snurra fram ett spel!'}</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
-          )}
+          </div>
         </section>
       </div>
 

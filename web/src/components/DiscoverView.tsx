@@ -616,6 +616,75 @@ export function DiscoverView({
     ).length;
   }, [targetGames]);
 
+  // Sammanslagen lista för pågående spel och fokusmål utan upprepning
+  const activeFocusAndPlayingGames = useMemo(() => {
+    const targetIDsSet = new Set(
+      (userProfile?.targetGameIDs || []).map((id) => String(id).toLowerCase())
+    );
+
+    const isGameTarget = (g: Game) => {
+      const gId = String(g.id).toLowerCase();
+      const igdbId =
+        g.igdb_id !== undefined && g.igdb_id !== null ? String(g.igdb_id).toLowerCase() : null;
+      return targetIDsSet.has(gId) || (igdbId ? targetIDsSet.has(igdbId) : false);
+    };
+
+    const isGamePlaying = (g: Game) => {
+      return (
+        (g.status === 'playing' || (g.status as string) === 'Spelar nu') &&
+        g.is_owned !== false
+      );
+    };
+
+    const map = new Map<string, { game: Game; isTarget: boolean; isPlaying: boolean }>();
+
+    // 1. Lägg till alla fokusmål
+    for (const g of targetGames) {
+      const key = String(g.id).toLowerCase();
+      map.set(key, {
+        game: g,
+        isTarget: true,
+        isPlaying: isGamePlaying(g),
+      });
+    }
+
+    // 2. Lägg till alla spel som spelas nu
+    for (const g of currentlyPlaying) {
+      const key = String(g.id).toLowerCase();
+      if (map.has(key)) {
+        const existing = map.get(key)!;
+        existing.isPlaying = true;
+      } else {
+        map.set(key, {
+          game: g,
+          isTarget: isGameTarget(g),
+          isPlaying: true,
+        });
+      }
+    }
+
+    const all = Array.from(map.values());
+
+    // Sortera:
+    // 1. Spel som BÅDE är fokusmål och spelas nu
+    // 2. Övriga spel som spelas nu
+    // 3. Övriga fokusmål
+    return all.sort((a, b) => {
+      const aBoth = a.isTarget && a.isPlaying;
+      const bBoth = b.isTarget && b.isPlaying;
+      if (aBoth && !bBoth) return -1;
+      if (!aBoth && bBoth) return 1;
+
+      if (a.isTarget && !b.isTarget) return -1;
+      if (!a.isTarget && b.isTarget) return 1;
+
+      if (a.isPlaying && !b.isPlaying) return -1;
+      if (!a.isPlaying && b.isPlaying) return 1;
+
+      return 0;
+    });
+  }, [targetGames, currentlyPlaying, userProfile?.targetGameIDs]);
+
   const annualGoal =
     userProfile?.annualGamingGoal !== undefined && userProfile?.annualGamingGoal !== null
       ? userProfile.annualGamingGoal
@@ -1392,25 +1461,81 @@ export function DiscoverView({
             </div>
           )}
 
-          {/* Fokusmål Spotlight */}
-          {targetGames.length > 0 && (
+          {/* Sammanslagen sektion: Pågående spelande & fokusmål (inga dubbletter) */}
+          {activeFocusAndPlayingGames.length > 0 && (
             <div className="space-y-3.5">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-amber-400 uppercase tracking-wider">
-                  <Target className="w-4 h-4 text-amber-400" />
-                  <span>Aktiva Fokusmål ({targetGames.length}/3)</span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center">
+                    <Target className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
+                      <span>
+                        {targetGames.length > 0 && currentlyPlaying.length > 0
+                          ? 'Ditt spelande & fokusmål'
+                          : targetGames.length > 0
+                          ? 'Aktiva fokusmål'
+                          : 'Ditt spelande just nu'}
+                      </span>
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-semibold normal-case">
+                        {activeFocusAndPlayingGames.length} spel
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-400 mt-0.5">
+                      {currentlyPlaying.length > 0 && (
+                        <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          {currentlyPlaying.length} spelas nu
+                        </span>
+                      )}
+                      {currentlyPlaying.length > 0 && targetGames.length > 0 && (
+                        <span className="text-zinc-600">•</span>
+                      )}
+                      {targetGames.length > 0 && (
+                        <span className="flex items-center gap-1 text-amber-400 font-medium">
+                          <Target className="w-3 h-3" />
+                          {targetGames.length}/3 fokusmål ({completedTargetCount}{' '}
+                          {completedTargetCount === 1 ? 'klart' : 'klara'})
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setIsGoalModalOpen(true)}
-                  className="text-xs font-semibold text-zinc-400 hover:text-amber-400 transition cursor-pointer"
-                >
-                  Hantera mål →
-                </button>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  {onOpenRouletteModal ? (
+                    <button
+                      onClick={onOpenRouletteModal}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs font-semibold text-zinc-300 hover:text-white transition cursor-pointer shadow-sm"
+                    >
+                      <Dices className="w-3.5 h-3.5 text-brand-red" />
+                      <span className="hidden sm:inline">Snurra fram ett spel</span>
+                      <span className="sm:hidden">Snurra</span>
+                    </button>
+                  ) : (
+                    <a
+                      href="#roulette-section"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs font-semibold text-zinc-300 hover:text-white transition"
+                    >
+                      <Dices className="w-3.5 h-3.5 text-brand-red" />
+                      <span className="hidden sm:inline">Snurra fram ett spel</span>
+                      <span className="sm:hidden">Snurra</span>
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsGoalModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:border-amber-500/50 text-xs font-semibold text-amber-400 hover:text-amber-300 transition cursor-pointer shadow-sm"
+                  >
+                    <Target className="w-3.5 h-3.5" />
+                    <span>Hantera mål</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {targetGames.map((game) => {
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                {activeFocusAndPlayingGames.map(({ game, isTarget, isPlaying }) => {
                   const isDone = game.status === 'completed' || (game.status as string) === 'Klar';
                   const totalTodos = game.todos?.length || 0;
                   const doneTodos = game.todos?.filter((t) => t.isDone).length || 0;
@@ -1419,18 +1544,22 @@ export function DiscoverView({
                     <div
                       key={game.id}
                       onClick={() => onSelectGame(game)}
-                      className={`group relative rounded-2xl p-4 flex gap-3.5 items-center cursor-pointer transition-all border shadow-lg ${
+                      className={`group relative rounded-2xl p-3.5 sm:p-4 flex gap-3.5 items-center cursor-pointer transition-all border shadow-sm hover:shadow-md ${
                         isDone
                           ? 'bg-emerald-950/20 border-emerald-500/40 hover:border-emerald-500/70'
-                          : 'bg-zinc-900/90 border-zinc-800 hover:border-amber-500/50 hover:bg-zinc-850'
+                          : isTarget
+                          ? 'bg-zinc-900/90 border-amber-500/30 hover:border-amber-500/60 hover:bg-zinc-850'
+                          : 'bg-zinc-900/60 hover:bg-zinc-900 border-zinc-800 hover:border-zinc-700'
                       }`}
                     >
-                      <div className="w-14 h-20 rounded-xl overflow-hidden bg-zinc-800 flex-shrink-0 relative shadow">
+                      {/* Omslagsbild */}
+                      <div className="w-14 h-20 sm:w-16 sm:h-22 rounded-xl overflow-hidden bg-zinc-950 flex-shrink-0 relative border border-zinc-800/80 shadow-md">
                         {game.cover_url ? (
                           <img
                             src={game.cover_url}
                             alt={game.title}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            loading="lazy"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-zinc-600">
@@ -1444,27 +1573,56 @@ export function DiscoverView({
                         )}
                       </div>
 
+                      {/* Innehåll & Märken */}
                       <div className="min-w-0 flex-1 space-y-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 uppercase tracking-wider">
-                            🎯 Mål
-                          </span>
-                          {isDone ? (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                              Klarat! 🏆
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {isTarget && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 uppercase tracking-wider flex items-center gap-1">
+                              <Target className="w-2.5 h-2.5" />
+                              <span>Mål</span>
                             </span>
-                          ) : (
-                            <StatusBadge game={game} />
                           )}
+                          {isPlaying && !isDone && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase tracking-wider flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                              <span>Spelar nu</span>
+                            </span>
+                          )}
+                          {isDone ? (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                              <Trophy className="w-2.5 h-2.5 text-yellow-400" />
+                              <span>Klarat!</span>
+                            </span>
+                          ) : !isPlaying ? (
+                            <StatusBadge game={game} />
+                          ) : null}
                         </div>
 
-                        <h3 className="text-sm font-bold text-white line-clamp-2 leading-snug group-hover:text-amber-400 transition-colors min-h-[2.5rem]">
+                        <h4 className="text-xs sm:text-sm font-bold text-white line-clamp-1 leading-snug group-hover:text-amber-400 transition-colors">
                           {game.title}
-                        </h3>
+                        </h4>
 
-                        {totalTodos > 0 && (
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                        <div className="flex items-center gap-2 text-[11px] text-zinc-400 truncate">
+                          <span className="truncate">{game.platforms?.[0] || 'Aktivt spel'}</span>
+                          {game.rating ? (
+                            <>
+                              <span className="text-zinc-600">•</span>
+                              <span className="text-amber-400 font-semibold shrink-0">
+                                ⭐ {game.rating}/10
+                              </span>
+                            </>
+                          ) : game.hours_played ? (
+                            <>
+                              <span className="text-zinc-600">•</span>
+                              <span className="text-zinc-400 shrink-0">⏱️ {game.hours_played}h</span>
+                            </>
+                          ) : null}
+                        </div>
+
+                        {/* Delmål / Todos */}
+                        {isTarget && totalTodos > 0 && (
+                          <div className="space-y-1 pt-0.5">
+                            <div className="flex items-center justify-between text-[10px] text-zinc-400">
                               <span>Delmål:</span>
                               <span className="font-semibold text-zinc-200">
                                 {doneTodos}/{totalTodos} klara
@@ -1473,23 +1631,30 @@ export function DiscoverView({
                             <div className="w-full h-1.5 rounded-full bg-zinc-950 border border-zinc-800 overflow-hidden">
                               <div
                                 className="h-full bg-amber-500 rounded-full transition-all duration-300"
-                                style={{ width: `${Math.round((doneTodos / totalTodos) * 100)}%` }}
+                                style={{
+                                  width: `${Math.round((doneTodos / totalTodos) * 100)}%`,
+                                }}
                               />
                             </div>
                           </div>
                         )}
                       </div>
+
+                      {/* Pil höger */}
+                      <div className="p-2 rounded-xl bg-zinc-800/50 group-hover:bg-zinc-700 text-zinc-400 group-hover:text-white transition flex-shrink-0 self-center">
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                      </div>
                     </div>
                   );
                 })}
 
-                {/* Lägg till fokusmål kort om < 3 */}
-                {targetGames.length < 3 && (
+                {/* Lägg till fokusmål om användaren har färre än 3 och minst 1 mål */}
+                {targetGames.length > 0 && targetGames.length < 3 && (
                   <div
                     onClick={() => setIsGoalModalOpen(true)}
-                    className="group relative rounded-2xl p-4 flex gap-3.5 items-center justify-center cursor-pointer transition-all border border-dashed border-zinc-800 hover:border-amber-500/50 hover:bg-zinc-900/60 min-h-[110px]"
+                    className="group relative rounded-2xl p-3.5 sm:p-4 flex gap-3.5 items-center justify-center cursor-pointer transition-all border border-dashed border-zinc-800 hover:border-amber-500/50 hover:bg-zinc-900/60 min-h-[96px]"
                   >
-                    <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform flex-shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform flex-shrink-0">
                       <Plus className="w-5 h-5" />
                     </div>
                     <div className="min-w-0">
@@ -1497,86 +1662,12 @@ export function DiscoverView({
                         Lägg till fokusmål
                       </span>
                       <span className="text-[11px] text-zinc-500 block">
-                        Välj ur biblioteket ({3 - targetGames.length} kvar)
+                        {3 - targetGames.length}{' '}
+                        {3 - targetGames.length === 1 ? 'plats kvar' : 'platser kvar'}
                       </span>
                     </div>
                   </div>
                 )}
-              </div>
-            </div>
-          )}
-
-          {/* 2. Zon 1: Ditt Spelande (Fortsätt spela) - Ligger alltid överst när man har aktiva spel */}
-          {currentlyPlaying.length > 0 && (
-            <div className="space-y-3.5">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-zinc-200 uppercase tracking-wider">
-                  <Play className="w-3.5 h-3.5 text-emerald-400 fill-current" />
-                  <span>Ditt spelande just nu ({currentlyPlaying.length})</span>
-                </div>
-                {onOpenRouletteModal ? (
-                  <button
-                    onClick={onOpenRouletteModal}
-                    className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs font-semibold text-zinc-300 hover:text-white transition cursor-pointer"
-                  >
-                    <Dices className="w-3.5 h-3.5 text-brand-red" />
-                    <span>Snurra fram ett spel</span>
-                  </button>
-                ) : (
-                  <a
-                    href="#roulette-section"
-                    className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs font-semibold text-zinc-300 hover:text-white transition"
-                  >
-                    <Dices className="w-3.5 h-3.5 text-brand-red" />
-                    <span>Snurra fram ett spel</span>
-                  </a>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                {currentlyPlaying.map((game) => (
-                  <div
-                    key={game.id}
-                    onClick={() => onSelectGame(game)}
-                    className="flex items-center gap-3.5 p-3 rounded-2xl bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 cursor-pointer group transition shadow-sm"
-                  >
-                    <div className="w-12 h-16 rounded-xl overflow-hidden bg-zinc-950 flex-shrink-0 border border-zinc-800 shadow-md">
-                      {game.cover_url ? (
-                        <img
-                          src={game.cover_url}
-                          alt={game.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Gamepad className="w-6 h-6 text-zinc-600" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
-                          Spelar nu
-                        </span>
-                      </div>
-                      <h4 className="text-xs sm:text-sm font-bold text-white line-clamp-2 leading-snug group-hover:text-red-400 transition">
-                        {game.title}
-                      </h4>
-                      <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
-                        {game.platforms?.[0] || 'Aktivt spel'}
-                      </p>
-                      {game.rating && (
-                        <span className="text-[10px] text-amber-400 font-semibold mt-0.5 block">
-                          ⭐ {game.rating}/10
-                        </span>
-                      )}
-                    </div>
-                    <div className="p-2 rounded-xl bg-zinc-800/60 group-hover:bg-brand-red group-hover:text-white text-zinc-400 transition flex-shrink-0">
-                      <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition" />
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
           )}

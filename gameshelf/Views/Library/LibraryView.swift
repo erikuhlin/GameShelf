@@ -550,23 +550,32 @@ struct LibraryView: View {
             .padding(.bottom, 6)
 
             // Huvudinnehåll
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    switch selectedTab {
-                    case .owned:
-                        ownedSection
-                    case .wishlist:
-                        wishlistSection
-                    case .collections:
-                        collectionsSection
+            ScrollViewReader { scrollProxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        switch selectedTab {
+                        case .owned:
+                            ownedSection
+                        case .wishlist:
+                            wishlistSection
+                        case .collections:
+                            collectionsSection
+                        }
                     }
+                    .padding(.top, 8)
+                    .padding(.bottom, 120) // Extra marginal så sista raden scrollas helt ovanför flytande tab-baren
+                    .id("libraryScrollTop")
                 }
-                .padding(.top, 8)
-                .padding(.bottom, 120) // Extra marginal så sista raden scrollas helt ovanför flytande tab-baren
-            }
-            .refreshable {
-                await profile.syncWithRemote()
-                await store.syncWithRemote()
+                .refreshable {
+                    await profile.syncWithRemote()
+                    await store.syncWithRemote()
+                }
+                .onChange(of: selectedStatusFilter) { _, _ in
+                    scrollProxy.scrollTo("libraryScrollTop", anchor: .top)
+                }
+                .onChange(of: selectedTab) { _, _ in
+                    scrollProxy.scrollTo("libraryScrollTop", anchor: .top)
+                }
             }
         }
         .navigationTitle("Bibliotek")

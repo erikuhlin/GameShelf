@@ -54,6 +54,8 @@ import {
   Crown,
   Trophy,
   Gamepad2,
+  Gamepad,
+  ChevronDown,
 } from 'lucide-react';
 import { fetchDealsForGames, normalizeTitle, GameDeal } from '@/services/priceWatcherService';
 
@@ -71,7 +73,7 @@ export default function HomePage() {
   const [collections, setCollections] = useState<GameCollection[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('discover');
   const [discoverTab, setDiscoverTab] = useState<'discover' | 'calendar' | 'toplist' | 'news'>('discover');
-  const [selectedStatus, setSelectedStatus] = useState<PlayStatus | 'Alla'>('Alla');
+  const [selectedStatus, setSelectedStatus] = useState<PlayStatus | 'Alla' | 'wishlist'>('Alla');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [profileName, setProfileName] = useState<string>('');
@@ -82,7 +84,6 @@ export default function HomePage() {
   const [librarySort, setLibrarySort] = useState<LibrarySortOption>('dateAdded');
   const [libraryPlatformFilter, setLibraryPlatformFilter] = useState<string>('Alla');
   const [libraryPlaytimeFilter, setLibraryPlaytimeFilter] = useState<'all' | 'short' | 'medium' | 'long' | 'epic'>('all');
-  const [libraryOwnershipFilter, setLibraryOwnershipFilter] = useState<'all' | 'owned' | 'wishlist'>('all');
   const [filterOnlyOnSale, setFilterOnlyOnSale] = useState(false);
   const [dealsMap, setDealsMap] = useState<Record<string, GameDeal>>({});
 
@@ -148,8 +149,8 @@ export default function HomePage() {
       const savedPlatform = localStorage.getItem('gameshelf_library_platform');
       if (savedPlatform) setLibraryPlatformFilter(savedPlatform);
       const savedOwnership = localStorage.getItem('gameshelf_library_ownership') as any;
-      if (savedOwnership) {
-        setLibraryOwnershipFilter(savedOwnership === 'memories' ? 'wishlist' : savedOwnership);
+      if (savedOwnership === 'wishlist' || savedOwnership === 'memories') {
+        setSelectedStatus('wishlist');
       }
 
       const loaded = loadUserProfile();
@@ -746,10 +747,11 @@ export default function HomePage() {
     setLibraryPlatformFilter(p);
     if (typeof window !== 'undefined') localStorage.setItem('gameshelf_library_platform', p);
   };
-  const handleOwnershipChange = (o: 'all' | 'owned' | 'wishlist') => {
-    setLibraryOwnershipFilter(o);
-    setSelectedStatus('Alla');
-    if (typeof window !== 'undefined') localStorage.setItem('gameshelf_library_ownership', o);
+  const handleStatusChange = (status: PlayStatus | 'Alla' | 'wishlist') => {
+    setSelectedStatus(status);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gameshelf_library_ownership', status === 'wishlist' ? 'wishlist' : 'owned');
+    }
   };
 
   // Dynamiska plattformar som finns i biblioteket
@@ -838,20 +840,18 @@ export default function HomePage() {
   // Filtrerade och sorterade spel
   const filteredGames = useMemo(() => {
     let result = games.filter((game) => {
-      // 1. Spelstatus filter
-      if (selectedStatus !== 'Alla' && game.status !== selectedStatus) {
-        return false;
-      }
-
-      // 2. Ägarskapsfilter / Önskelista
-      if (libraryOwnershipFilter === 'owned' && !game.is_owned) {
-        return false;
-      }
-      if (libraryOwnershipFilter === 'wishlist') {
+      // 1. Spelstatus och Önskelista
+      if (selectedStatus === 'wishlist') {
         if (game.is_owned) return false;
         if (filterOnlyOnSale) {
           const deal = dealsMap[normalizeTitle(game.title)];
           if (!deal || !deal.isOnSale) return false;
+        }
+      } else {
+        // Endast ägda spel i biblioteket
+        if (!game.is_owned) return false;
+        if (selectedStatus !== 'Alla' && game.status !== selectedStatus) {
+          return false;
         }
       }
 
@@ -985,7 +985,6 @@ export default function HomePage() {
   }, [
     games,
     selectedStatus,
-    libraryOwnershipFilter,
     libraryPlatformFilter,
     libraryPlaytimeFilter,
     selectedCollectionId,
@@ -994,21 +993,19 @@ export default function HomePage() {
     librarySort,
   ]);
 
-  // Status counts for tab pills
+  // Status counts for tab pills (beräknas på ägda spel i biblioteket)
   const statusCounts = useMemo(() => {
-    const relevant = games.filter((g) =>
-      libraryOwnershipFilter === 'owned'
-        ? g.is_owned
-        : libraryOwnershipFilter === 'wishlist'
-        ? !g.is_owned
-        : true
-    );
-    const counts: { [k: string]: number } = { Alla: relevant.length };
+    const owned = games.filter((g) => g.is_owned);
+    const counts: { [k: string]: number } = { Alla: owned.length };
     PLAY_STATUSES.forEach((s) => {
-      counts[s] = relevant.filter((g) => g.status === s).length;
+      counts[s] = owned.filter((g) => g.status === s).length;
     });
     return counts;
-  }, [games, libraryOwnershipFilter]);
+  }, [games]);
+
+  const wishlistCount = useMemo(() => {
+    return games.filter((g) => !g.is_owned).length;
+  }, [games]);
 
   const wishlistOnSaleCount = useMemo(() => {
     return games.filter((g) => !g.is_owned && dealsMap[normalizeTitle(g.title)]?.isOnSale).length;
@@ -1549,228 +1546,242 @@ export default function HomePage() {
 
         {/* Library Sub-bar: Status Filter Tabs & View Mode Switcher */}
         {viewMode !== 'collections' && viewMode !== 'stats' && viewMode !== 'discover' && games.length > 0 && (
-          <div className="space-y-2">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
-            {/* Left: Status Filter Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-              <button
-                onClick={() => setSelectedStatus('Alla')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
-                  selectedStatus === 'Alla'
-                    ? 'bg-zinc-100 text-zinc-900 shadow-md'
-                    : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
-                }`}
-              >
-                <span>Alla</span>
-                <span
-                  className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-                    selectedStatus === 'Alla' ? 'bg-zinc-300 text-zinc-900' : 'bg-zinc-800 text-zinc-400'
+          <div className="space-y-2.5">
+            {/* Top row: Status/Wishlist Tabs (Left) & Spelmål + View Mode (Right) */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              {/* Left: Unified Tabs (Alla, Spelar nu, Pausat, Backlog, Genomspelat, Avslutat | Önskelista) */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                <button
+                  onClick={() => handleStatusChange('Alla')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+                    selectedStatus === 'Alla'
+                      ? 'bg-zinc-100 text-zinc-900 shadow-md'
+                      : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
                   }`}
                 >
-                  {statusCounts['Alla'] || 0}
-                </span>
-              </button>
-
-              {PLAY_STATUSES.map((status) => {
-                const isSelected = selectedStatus === status;
-                const count = statusCounts[status] || 0;
-                const label = getStatusDisplayTitle(status, false);
-                return (
-                  <button
-                    key={status}
-                    onClick={() => setSelectedStatus(status)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
-                      isSelected
-                        ? 'bg-zinc-100 text-zinc-900 shadow-md'
-                        : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                  <span>Alla</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                      selectedStatus === 'Alla' ? 'bg-zinc-300 text-zinc-900' : 'bg-zinc-800 text-zinc-400'
                     }`}
                   >
-                    <span>{label}</span>
-                    <span
-                      className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-                        isSelected ? 'bg-zinc-300 text-zinc-900' : 'bg-zinc-800 text-zinc-400'
+                    {statusCounts['Alla'] || 0}
+                  </span>
+                </button>
+
+                {PLAY_STATUSES.map((status) => {
+                  const isSelected = selectedStatus === status;
+                  const count = statusCounts[status] || 0;
+                  const label = getStatusDisplayTitle(status, false);
+                  return (
+                    <button
+                      key={status}
+                      onClick={() => handleStatusChange(status)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+                        isSelected
+                          ? 'bg-zinc-100 text-zinc-900 shadow-md'
+                          : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
                       }`}
                     >
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
+                      <span>{label}</span>
+                      <span
+                        className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                          isSelected ? 'bg-zinc-300 text-zinc-900' : 'bg-zinc-800 text-zinc-400'
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
 
-              {/* Spelmål-knapp direkt i biblioteket */}
-              <button
-                onClick={() => setIsGamingGoalModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition shadow-sm cursor-pointer ml-1"
-                title={`Spelmål ${currentGoalYear}: ${completedGamesThisYear} av ${userProfile.annualGamingGoal || 12} klara`}
-              >
-                <Trophy className="w-3.5 h-3.5 text-amber-400" />
-                <span>Mål {currentGoalYear}</span>
-                <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500/25 text-amber-300 font-mono">
-                  {completedGamesThisYear}/{userProfile.annualGamingGoal || 12}
-                </span>
-              </button>
-            </div>
+                {/* Subtle vertical divider before Wishlist */}
+                <div className="h-4 w-px bg-zinc-800 mx-1 shrink-0" />
 
-            {/* Right: View Mode Switcher (Hylla | Grid | Lista) */}
-            <div className="flex items-center self-end sm:self-auto bg-zinc-900/90 border border-zinc-800/90 rounded-xl p-1 shrink-0">
-              <button
-                onClick={() => setViewMode('shelf')}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition ${
-                  viewMode === 'shelf'
-                    ? 'bg-zinc-800 text-white shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-                title="Hyllvy"
-              >
-                <Library className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Hylla</span>
-              </button>
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition ${
-                  viewMode === 'grid'
-                    ? 'bg-zinc-800 text-white shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-                title="Rutnätsvy"
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Rutnät</span>
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition ${
-                  viewMode === 'list'
-                    ? 'bg-zinc-800 text-white shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-                title="Listvy"
-              >
-                <List className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Lista</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Sub-toolbar: Sortering & Anpassa biblioteksvyn */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 pb-2 border-t border-zinc-800/60 text-xs">
-            {/* Vänster: Sorteringsdropdown & Plattformsfilter */}
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <div className="flex items-center gap-1.5 text-zinc-400 font-medium">
-                <ArrowUpDown className="w-3.5 h-3.5 text-brand-red" />
-                <span>Sortera:</span>
-              </div>
-              <select
-                value={librarySort}
-                onChange={(e) => handleSortChange(e.target.value as LibrarySortOption)}
-                className="bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-brand-red cursor-pointer font-medium hover:border-zinc-700 transition"
-              >
-                <option value="dateAdded">Senast tillagda</option>
-                <option value="titleAsc">Titel (A–Ö)</option>
-                <option value="titleDesc">Titel (Ö–A)</option>
-                <option value="rating">Högst betyg ⭐</option>
-                <option value="releaseYearDesc">Lanseringsdatum (Nyast först)</option>
-                <option value="releaseYearAsc">Lanseringsdatum (Äldst först)</option>
-                <option value="hours">Speltid ⏱️</option>
-              </select>
-
-              {/* Plattformsfilter */}
-              {availablePlatforms.length > 2 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-zinc-600 hidden sm:inline">•</span>
-                  <select
-                    value={libraryPlatformFilter}
-                    onChange={(e) => handlePlatformChange(e.target.value)}
-                    className="bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-brand-red cursor-pointer font-medium hover:border-zinc-700 transition"
-                  >
-                    {availablePlatforms.map((p) => (
-                      <option key={p} value={p}>
-                        {p === 'Alla' ? 'Alla plattformar' : p}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Speltidsfilter */}
-              <div className="flex items-center gap-2">
-                <span className="text-zinc-600 hidden sm:inline">•</span>
-                <select
-                  value={libraryPlaytimeFilter}
-                  onChange={(e) => setLibraryPlaytimeFilter(e.target.value as any)}
-                  className="bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-brand-red cursor-pointer font-medium hover:border-zinc-700 transition"
-                >
-                  <option value="all">Alla speltider</option>
-                  <option value="short">Snabbspel (&lt; 5h)</option>
-                  <option value="medium">Mellan (5–15h)</option>
-                  <option value="long">Långt (15–40h)</option>
-                  <option value="epic">Episkt (40h+)</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Höger: Ägarskapsfilter (Alla / I ägo / Önskelista) */}
-            <div className="flex items-center gap-1 bg-zinc-900/90 border border-zinc-800/90 rounded-xl p-1 shrink-0">
-              <button
-                onClick={() => handleOwnershipChange('all')}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-                  libraryOwnershipFilter === 'all'
-                    ? 'bg-zinc-800 text-white shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                Alla ({games.length})
-              </button>
-              <button
-                onClick={() => handleOwnershipChange('owned')}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-                  libraryOwnershipFilter === 'owned'
-                    ? 'bg-zinc-800 text-white shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-                title="Endast spel du äger i ditt bibliotek"
-              >
-                I ägo 🎮 ({games.filter((g) => g.is_owned).length})
-              </button>
-              <button
-                onClick={() => handleOwnershipChange('wishlist')}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
-                  libraryOwnershipFilter === 'wishlist'
-                    ? 'bg-zinc-800 text-white shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-                title="Spel på din önskelista"
-              >
-                Önskelista 🎁 ({games.filter((g) => !g.is_owned).length})
-              </button>
-            </div>
-
-            {libraryOwnershipFilter === 'wishlist' && (
-              <button
-                type="button"
-                onClick={() => setFilterOnlyOnSale((prev) => !prev)}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                  filterOnlyOnSale
-                    ? 'bg-gradient-to-r from-red-600/20 to-orange-500/20 text-orange-400 border border-orange-500/50 shadow-sm'
-                    : 'bg-zinc-900/60 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
-                }`}
-                title="Filtrera för att endast visa spel med aktiv rabatt"
-              >
-                <Flame
-                  className={`w-3.5 h-3.5 ${
-                    filterOnlyOnSale ? 'text-orange-400 fill-current' : 'text-zinc-500'
+                {/* Önskelista Tab */}
+                <button
+                  onClick={() => handleStatusChange('wishlist')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+                    selectedStatus === 'wishlist'
+                      ? 'bg-purple-600 text-white shadow-md shadow-purple-900/40'
+                      : 'bg-zinc-900/80 text-purple-300 hover:text-purple-200 border border-purple-900/40'
                   }`}
-                />
-                <span>
-                  {wishlistOnSaleCount > 0
-                    ? `Endast på rea (${wishlistOnSaleCount})`
-                    : 'Endast på rea'}
-                </span>
-              </button>
-            )}
+                >
+                  <span>Önskelista 🎁</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                      selectedStatus === 'wishlist'
+                        ? 'bg-purple-800 text-white'
+                        : 'bg-purple-950 text-purple-300'
+                    }`}
+                  >
+                    {wishlistCount}
+                  </span>
+                </button>
+              </div>
+
+              {/* Right: Spelmål-knapp + View Mode Switcher */}
+              <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                <button
+                  onClick={() => setIsGamingGoalModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition shadow-sm cursor-pointer"
+                  title={`Spelmål ${currentGoalYear}: ${completedGamesThisYear} av ${userProfile.annualGamingGoal || 12} klara`}
+                >
+                  <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Mål {currentGoalYear}</span>
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500/25 text-amber-300 font-mono">
+                    {completedGamesThisYear}/{userProfile.annualGamingGoal || 12}
+                  </span>
+                </button>
+
+                <div className="flex items-center bg-zinc-900/90 border border-zinc-800/90 rounded-xl p-1">
+                  <button
+                    onClick={() => setViewMode('shelf')}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
+                      viewMode === 'shelf'
+                        ? 'bg-zinc-800 text-white shadow-sm'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                    title="Hyllvy"
+                  >
+                    <Library className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Hylla</span>
+                  </button>
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
+                      viewMode === 'grid'
+                        ? 'bg-zinc-800 text-white shadow-sm'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                    title="Rutnätsvy"
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Rutnät</span>
+                  </button>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
+                      viewMode === 'list'
+                        ? 'bg-zinc-800 text-white shadow-sm'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                    title="Listvy"
+                  >
+                    <List className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Lista</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Sub-toolbar: Sortering & Filter (Städad och modern) */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 pb-1 border-t border-zinc-800/60 text-xs">
+              {/* Vänster: Stilrena filter controls */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Sortering */}
+                <div className="relative flex items-center">
+                  <ArrowUpDown className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 pointer-events-none" />
+                  <select
+                    value={librarySort}
+                    onChange={(e) => handleSortChange(e.target.value as LibrarySortOption)}
+                    className="bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs rounded-xl pl-8 pr-7 py-1.5 focus:outline-none focus:border-brand-red cursor-pointer font-medium hover:border-zinc-700 transition appearance-none"
+                  >
+                    <option value="dateAdded">Senast tillagda</option>
+                    <option value="titleAsc">Titel (A–Ö)</option>
+                    <option value="titleDesc">Titel (Ö–A)</option>
+                    <option value="rating">Högst betyg ⭐</option>
+                    <option value="releaseYearDesc">Lanseringsdatum (Nyast först)</option>
+                    <option value="releaseYearAsc">Lanseringsdatum (Äldst först)</option>
+                    <option value="hours">Speltid ⏱️</option>
+                  </select>
+                  <ChevronDown className="w-3 h-3 text-zinc-500 absolute right-2.5 pointer-events-none" />
+                </div>
+
+                {/* Plattform */}
+                {availablePlatforms.length > 2 && (
+                  <div className="relative flex items-center">
+                    <Gamepad className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 pointer-events-none" />
+                    <select
+                      value={libraryPlatformFilter}
+                      onChange={(e) => handlePlatformChange(e.target.value)}
+                      className={`border text-xs rounded-xl pl-8 pr-7 py-1.5 focus:outline-none focus:border-brand-red cursor-pointer font-medium transition appearance-none ${
+                        libraryPlatformFilter !== 'Alla'
+                          ? 'bg-zinc-800 border-zinc-600 text-white font-semibold'
+                          : 'bg-zinc-900 border-zinc-800 text-zinc-200 hover:border-zinc-700'
+                      }`}
+                    >
+                      {availablePlatforms.map((p) => (
+                        <option key={p} value={p}>
+                          {p === 'Alla' ? 'Alla plattformar' : p}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-3 h-3 text-zinc-500 absolute right-2.5 pointer-events-none" />
+                  </div>
+                )}
+
+                {/* Speltid */}
+                <div className="relative flex items-center">
+                  <Clock className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 pointer-events-none" />
+                  <select
+                    value={libraryPlaytimeFilter}
+                    onChange={(e) => setLibraryPlaytimeFilter(e.target.value as any)}
+                    className={`border text-xs rounded-xl pl-8 pr-7 py-1.5 focus:outline-none focus:border-brand-red cursor-pointer font-medium transition appearance-none ${
+                      libraryPlaytimeFilter !== 'all'
+                        ? 'bg-zinc-800 border-zinc-600 text-white font-semibold'
+                        : 'bg-zinc-900 border-zinc-800 text-zinc-200 hover:border-zinc-700'
+                    }`}
+                  >
+                    <option value="all">Alla speltider</option>
+                    <option value="short">Snabbspel (&lt; 5h)</option>
+                    <option value="medium">Mellan (5–15h)</option>
+                    <option value="long">Långt (15–40h)</option>
+                    <option value="epic">Episkt (40h+)</option>
+                  </select>
+                  <ChevronDown className="w-3 h-3 text-zinc-500 absolute right-2.5 pointer-events-none" />
+                </div>
+
+                {/* Önskelista - Endast med rabatt toggle */}
+                {selectedStatus === 'wishlist' && (
+                  <button
+                    type="button"
+                    onClick={() => setFilterOnlyOnSale((prev) => !prev)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                      filterOnlyOnSale
+                        ? 'bg-gradient-to-r from-red-600 to-orange-500 text-white shadow-md shadow-red-900/30'
+                        : 'bg-zinc-900/90 text-zinc-300 hover:text-white border border-zinc-800'
+                    }`}
+                    title="Filtrera för att endast visa spel med aktiv rabatt"
+                  >
+                    <Flame className="w-3.5 h-3.5 fill-current text-orange-400" />
+                    <span>Endast rea {wishlistOnSaleCount > 0 ? `(${wishlistOnSaleCount})` : ''}</span>
+                  </button>
+                )}
+
+                {/* Återställ filter om något filter är aktivt */}
+                {(libraryPlatformFilter !== 'Alla' || libraryPlaytimeFilter !== 'all' || (selectedStatus === 'wishlist' && filterOnlyOnSale)) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLibraryPlatformFilter('Alla');
+                      setLibraryPlaytimeFilter('all');
+                      setFilterOnlyOnSale(false);
+                    }}
+                    className="text-xs text-zinc-400 hover:text-zinc-200 underline px-1 cursor-pointer"
+                  >
+                    Rensa filter
+                  </button>
+                )}
+              </div>
+
+              {/* Höger: Diskret resultaträknare */}
+              <div className="text-xs text-zinc-500 hidden sm:block font-medium">
+                Visar {filteredGames.length} {filteredGames.length === 1 ? 'spel' : 'spel'}
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
         {/* Views Switcher: Discover, Collections, Stats, or Library (Shelf, Grid, List) */}
         {viewMode === 'discover' ? (
@@ -1847,7 +1858,6 @@ export default function HomePage() {
             {/* Spelar just nu - horisontell strip överst i biblioteket (motsvarande appen) */}
             {selectedStatus === 'Alla' &&
               !searchQuery.trim() &&
-              libraryOwnershipFilter !== 'wishlist' &&
               playingNowGames.length > 0 && (
                 <div className="mb-6 space-y-2.5">
                   <div className="flex items-center gap-2">

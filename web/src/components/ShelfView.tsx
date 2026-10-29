@@ -44,7 +44,7 @@ export function ShelfView({ games, onSelectGame, dealsMap }: ShelfViewProps) {
         <section key={`shelf-row-${rowIndex}`} className="relative">
           {/* Games on Shelf */}
           <div className="relative">
-            <div className="flex items-end gap-3.5 sm:gap-5 overflow-x-auto pb-4 pt-4 sm:pt-6 px-2 sm:px-4 scrollbar-none">
+            <div className="flex items-start gap-3.5 sm:gap-5 overflow-x-auto pb-4 pt-4 sm:pt-6 px-2 sm:px-4 scrollbar-none">
               {rowGames.map((game) => {
                 const completedTodos = game.todos?.filter((t) => t.isDone).length || 0;
                 const totalTodos = game.todos?.length || 0;
@@ -120,10 +120,10 @@ export function ShelfView({ games, onSelectGame, dealsMap }: ShelfViewProps) {
 
                   {/* Title & Platform label */}
                   <div className="w-full mt-2 sm:mt-2.5 text-center px-1">
-                    <h4 className="text-xs sm:text-sm font-semibold text-zinc-200 group-hover:text-brand-red transition text-center line-clamp-2 min-h-[2.25rem] leading-tight">
+                    <h4 className="text-xs sm:text-sm font-semibold text-zinc-200 group-hover:text-brand-red transition text-center line-clamp-2 min-h-[2.5rem] leading-snug">
                       {game.title}
                     </h4>
-                    <p className="text-[10px] sm:text-xs text-zinc-500 truncate mt-0.5">
+                    <p className="text-[10px] sm:text-xs text-zinc-500 truncate mt-0.5 min-h-[1rem]">
                       {game.platforms?.join(', ') || 'Okänd'}
                     </p>
                   </div>

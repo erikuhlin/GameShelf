@@ -851,7 +851,7 @@ struct ActiveGameProgressCard: View {
             let since = GamingGoalEngine.formatShortDayMonth(game.effectivePausedDate)
             return "Pausat sedan \(since)"
         case .notStarted:
-            return "Inte påbörjat"
+            return "Backlog"
         case .completed:
             return "Klarat"
         case .abandoned:

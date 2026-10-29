@@ -19,8 +19,8 @@ export type PlayPriority = 'none' | 'low' | 'normal' | 'high' | 'nextUp';
 
 export const PLAY_STATUSES: PlayStatus[] = [
   'playing',
-  'notStarted',
   'paused',
+  'notStarted',
   'completed',
   'abandoned',
 ];

@@ -89,6 +89,10 @@ final class LibraryStore: ObservableObject {
         pendingSyncGameIDs.remove(gameID)
     }
 
+    func isPendingSync(gameID: UUID) -> Bool {
+        pendingSyncGameIDs.contains(gameID)
+    }
+
     init() {
         do {
             try loadGames()
@@ -200,9 +204,25 @@ final class LibraryStore: ObservableObject {
                 for r in filteredRemote {
                     if let local = localMap[r.id] {
                         if pendingSyncGameIDs.contains(local.id) {
-                            // Lokalt spel ändrades offline och har ännu inte synkats till molnet -> behåll lokala ändringen!
-                            mergedGames.append(local)
-                            gamesToPushToCloud.append(local)
+                            // Lokalt spel ändrades offline och har ännu inte synkats till molnet -> behåll lokala ändringen,
+                            // men skriv aldrig över sparade todos i molnet med en tom lokal lista (eller äldre progress)
+                            var resolvedLocal = local
+                            if resolvedLocal.todos.isEmpty && !r.todos.isEmpty {
+                                resolvedLocal.todos = r.todos
+                                resolvedLocal.storyProgress = r.storyProgress ?? resolvedLocal.storyProgress
+                                resolvedLocal.progressNote = r.progressNote ?? resolvedLocal.progressNote
+                                resolvedLocal.noteUpdatedAt = r.noteUpdatedAt ?? resolvedLocal.noteUpdatedAt
+                            } else if !r.todos.isEmpty,
+                                      let rUpdated = r.noteUpdatedAt,
+                                      let lUpdated = resolvedLocal.noteUpdatedAt,
+                                      rUpdated > lUpdated {
+                                resolvedLocal.todos = r.todos
+                                resolvedLocal.storyProgress = r.storyProgress ?? resolvedLocal.storyProgress
+                                resolvedLocal.progressNote = r.progressNote ?? resolvedLocal.progressNote
+                                resolvedLocal.noteUpdatedAt = rUpdated
+                            }
+                            mergedGames.append(resolvedLocal)
+                            gamesToPushToCloud.append(resolvedLocal)
                         } else {
                             // Molnet är uppdaterat -> använd remote men bevara lokala datum om de saknas
                             var merged = r

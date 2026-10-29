@@ -132,7 +132,7 @@ enum PlayStatus: String, CaseIterable, Codable, Identifiable, Sendable {
             }
         } else {
             switch self {
-            case .notStarted: return "Vill spela"
+            case .notStarted: return "Backlog"
             case .playing: return "Spelar nu"
             case .paused: return "Pausat"
             case .completed: return "Klarat"

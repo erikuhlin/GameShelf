@@ -14,11 +14,18 @@ struct GameWalkthroughSectionView: View {
 
     @AppStorage("gemini_api_key") private var geminiApiKey: String = ""
     @AppStorage("walkthrough_spoiler_protection") private var spoilerProtection: Bool = true
+    @AppStorage("walkthrough_admin_mode") private var isAdminMode: Bool = true
 
     @State private var isCheckingSupabase = false
     @State private var hasCheckedSupabase = false
     @State private var isGeneratingAI = false
     @State private var aiErrorMessage: String? = nil
+
+    // Admin & Global Template State
+    @State private var remoteTemplate: GameWalkthroughTemplate? = nil
+    @State private var hasUnpublishedAdminChanges = false
+    @State private var isPublishingTemplate = false
+    @State private var adminStatusBanner: String? = nil
 
     // Expansion per group & Spoiler states
     @State private var isMainQuestsExpanded = false
@@ -279,7 +286,34 @@ struct GameWalkthroughSectionView: View {
                             Label("Hämta med AI", systemImage: "sparkles")
                         }
 
+                        if isAdminMode {
+                            Section("Admin · Global mall") {
+                                Button {
+                                    Task { await publishCurrentAsOfficialTemplate() }
+                                } label: {
+                                    Label("Spara som officiell mall", systemImage: "checkmark.seal.fill")
+                                }
+
+                                if remoteTemplate != nil {
+                                    Button {
+                                        Task { await reloadFromOfficialTemplate() }
+                                    } label: {
+                                        Label("Hämta global mall på nytt", systemImage: "arrow.down.circle")
+                                    }
+                                }
+                            }
+                        }
+
                         Divider()
+
+                        Button {
+                            isAdminMode.toggle()
+                        } label: {
+                            Label(
+                                isAdminMode ? "Admin-läge: PÅ" : "Admin-läge: AV",
+                                systemImage: isAdminMode ? "person.badge.key.fill" : "person.badge.key"
+                            )
+                        }
 
                         Button(role: .destructive) {
                             showingClearConfirmation = true
@@ -366,24 +400,43 @@ struct GameWalkthroughSectionView: View {
                     .opacity(0.4)
                     .padding(.top, 2)
 
-                Button {
-                    newStepTitle = ""
-                    selectedCategory = .main
-                    showingAddModal = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus")
-                            .font(.subheadline.bold())
-                        Text("Lägg till kapitel eller uppdrag")
-                            .font(.subheadline.weight(.semibold))
+                HStack(spacing: 10) {
+                    Button {
+                        newStepTitle = ""
+                        selectedCategory = .main
+                        showingAddModal = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "plus")
+                                .font(.subheadline.bold())
+                            Text("Lägg till kapitel eller uppdrag")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .foregroundStyle(Color.red)
                     }
-                    .foregroundStyle(Color.red)
+                    .buttonStyle(.plain)
+
+                    Spacer(minLength: 4)
+
+                    if isAdminMode && !(mainQuests.isEmpty && sideQuests.isEmpty) {
+                        adminTemplateStatusControl
+                    }
                 }
-                .buttonStyle(.plain)
             }
             .padding(16)
             .background(Color(.secondarySystemGroupedBackground))
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            if let banner = adminStatusBanner {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.caption2)
+                    Text(banner)
+                        .font(.caption2.weight(.medium))
+                }
+                .foregroundStyle(.green)
+                .padding(.horizontal, 4)
+            }
 
             if let err = aiErrorMessage {
                 Text(err)
@@ -1134,6 +1187,30 @@ struct GameWalkthroughSectionView: View {
                         .foregroundStyle(.secondary)
                 }
 
+                if isAdminMode {
+                    Section("Admin · Global mall (Supabase)") {
+                        Button {
+                            Task {
+                                await publishCurrentAsOfficialTemplate()
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                if isPublishingTemplate {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "checkmark.seal.fill")
+                                        .foregroundStyle(.green)
+                                }
+                                Text(hasUnpublishedAdminChanges ? "Publicera ändringar som officiell mall" : "Spara som officiell mall för alla")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                            }
+                        }
+                        .disabled(isPublishingTemplate || (mainQuests.isEmpty && sideQuests.isEmpty))
+                    }
+                }
+
                 Section {
                     Button(role: .destructive) {
                         showingClearConfirmation = true
@@ -1343,11 +1420,96 @@ struct GameWalkthroughSectionView: View {
         return .main
     }
 
+    @ViewBuilder
+    private var adminTemplateStatusControl: some View {
+        if hasUnpublishedAdminChanges || remoteTemplate == nil || !(remoteTemplate?.isAdminVerified ?? false) {
+            Button {
+                Task { await publishCurrentAsOfficialTemplate() }
+            } label: {
+                HStack(spacing: 4) {
+                    if isPublishingTemplate {
+                        ProgressView()
+                            .controlSize(.mini)
+                    } else {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    Text(hasUnpublishedAdminChanges ? "Publicera ändringar" : "Spara som officiell mall")
+                        .font(.caption.weight(.semibold))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color.green.opacity(0.16), in: Capsule())
+                .foregroundStyle(Color.green)
+            }
+            .buttonStyle(.plain)
+            .disabled(isPublishingTemplate)
+        } else {
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 10, weight: .bold))
+                Text("Officiell mall")
+                    .font(.caption2.weight(.semibold))
+            }
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color(.tertiarySystemFill), in: Capsule())
+        }
+    }
+
+    private func publishCurrentAsOfficialTemplate() async {
+        let targetIgdbId = game.igdbID ?? remoteIGDBID ?? abs(game.title.hashValue)
+        let template = GameWalkthroughTemplate.fromTodos(
+            todos: game.todos,
+            igdbId: targetIgdbId,
+            title: game.title,
+            source: "Verifierad (Admin)",
+            summary: remoteTemplate?.summary ?? "Verifierad kapitellista för \(game.title).",
+            sourceUrl: remoteTemplate?.sourceUrl
+        )
+        guard !template.items.isEmpty else { return }
+
+        isPublishingTemplate = true
+        aiErrorMessage = nil
+        defer { isPublishingTemplate = false }
+
+        do {
+            try await SupabaseSyncService.shared.upsertWalkthroughTemplate(template)
+            remoteTemplate = template
+            hasUnpublishedAdminChanges = false
+            adminStatusBanner = "Sparad som officiell mall i databasen (\(template.items.count) uppdrag)"
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        } catch {
+            aiErrorMessage = "Kunde inte spara officiell mall: \(error.localizedDescription)"
+        }
+    }
+
+    private func reloadFromOfficialTemplate() async {
+        let targetId = game.igdbID ?? remoteIGDBID ?? abs(game.title.hashValue)
+        if let template = try? await SupabaseSyncService.shared.fetchWalkthroughTemplate(igdbId: targetId, title: game.title, forceRefresh: true),
+           !template.items.isEmpty {
+            remoteTemplate = template
+            hasUnpublishedAdminChanges = false
+            var copy = game
+            copy.todos = template.toTodoItems() + personalGoals
+            syncProgress(for: &copy)
+            onUpdateGame(copy)
+            adminStatusBanner = "Hämtade global mall (\(template.items.count) uppdrag)"
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+    }
+
     private func deleteStep(_ item: GameTodoItem) {
         var copy = game
+        let wasTemplateItem = category(for: item) != .goal
         copy.todos.removeAll(where: { $0.id == item.id })
         syncProgress(for: &copy)
         onUpdateGame(copy)
+        if isAdminMode && wasTemplateItem {
+            hasUnpublishedAdminChanges = true
+            adminStatusBanner = nil
+        }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 
@@ -1361,6 +1523,10 @@ struct GameWalkthroughSectionView: View {
         }
         syncProgress(for: &copy)
         onUpdateGame(copy)
+        if isAdminMode {
+            hasUnpublishedAdminChanges = true
+            adminStatusBanner = nil
+        }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 
@@ -1373,6 +1539,10 @@ struct GameWalkthroughSectionView: View {
             }
         }
         onUpdateGame(copy)
+        if isAdminMode {
+            hasUnpublishedAdminChanges = true
+            adminStatusBanner = nil
+        }
     }
 
     private func editStep(item: GameTodoItem, newTitle: String, newCategory: TaskCategory) {
@@ -1398,6 +1568,10 @@ struct GameWalkthroughSectionView: View {
         }
         syncProgress(for: &copy)
         onUpdateGame(copy)
+        if isAdminMode && newCategory != .goal {
+            hasUnpublishedAdminChanges = true
+            adminStatusBanner = nil
+        }
     }
 
     private func clearAllTodos() {
@@ -1436,18 +1610,49 @@ struct GameWalkthroughSectionView: View {
     private func autoLoadWalkthroughIfNeeded() async {
         guard !hasCheckedSupabase else { return }
         hasCheckedSupabase = true
-        guard totalCount == 0 else { return }
 
         isCheckingSupabase = true
         defer { isCheckingSupabase = false }
 
+        // 1. Kolla först om user_games i Supabase har uppdaterad progress/todos (t.ex. avbockad på webben)
+        var currentHasTodos = totalCount > 0
+        if let remoteGame = try? await SupabaseSyncService.shared.fetchRemoteGame(id: game.id),
+           !remoteGame.todos.isEmpty {
+            let shouldAdoptRemote: Bool
+            if game.todos.isEmpty {
+                shouldAdoptRemote = true
+            } else if remoteGame.todos != game.todos {
+                if let rDate = remoteGame.noteUpdatedAt, let lDate = game.noteUpdatedAt {
+                    shouldAdoptRemote = rDate > lDate
+                } else {
+                    shouldAdoptRemote = remoteGame.todos.filter(\.isDone).count != game.todos.filter(\.isDone).count
+                }
+            } else {
+                shouldAdoptRemote = false
+            }
+
+            if shouldAdoptRemote {
+                var copy = game
+                copy.todos = remoteGame.todos
+                copy.storyProgress = remoteGame.storyProgress ?? copy.storyProgress
+                copy.progressNote = remoteGame.progressNote ?? copy.progressNote
+                copy.noteUpdatedAt = remoteGame.noteUpdatedAt ?? copy.noteUpdatedAt
+                onUpdateGame(copy)
+                currentHasTodos = true
+            }
+        }
+
+        // 2. Hämta ev. global walkthrough-mall (och autoladda endast om spelet fortfarande helt saknar todos)
         let targetId = game.igdbID ?? remoteIGDBID ?? abs(game.title.hashValue)
         if let template = try? await SupabaseSyncService.shared.fetchWalkthroughTemplate(igdbId: targetId, title: game.title),
            !template.items.isEmpty {
-            var copy = game
-            let generated = template.toTodoItems()
-            copy.todos = generated + personalGoals
-            onUpdateGame(copy)
+            remoteTemplate = template
+            if !currentHasTodos && totalCount == 0 {
+                var copy = game
+                let generated = template.toTodoItems()
+                copy.todos = generated + personalGoals
+                onUpdateGame(copy)
+            }
         }
     }
 
@@ -1497,6 +1702,10 @@ struct GameWalkthroughSectionView: View {
 
         copy.todos.append(newItem)
         onUpdateGame(copy)
+        if isAdminMode && selectedCategory != .goal {
+            hasUnpublishedAdminChanges = true
+            adminStatusBanner = nil
+        }
         newStepTitle = ""
     }
 
@@ -1543,18 +1752,30 @@ struct GameWalkthroughSectionView: View {
             alternateIgdbIds: nil,
             hasLinearProgression: true,
             progressionType: "chapters",
-            summary: "Manuell import",
+            summary: isAdminMode ? "Verifierad kapitellista" : "Manuell import",
             items: items,
-            source: "Manuell import",
+            source: isAdminMode ? "Verifierad (Admin)" : "Manuell import",
             sourceUrl: nil
         )
 
         var copy = game
         copy.todos = template.toTodoItems() + personalGoals
+        syncProgress(for: &copy)
         onUpdateGame(copy)
 
-        Task {
-            _ = try? await SupabaseSyncService.shared.upsertWalkthroughTemplate(template)
+        // Vanliga användares inklistrade listor sparas endast för dem själva.
+        // Endast Admin publicerar inklistrad lista som officiell global mall.
+        if isAdminMode {
+            Task {
+                do {
+                    try await SupabaseSyncService.shared.upsertWalkthroughTemplate(template)
+                    remoteTemplate = template
+                    hasUnpublishedAdminChanges = false
+                    adminStatusBanner = "Inklistrad lista sparad som officiell mall (\(items.count) uppdrag)"
+                } catch {
+                    hasUnpublishedAdminChanges = true
+                }
+            }
         }
     }
 
@@ -1899,7 +2120,21 @@ struct GameWalkthroughSectionView: View {
             syncProgress(for: &copy)
             onUpdateGame(copy)
 
-            _ = try? await SupabaseSyncService.shared.upsertWalkthroughTemplate(template)
+            if isAdminMode {
+                if remoteTemplate?.isAdminVerified == true {
+                    hasUnpublishedAdminChanges = true
+                    adminStatusBanner = "AI-lista hämtad lokalt. Tryck 'Publicera ändringar' för att ersätta den officiella mallen."
+                } else {
+                    _ = try? await SupabaseSyncService.shared.upsertWalkthroughTemplate(template)
+                    remoteTemplate = template
+                    hasUnpublishedAdminChanges = false
+                }
+            } else {
+                let inserted = (try? await SupabaseSyncService.shared.insertWalkthroughTemplateIfMissing(template)) ?? false
+                if inserted {
+                    remoteTemplate = template
+                }
+            }
         } catch {
             aiErrorMessage = "Kunde inte hämta lista med AI (\(error.localizedDescription))."
         }

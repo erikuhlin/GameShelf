@@ -299,7 +299,7 @@ export function getStatusDisplayTitle(
   } else {
     switch (status) {
       case 'notStarted':
-        return 'Inte påbörjat';
+        return 'Backlog';
       case 'playing':
         return 'Spelar nu';
       case 'paused':
@@ -331,10 +331,10 @@ export function getStatusColor(status: PlayStatus): {
       };
     case 'notStarted':
       return {
-        bg: 'bg-zinc-900/70',
-        border: 'border-zinc-700/50',
-        text: 'text-zinc-400',
-        indicator: 'bg-zinc-500',
+        bg: 'bg-blue-950/70',
+        border: 'border-blue-500/40',
+        text: 'text-blue-300',
+        indicator: 'bg-blue-500',
       };
     case 'paused':
       return {

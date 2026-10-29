@@ -88,6 +88,11 @@ struct GameWalkthroughTemplate: Codable, Hashable, Sendable {
         case sourceUrl = "source_url"
     }
 
+    nonisolated var isAdminVerified: Bool {
+        let lower = source.lowercased()
+        return lower.contains("admin") || lower.contains("verifierad") || lower.contains("curated") || lower.contains("ign")
+    }
+
     nonisolated func toTodoItems() -> [GameTodoItem] {
         items.enumerated().map { idx, item in
             GameTodoItem(
@@ -100,6 +105,49 @@ struct GameWalkthroughTemplate: Codable, Hashable, Sendable {
                 isOptional: item.isOptional ?? false
             )
         }
+    }
+
+    nonisolated static func fromTodos(
+        todos: [GameTodoItem],
+        igdbId: Int,
+        title: String,
+        source: String = "Verifierad (Admin)",
+        summary: String = "Verifierad kapitellista",
+        sourceUrl: String? = nil
+    ) -> GameWalkthroughTemplate {
+        // Exkludera personliga "Egna mål" så att bara spelets faktiska huvud- och sidouppdrag sparas i den globala mallen
+        let templateTodos = todos.filter { item in
+            if item.chapterGroup == "Egna mål" { return false }
+            let hasStructured = todos.contains { $0.chapterGroup != nil || $0.order != nil }
+            if hasStructured && item.chapterGroup == nil && item.order == nil {
+                return false
+            }
+            return true
+        }
+
+        let mappedItems = templateTodos.enumerated().map { idx, todo in
+            GameWalkthroughTemplateItem(
+                id: String(idx + 1),
+                title: todo.title,
+                order: idx + 1,
+                chapterGroup: todo.chapterGroup ?? "Huvudberättelsen",
+                description: todo.description,
+                isOptional: todo.isOptional || todo.chapterGroup == "Sidouppdrag"
+            )
+        }
+
+        return GameWalkthroughTemplate(
+            igdbId: igdbId,
+            title: title,
+            normalizedTitle: normalizeTitle(title),
+            alternateIgdbIds: nil,
+            hasLinearProgression: true,
+            progressionType: "chapters",
+            summary: summary,
+            items: mappedItems,
+            source: source,
+            sourceUrl: sourceUrl
+        )
     }
 
     nonisolated static func normalizeTitle(_ rawTitle: String) -> String {
@@ -130,6 +178,27 @@ enum GameStoryProgress: String, Codable, CaseIterable, Identifiable, Sendable {
     case completed = "Klar"
 
     var id: String { rawValue }
+
+    nonisolated static func fromAnyString(_ raw: String?) -> GameStoryProgress? {
+        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        if let exact = GameStoryProgress(rawValue: trimmed) {
+            return exact
+        }
+        switch trimmed.lowercased() {
+        case "juststarted", "precis börjat":
+            return .justStarted
+        case "midway", "mitt i det", "halvvägs":
+            return .midway
+        case "nearend", "närmar mig slutet", "snart klar":
+            return .nearEnd
+        case "completed", "klar", "klart":
+            return .completed
+        default:
+            return nil
+        }
+    }
 }
 
 struct Game: Identifiable, Hashable, Codable, Sendable {

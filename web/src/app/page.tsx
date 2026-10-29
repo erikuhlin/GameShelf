@@ -2,7 +2,16 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Game, GameCollection, PlayStatus, PLAY_STATUSES } from '@/types/game';
-import { supabase, mapSupabaseGame, mapSupabaseCollection, normalizeIgdbRating, sanitizeUserGamePayload, normalizeLocalGame } from '@/lib/supabase';
+import {
+  supabase,
+  mapSupabaseGame,
+  mapSupabaseCollection,
+  normalizeIgdbRating,
+  sanitizeUserGamePayload,
+  buildCoreUserGamePayload,
+  updateUserGameInSupabase,
+  normalizeLocalGame,
+} from '@/lib/supabase';
 import { getStatusDisplayTitle, inferPlayTypes, isMultiplayerOrOngoing } from '@/lib/statusHelper';
 import { Header, ViewMode } from '@/components/Header';
 import { ShelfView } from '@/components/ShelfView';
@@ -62,7 +71,7 @@ export default function HomePage() {
   const [collections, setCollections] = useState<GameCollection[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('discover');
   const [discoverTab, setDiscoverTab] = useState<'discover' | 'calendar' | 'toplist' | 'news'>('discover');
-  const [selectedStatus, setSelectedStatus] = useState<PlayStatus | 'Alla' | 'Backlog'>('Alla');
+  const [selectedStatus, setSelectedStatus] = useState<PlayStatus | 'Alla'>('Alla');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [profileName, setProfileName] = useState<string>('');
@@ -830,9 +839,7 @@ export default function HomePage() {
   const filteredGames = useMemo(() => {
     let result = games.filter((game) => {
       // 1. Spelstatus filter
-      if (selectedStatus === 'Backlog') {
-        if (!game.is_backlog) return false;
-      } else if (selectedStatus !== 'Alla' && game.status !== selectedStatus) {
+      if (selectedStatus !== 'Alla' && game.status !== selectedStatus) {
         return false;
       }
 
@@ -1000,7 +1007,6 @@ export default function HomePage() {
     PLAY_STATUSES.forEach((s) => {
       counts[s] = relevant.filter((g) => g.status === s).length;
     });
-    counts['Backlog'] = relevant.filter((g) => g.is_backlog).length;
     return counts;
   }, [games, libraryOwnershipFilter]);
 
@@ -1086,8 +1092,15 @@ export default function HomePage() {
           .select()
           .single();
 
-        if (error && error.message?.includes('first_release_date')) {
-          const { first_release_date, ...fallbackPayload } = sanitized;
+        if (
+          error &&
+          (error.code === 'PGRST204' ||
+            error.code === '42703' ||
+            error.message?.includes('column') ||
+            error.message?.includes('schema cache') ||
+            error.message?.includes('first_release_date'))
+        ) {
+          const fallbackPayload = buildCoreUserGamePayload(newGamePayload);
           const retry = await supabase
             .from('user_games')
             .insert([fallbackPayload])
@@ -1180,11 +1193,7 @@ export default function HomePage() {
     });
 
     try {
-      const payload = sanitizeUserGamePayload(updates, currentGame);
-      await supabase
-        .from('user_games')
-        .update(payload)
-        .eq('id', gameId);
+      await updateUserGameInSupabase(gameId, updates, currentGame);
     } catch (err) {
       console.error('Failed to update game status:', err);
     }
@@ -1374,7 +1383,7 @@ export default function HomePage() {
             release_year: g.release_year || null,
             genres: g.genres || [],
             developers: g.developers || [],
-            status: g.status || 'Backlog',
+            status: g.status || 'notStarted',
             is_owned: g.is_owned ?? true,
             rating: g.rating || null,
             igdb_rating: g.igdb_rating || null,
@@ -1561,29 +1570,6 @@ export default function HomePage() {
                   {statusCounts['Alla'] || 0}
                 </span>
               </button>
-
-              {/* Backlog Tab */}
-              {libraryOwnershipFilter !== 'wishlist' && (
-                <button
-                  onClick={() => setSelectedStatus('Backlog')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
-                    selectedStatus === 'Backlog'
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'bg-zinc-900/80 text-blue-300 hover:text-blue-200 border border-blue-900/40'
-                  }`}
-                >
-                  <span>Backlog</span>
-                  <span
-                    className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-                      selectedStatus === 'Backlog'
-                        ? 'bg-blue-800 text-white'
-                        : 'bg-blue-950 text-blue-300'
-                    }`}
-                  >
-                    {statusCounts['Backlog'] || 0}
-                  </span>
-                </button>
-              )}
 
               {PLAY_STATUSES.map((status) => {
                 const isSelected = selectedStatus === status;

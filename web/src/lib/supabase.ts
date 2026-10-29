@@ -5,6 +5,7 @@ import {
   unpackGameNotes,
   packGameNotes,
   sanitizeUserGamePayload,
+  buildCoreUserGamePayload,
   normalizeIgdbRating,
   type GameMetadataPayload,
   META_REGEX,
@@ -100,6 +101,52 @@ export function normalizeLocalGame(g: any): Game {
   };
 }
 
+function normalizeStoryProgress(raw: any, isCompleted: boolean): any {
+  if (!raw) return isCompleted ? 'completed' : null;
+  const s = String(raw).trim().toLowerCase();
+  if (s === 'juststarted' || s === 'precis börjat') return 'justStarted';
+  if (s === 'midway' || s === 'mitt i det' || s === 'halvvägs') return 'midway';
+  if (s === 'nearend' || s === 'närmar mig slutet' || s === 'snart klar') return 'nearEnd';
+  if (s === 'completed' || s === 'klar' || s === 'klart') return 'completed';
+  return raw;
+}
+
+let useCoreUserGamesSchemaOnly = false;
+
+/**
+ * Uppdaterar ett spel i Supabase 'user_games' med automatisk fallback till bas-kolumner
+ * om databasschemat saknar utökade kolumner (t.ex. PGRST204). Garanterar att todos och progress alltid sparas.
+ */
+export async function updateUserGameInSupabase(
+  gameId: string,
+  updates: Partial<Game>,
+  existingGame?: Partial<Game>
+) {
+  if (!useCoreUserGamesSchemaOnly) {
+    const primaryPayload = sanitizeUserGamePayload(updates, existingGame);
+    const { error } = await supabase.from('user_games').update(primaryPayload).eq('id', gameId);
+    if (!error) return;
+
+    if (
+      error.code === 'PGRST204' ||
+      error.code === '42703' ||
+      error.message?.includes('column') ||
+      error.message?.includes('schema cache')
+    ) {
+      useCoreUserGamesSchemaOnly = true;
+    } else {
+      console.warn('Supabase update error:', error);
+      return;
+    }
+  }
+
+  const fallbackPayload = buildCoreUserGamePayload(updates, existingGame);
+  const { error: retryErr } = await supabase.from('user_games').update(fallbackPayload).eq('id', gameId);
+  if (retryErr) {
+    console.warn('Supabase fallback update error:', retryErr);
+  }
+}
+
 // Database response mapping helpers
 export function mapSupabaseGame(row: any): Game {
   const mapped = normalizeLocalGame(row);
@@ -137,15 +184,15 @@ export function mapSupabaseGame(row: any): Game {
     completed_year: completedYear,
     completed_date: completedDate,
     last_played_date: meta.last_played_date || row.last_played_date || null,
-    story_progress: meta.story_progress || row.story_progress || (isCompleted ? 'completed' : null),
+    story_progress: normalizeStoryProgress(row.story_progress || meta.story_progress, isCompleted),
     hours_played:
       meta.hours_played !== undefined && meta.hours_played !== null
         ? Number(meta.hours_played)
         : row.hours_played !== undefined && row.hours_played !== null
         ? Number(row.hours_played)
         : null,
-    progress_note: meta.progress_note || row.progress_note || null,
-    note_updated_at: meta.note_updated_at || row.note_updated_at || null,
+    progress_note: row.progress_note || meta.progress_note || null,
+    note_updated_at: row.note_updated_at || meta.note_updated_at || null,
   };
 }
 

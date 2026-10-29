@@ -4,7 +4,7 @@ import React from 'react';
 import { Game } from '@/types/game';
 import { StatusBadge } from './StatusBadge';
 import { isMultiplayerOrOngoing } from '@/lib/statusHelper';
-import { Star, Gamepad, Clock, CheckSquare, Flame } from 'lucide-react';
+import { Star, Gamepad, Clock, Flame } from 'lucide-react';
 import { GameDeal, normalizeTitle } from '@/services/priceWatcherService';
 
 interface GridViewProps {
@@ -101,13 +101,21 @@ export function GridView({
             </div>
           )}
 
-          {/* Todos progress badge if has todos (singleplayer only) */}
-          {!isMultiplayerOrOngoing(game) && totalTodos > 0 && (
-            <div className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded bg-black/75 backdrop-blur-md text-zinc-300 text-xs border border-zinc-700">
-              <CheckSquare className="w-3 h-3 text-emerald-400" />
-              <span>
-                {completedTodos}/{totalTodos}
-              </span>
+          {/* Tunn progressbar längst ned på omslaget för singleplayer med progress > 0 % */}
+          {!isMultiplayerOrOngoing(game) && totalTodos > 0 && completedTodos > 0 && (
+            <div className="absolute bottom-0 left-0 right-0 h-[3.5px] bg-black/60 overflow-hidden z-10">
+              <div
+                className={`h-full transition-all duration-300 ${
+                  game.status === 'paused'
+                    ? 'bg-amber-500'
+                    : game.status === 'completed'
+                    ? 'bg-teal-400'
+                    : game.status === 'playing'
+                    ? 'bg-emerald-500'
+                    : 'bg-blue-500'
+                }`}
+                style={{ width: `${Math.min(100, Math.max(4, Math.round((completedTodos / totalTodos) * 100)))}%` }}
+              />
             </div>
           )}
         </div>

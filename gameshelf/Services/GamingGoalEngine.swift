@@ -125,7 +125,7 @@ enum GamingGoalEngine {
                 switch game.status {
                 case .playing: return "Spelar nu"
                 case .paused: return "Pausat"
-                case .notStarted: return "Inte påbörjat"
+                case .notStarted: return "Backlog"
                 case .completed: return "Klarat"
                 case .abandoned: return "Avslutat"
                 }
@@ -155,7 +155,7 @@ enum GamingGoalEngine {
             switch game.status {
             case .playing: return "Spelar nu"
             case .paused: return "Pausat"
-            case .notStarted: return "Inte påbörjat"
+            case .notStarted: return "Backlog"
             case .completed: return "Klarat"
             case .abandoned: return "Avslutat"
             }

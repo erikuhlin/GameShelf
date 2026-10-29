@@ -137,7 +137,7 @@ export const GamingGoalEngine = {
           ? 'Spelar nu'
           : game.status === 'paused'
           ? 'Pausat'
-          : 'Inte påbörjat';
+          : 'Backlog';
 
       const displaySubtext = next
         ? `${done}/${total} uppdrag (${pct}%) · Nästa: ${next}`
@@ -177,7 +177,7 @@ export const GamingGoalEngine = {
         ? `Framsteg: ${game.story_progress}`
         : game.status === 'playing'
         ? 'Spelar nu (inga uppdrag tillagda)'
-        : 'Inte påbörjat',
+        : 'Backlog',
       hasTasks: false,
     };
   },

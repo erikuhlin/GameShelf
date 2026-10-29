@@ -13,6 +13,7 @@ import SwiftUI
 
 
 struct gameshelfApp: App {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var store = LibraryStore()
     @StateObject private var profile = ProfileStore.shared
 
@@ -26,6 +27,14 @@ struct gameshelfApp: App {
                 .environmentObject(profile)
                 .onOpenURL { url in
                     handleIncomingURL(url)
+                }
+                .onChange(of: scenePhase) { _, newPhase in
+                    if newPhase == .active {
+                        Task {
+                            await store.syncWithRemote()
+                            await profile.syncWithRemote()
+                        }
+                    }
                 }
         }
     }

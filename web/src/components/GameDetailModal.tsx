@@ -10,7 +10,7 @@ import {
   GamePlayType,
   GameStoryProgress,
 } from '@/types/game';
-import { supabase, sanitizeUserGamePayload } from '@/lib/supabase';
+import { supabase, sanitizeUserGamePayload, updateUserGameInSupabase } from '@/lib/supabase';
 import { StatusBadge } from './StatusBadge';
 import { getStatusDisplayTitle, inferPlayTypes, isMultiplayerOrOngoing } from '@/lib/statusHelper';
 import {
@@ -269,6 +269,30 @@ function GameDetailModalContent({
     }
   }, [game?.id, game?.title, game?.igdb_id]);
 
+  // Synka lokal state när spelobjektet uppdateras utifrån (t.ex. via Supabase Realtime från iOS-appen)
+  useEffect(() => {
+    if (!game) return;
+    setTodos(game.todos || []);
+    setStatus(game.status);
+    setIsBacklog(game.is_backlog ?? false);
+    setCompletedYear(game.completed_year ?? null);
+    setRating(game.rating || null);
+    setHoursPlayed(game.hours_played ?? 0);
+    if (game.story_progress) setStoryProgress(game.story_progress);
+    if (game.progress_note !== undefined) setProgressNote(game.progress_note || '');
+    if (game.note_updated_at !== undefined) setNoteUpdatedAt(game.note_updated_at || null);
+  }, [
+    game?.todos,
+    game?.status,
+    game?.is_backlog,
+    game?.completed_year,
+    game?.rating,
+    game?.hours_played,
+    game?.story_progress,
+    game?.progress_note,
+    game?.note_updated_at,
+  ]);
+
   // Stäng med Escape-tangenten
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -365,8 +389,7 @@ function GameDetailModalContent({
               };
               if (onUpdateGame) onUpdateGame({ ...game, ...updates });
               try {
-                const sanitized = sanitizeUserGamePayload(updates, game);
-                supabase.from('user_games').update(sanitized).eq('id', game.id).then();
+                updateUserGameInSupabase(game.id, updates, game);
               } catch (_) {}
             }
           }
@@ -386,8 +409,23 @@ function GameDetailModalContent({
 
   // Spara ändringar till Supabase och state
   const saveGameUpdates = async (updates: Partial<Game>) => {
-    const updatedGame: Game = {
+    const currentStateGame: Game = {
       ...game,
+      status,
+      is_backlog: isBacklog,
+      completed_year: completedYear,
+      play_types: playTypes,
+      rating,
+      notes,
+      todos,
+      hours_played: hoursPlayed,
+      story_progress: storyProgress,
+      progress_note: progressNote,
+      note_updated_at: noteUpdatedAt,
+    };
+
+    const updatedGame: Game = {
+      ...currentStateGame,
       ...updates,
       updated_at: new Date().toISOString(),
     };
@@ -404,11 +442,7 @@ function GameDetailModalContent({
     if (onUpdateGame) onUpdateGame(updatedGame);
 
     try {
-      const sanitized = sanitizeUserGamePayload(updates, game);
-      await supabase
-        .from('user_games')
-        .update(sanitized)
-        .eq('id', game.id);
+      await updateUserGameInSupabase(game.id, updates, currentStateGame);
     } catch (err) {
       console.warn('Failed to persist game updates to Supabase:', err);
     }
@@ -1310,7 +1344,7 @@ function GameDetailModalContent({
                       {isMultiplayer ? '🟢 Aktiv' : '🎮 Spelar nu'}
                     </option>
                     <option value="notStarted">
-                      {isMultiplayer ? '⚪ Inte spelat' : '📦 Backlog / Inte påbörjat'}
+                      {isMultiplayer ? '⚪ Inte spelat' : '📦 Backlog'}
                     </option>
                     <option value="paused">⏸️ Pausat</option>
                     <option value="completed">
@@ -1673,7 +1707,35 @@ function GameDetailModalContent({
                 game={{ ...effectiveGame, todos }}
                 onUpdateTodos={(updatedTodos) => {
                   setTodos(updatedTodos);
-                  saveGameUpdates({ todos: updatedTodos });
+
+                  const updates: Partial<Game> = { todos: updatedTodos };
+                  if (updatedTodos.length === 0) {
+                    setProgressNote('');
+                    updates.progress_note = null;
+                  } else if (status === 'playing') {
+                    const doneNum = updatedTodos.filter((t) => t.isDone).length;
+                    const ratio = doneNum / updatedTodos.length;
+                    let nextProg: GameStoryProgress = 'justStarted';
+                    if (doneNum === updatedTodos.length) {
+                      nextProg = 'completed';
+                    } else if (ratio >= 0.75) {
+                      nextProg = 'nearEnd';
+                    } else if (ratio >= 0.25) {
+                      nextProg = 'midway';
+                    }
+                    setStoryProgress(nextProg);
+                    updates.story_progress = nextProg;
+
+                    const nextTask = updatedTodos.find((t) => !t.isDone);
+                    const nextNote = nextTask ? nextTask.title : 'Alla uppdrag klara';
+                    const nowIso = new Date().toISOString();
+                    setProgressNote(nextNote);
+                    setNoteUpdatedAt(nowIso);
+                    updates.progress_note = nextNote;
+                    updates.note_updated_at = nowIso;
+                  }
+
+                  saveGameUpdates(updates);
                 }}
                 onUpdateStoryProgress={(progress) => {
                   setStoryProgress(progress);

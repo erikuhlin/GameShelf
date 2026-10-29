@@ -152,3 +152,61 @@ export function sanitizeUserGamePayload(updates: Partial<Game>, existingGame?: P
 
   return payload;
 }
+
+/**
+ * Fallback payload builder when the remote Supabase 'user_games' table only has the core columns
+ * (packing extended metadata safely into <!--GS_META:...--> inside notes while preserving todos).
+ */
+export function buildCoreUserGamePayload(updates: Partial<Game>, existingGame?: Partial<Game>): Record<string, any> {
+  const merged: Partial<Game> = {
+    ...existingGame,
+    ...updates,
+  };
+
+  const { notes: existingNotes, meta: existingMeta } = unpackGameNotes(existingGame?.notes);
+  const userNotes = updates.notes !== undefined
+    ? unpackGameNotes(updates.notes).notes
+    : existingNotes;
+
+  const mergedMeta: GameMetadataPayload = {
+    completed_year: merged.completed_year !== undefined ? merged.completed_year : existingMeta.completed_year,
+    completed_date: merged.completed_date !== undefined ? merged.completed_date : existingMeta.completed_date,
+    story_progress: merged.story_progress !== undefined ? merged.story_progress : existingMeta.story_progress,
+    hours_played: merged.hours_played !== undefined ? merged.hours_played : existingMeta.hours_played,
+    progress_note: merged.progress_note !== undefined ? merged.progress_note : existingMeta.progress_note,
+    note_updated_at: merged.note_updated_at !== undefined ? merged.note_updated_at : existingMeta.note_updated_at,
+    is_backlog: merged.is_backlog !== undefined ? merged.is_backlog : existingMeta.is_backlog,
+    is_owned: merged.is_owned !== undefined ? merged.is_owned : existingMeta.is_owned,
+    last_played_date: merged.last_played_date !== undefined ? merged.last_played_date : existingMeta.last_played_date,
+    started_playing_date: merged.started_playing_date !== undefined ? merged.started_playing_date : existingMeta.started_playing_date,
+    paused_date: merged.paused_date !== undefined ? merged.paused_date : existingMeta.paused_date,
+    play_types: merged.play_types !== undefined ? merged.play_types : existingMeta.play_types,
+  };
+
+  const payload: Record<string, any> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (updates.id !== undefined) payload.id = updates.id;
+  if (updates.user_id !== undefined) payload.user_id = updates.user_id;
+  if (updates.title !== undefined) payload.title = updates.title;
+  if (updates.cover_url !== undefined) payload.cover_url = updates.cover_url;
+  if ((updates as any).platform !== undefined) payload.platform = (updates as any).platform;
+  else if (updates.platforms && updates.platforms.length > 0) payload.platform = updates.platforms[0];
+  if (updates.platforms !== undefined) payload.platforms = updates.platforms;
+  if (updates.genres !== undefined) payload.genres = updates.genres;
+  if (updates.developers !== undefined) payload.developers = updates.developers;
+  if (updates.status !== undefined) payload.status = updates.status;
+  if (updates.rating !== undefined) payload.rating = updates.rating;
+  if (updates.igdb_rating !== undefined) payload.igdb_rating = updates.igdb_rating;
+  if (updates.release_year !== undefined) payload.release_year = updates.release_year;
+  if (updates.estimated_hours !== undefined) payload.estimated_hours = updates.estimated_hours;
+  if (updates.is_owned !== undefined) payload.is_owned = updates.is_owned;
+  if (updates.todos !== undefined) payload.todos = updates.todos;
+  else if (merged.todos !== undefined) payload.todos = merged.todos;
+  if (updates.igdb_id !== undefined) payload.igdb_id = updates.igdb_id;
+
+  payload.notes = packGameNotes(userNotes, mergedMeta);
+
+  return payload;
+}

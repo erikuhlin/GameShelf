@@ -267,22 +267,6 @@ export function GameWalkthroughSection({
   const handleToggleTodo = (id: string) => {
     const updated = todos.map((t) => (t.id === id ? { ...t, isDone: !t.isDone } : t));
     onUpdateTodos(updated);
-
-    // Uppdatera story progress automatiskt om relevant
-    if (onUpdateStoryProgress && updated.length > 0) {
-      const allDone = updated.every((t) => t.isDone);
-      const doneNum = updated.filter((t) => t.isDone).length;
-      const ratio = doneNum / updated.length;
-      if (allDone) {
-        onUpdateStoryProgress('completed');
-      } else if (ratio >= 0.75) {
-        onUpdateStoryProgress('nearEnd');
-      } else if (ratio >= 0.35) {
-        onUpdateStoryProgress('midway');
-      } else if (doneNum > 0) {
-        onUpdateStoryProgress('justStarted');
-      }
-    }
   };
 
   const toggleReveal = (id: string) => {

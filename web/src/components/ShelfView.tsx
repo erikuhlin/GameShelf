@@ -3,6 +3,7 @@
 import React from 'react';
 import { Game } from '@/types/game';
 import { StatusBadge } from './StatusBadge';
+import { isMultiplayerOrOngoing } from '@/lib/statusHelper';
 import { Star, Gamepad, Flame } from 'lucide-react';
 import { GameDeal, normalizeTitle } from '@/services/priceWatcherService';
 
@@ -44,7 +45,11 @@ export function ShelfView({ games, onSelectGame, dealsMap }: ShelfViewProps) {
           {/* Games on Shelf */}
           <div className="relative">
             <div className="flex items-end gap-3.5 sm:gap-5 overflow-x-auto pb-4 pt-4 sm:pt-6 px-2 sm:px-4 scrollbar-none">
-              {rowGames.map((game) => (
+              {rowGames.map((game) => {
+                const completedTodos = game.todos?.filter((t) => t.isDone).length || 0;
+                const totalTodos = game.todos?.length || 0;
+
+                return (
                 <div
                   key={game.id}
                   onClick={() => onSelectGame(game)}
@@ -93,6 +98,24 @@ export function ShelfView({ games, onSelectGame, dealsMap }: ShelfViewProps) {
                         <span>Backlog</span>
                       </div>
                     ) : null}
+
+                    {/* Tunn progressbar längst ned på omslaget för singleplayer med progress > 0 % */}
+                    {!isMultiplayerOrOngoing(game) && totalTodos > 0 && completedTodos > 0 && (
+                      <div className="absolute bottom-0 left-0 right-0 h-[3.5px] bg-black/60 overflow-hidden z-10">
+                        <div
+                          className={`h-full transition-all duration-300 ${
+                            game.status === 'paused'
+                              ? 'bg-amber-500'
+                              : game.status === 'completed'
+                              ? 'bg-teal-400'
+                              : game.status === 'playing'
+                              ? 'bg-emerald-500'
+                              : 'bg-blue-500'
+                          }`}
+                          style={{ width: `${Math.min(100, Math.max(4, Math.round((completedTodos / totalTodos) * 100)))}%` }}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Title & Platform label */}
@@ -105,7 +128,8 @@ export function ShelfView({ games, onSelectGame, dealsMap }: ShelfViewProps) {
                     </p>
                   </div>
                 </div>
-              ))}
+              );
+              })}
             </div>
 
             {/* Wooden Shelf Plank Base */}

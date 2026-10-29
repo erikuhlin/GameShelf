@@ -106,6 +106,8 @@ actor SupabaseSyncService {
         var last_played_date: String?
         var started_playing_date: String?
         var paused_date: String?
+        var packed_notes_with_meta: String?
+        var useCoreColumnsOnly: Bool = false
 
         enum CodingKeys: String, CodingKey {
             case id, user_id, title, platform, platforms, release_year, first_release_date
@@ -125,7 +127,6 @@ actor SupabaseSyncService {
             try container.encodeIfPresent(platform, forKey: .platform)
             try container.encodeIfPresent(platforms, forKey: .platforms)
             try container.encodeIfPresent(release_year, forKey: .release_year)
-            try container.encodeIfPresent(first_release_date, forKey: .first_release_date)
             try container.encodeIfPresent(genres, forKey: .genres)
             try container.encodeIfPresent(developers, forKey: .developers)
             try container.encodeIfPresent(status, forKey: .status)
@@ -135,24 +136,30 @@ actor SupabaseSyncService {
             try container.encodeIfPresent(igdb_id, forKey: .igdb_id)
             try container.encodeIfPresent(estimated_hours, forKey: .estimated_hours)
             try container.encodeIfPresent(is_owned, forKey: .is_owned)
-            try container.encodeIfPresent(notes, forKey: .notes)
             try container.encodeIfPresent(todos, forKey: .todos)
             try container.encodeIfPresent(created_at, forKey: .created_at)
-            try container.encodeIfPresent(completed_year, forKey: .completed_year)
-            try container.encodeIfPresent(completed_date, forKey: .completed_date)
-            try container.encodeIfPresent(story_progress, forKey: .story_progress)
-            try container.encodeIfPresent(hours_played, forKey: .hours_played)
-            try container.encodeIfPresent(progress_note, forKey: .progress_note)
-            try container.encodeIfPresent(note_updated_at, forKey: .note_updated_at)
-            try container.encodeIfPresent(play_types, forKey: .play_types)
-            try container.encodeIfPresent(priority, forKey: .priority)
-            try container.encodeIfPresent(is_backlog, forKey: .is_backlog)
-            try container.encodeIfPresent(last_played_date, forKey: .last_played_date)
-            try container.encodeIfPresent(started_playing_date, forKey: .started_playing_date)
-            try container.encodeIfPresent(paused_date, forKey: .paused_date)
+
+            if useCoreColumnsOnly {
+                try container.encodeIfPresent(packed_notes_with_meta ?? notes, forKey: .notes)
+            } else {
+                try container.encodeIfPresent(first_release_date, forKey: .first_release_date)
+                try container.encodeIfPresent(notes, forKey: .notes)
+                try container.encodeIfPresent(completed_year, forKey: .completed_year)
+                try container.encodeIfPresent(completed_date, forKey: .completed_date)
+                try container.encodeIfPresent(story_progress, forKey: .story_progress)
+                try container.encodeIfPresent(hours_played, forKey: .hours_played)
+                try container.encodeIfPresent(progress_note, forKey: .progress_note)
+                try container.encodeIfPresent(note_updated_at, forKey: .note_updated_at)
+                try container.encodeIfPresent(play_types, forKey: .play_types)
+                try container.encodeIfPresent(priority, forKey: .priority)
+                try container.encodeIfPresent(is_backlog, forKey: .is_backlog)
+                try container.encodeIfPresent(last_played_date, forKey: .last_played_date)
+                try container.encodeIfPresent(started_playing_date, forKey: .started_playing_date)
+                try container.encodeIfPresent(paused_date, forKey: .paused_date)
+            }
         }
 
-        init(from game: Game, userId: UUID? = nil) {
+        init(from game: Game, userId: UUID? = nil, useCoreColumnsOnly: Bool = false) {
             self.id = game.id
             self.user_id = userId
             self.title = game.title
@@ -183,8 +190,38 @@ actor SupabaseSyncService {
             self.last_played_date = game.lastPlayedDate.map { SupabaseDateParser.string(from: $0) }
             self.started_playing_date = game.startedPlayingDate.map { SupabaseDateParser.string(from: $0) }
             self.paused_date = game.pausedDate.map { SupabaseDateParser.string(from: $0) }
+            self.useCoreColumnsOnly = useCoreColumnsOnly
 
-            self.notes = game.notes.replacingOccurrences(of: #"<!--GS_META:[\s\S]*?-->\n?"#, with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+            let cleanNotes = game.notes.replacingOccurrences(of: #"<!--GS_META:[\s\S]*?-->\n?"#, with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+            self.notes = cleanNotes
+
+            // Packa även metadata i <!--GS_META:...--> för bakåtkompatibilitet om user_games i molnet saknar de utökade kolumnerna
+            var metaDict: [String: Any] = [:]
+            if let cy = game.completedYear {
+                metaDict["completed_year"] = cy
+            } else if game.status == .completed {
+                metaDict["completed_year"] = NSNull()
+            }
+            if let cd = self.completed_date { metaDict["completed_date"] = cd }
+            if let sp = self.story_progress { metaDict["story_progress"] = sp }
+            if let hp = self.hours_played { metaDict["hours_played"] = hp }
+            if let pn = self.progress_note { metaDict["progress_note"] = pn }
+            if let nu = self.note_updated_at { metaDict["note_updated_at"] = nu }
+            if let pt = self.play_types, !pt.isEmpty { metaDict["play_types"] = pt }
+            if let lpd = self.last_played_date { metaDict["last_played_date"] = lpd }
+            if let spd = self.started_playing_date { metaDict["started_playing_date"] = spd }
+            if let pd = self.paused_date { metaDict["paused_date"] = pd }
+            metaDict["is_backlog"] = game.isBacklog
+            metaDict["is_owned"] = game.isOwned
+
+            if !metaDict.isEmpty,
+               let jsonData = try? JSONSerialization.data(withJSONObject: metaDict),
+               let metaStr = String(data: jsonData, encoding: .utf8) {
+                let tag = "<!--GS_META:\(metaStr)-->"
+                self.packed_notes_with_meta = cleanNotes.isEmpty ? tag : "\(tag)\n\(cleanNotes)"
+            } else {
+                self.packed_notes_with_meta = cleanNotes
+            }
         }
 
         func toDomainGame() -> Game {
@@ -233,6 +270,15 @@ actor SupabaseSyncService {
 
             var parsedCompletedYear = completed_year
             var parsedCompletedDate: Date? = nil
+            var metaStoryProgress: String? = nil
+            var metaHoursPlayed: Double? = nil
+            var metaProgressNote: String? = nil
+            var metaNoteUpdatedAt: Date? = nil
+            var metaPlayTypes: [String]? = nil
+            var metaIsBacklog: Bool? = nil
+            var metaLastPlayedDate: Date? = nil
+            var metaStartedPlayingDate: Date? = nil
+            var metaPausedDate: Date? = nil
             var cleanUserNotes = notes ?? ""
 
             if let rawNotes = notes, let regex = try? NSRegularExpression(pattern: #"<!--GS_META:([\s\S]*?)-->"#) {
@@ -252,6 +298,38 @@ actor SupabaseSyncService {
                         if let cdStr = dict["completed_date"] as? String {
                             parsedCompletedDate = SupabaseDateParser.parse(cdStr)
                         }
+                        if let spStr = dict["story_progress"] as? String {
+                            metaStoryProgress = spStr
+                        }
+                        if let hpNum = dict["hours_played"] as? Double {
+                            metaHoursPlayed = hpNum
+                        } else if let hpInt = dict["hours_played"] as? Int {
+                            metaHoursPlayed = Double(hpInt)
+                        }
+                        if let pnStr = dict["progress_note"] as? String {
+                            metaProgressNote = pnStr
+                        }
+                        if let nuStr = dict["note_updated_at"] as? String {
+                            metaNoteUpdatedAt = SupabaseDateParser.parse(nuStr)
+                        }
+                        if let ptArr = dict["play_types"] as? [String] {
+                            metaPlayTypes = ptArr
+                        }
+                        if let ibBool = dict["is_backlog"] as? Bool {
+                            metaIsBacklog = ibBool
+                        }
+                        if let ioBool = dict["is_owned"] as? Bool, is_owned == nil {
+                            isOwnedGame = ioBool
+                        }
+                        if let lpdStr = dict["last_played_date"] as? String {
+                            metaLastPlayedDate = SupabaseDateParser.parse(lpdStr)
+                        }
+                        if let spdStr = dict["started_playing_date"] as? String {
+                            metaStartedPlayingDate = SupabaseDateParser.parse(spdStr)
+                        }
+                        if let pdStr = dict["paused_date"] as? String {
+                            metaPausedDate = SupabaseDateParser.parse(pdStr)
+                        }
                     }
                     cleanUserNotes = regex.stringByReplacingMatches(in: rawNotes, range: NSRange(location: 0, length: nsStr.length), withTemplate: "").trimmingCharacters(in: .whitespacesAndNewlines)
                 }
@@ -261,16 +339,18 @@ actor SupabaseSyncService {
                 parsedCompletedDate = SupabaseDateParser.parse(compStr)
             }
 
-            let mappedStoryProgress = (story_progress.flatMap { GameStoryProgress(rawValue: $0) }) ?? (playStatus == .completed ? .completed : nil)
-            let mappedPlayTypes: [GamePlayType]? = play_types.flatMap { types in
+            let rawStoryProg = story_progress ?? metaStoryProgress
+            let mappedStoryProgress = GameStoryProgress.fromAnyString(rawStoryProg) ?? (playStatus == .completed ? .completed : nil)
+            let rawPlayTypes = play_types ?? metaPlayTypes
+            let mappedPlayTypes: [GamePlayType]? = rawPlayTypes.flatMap { types in
                 let parsed = types.compactMap { GamePlayType(rawValue: $0) }
                 return parsed.isEmpty ? nil : parsed
             }
             let mappedPriority = priority.flatMap { PlayPriority(rawValue: $0) } ?? .none
-            let mappedLastPlayed = last_played_date.flatMap { SupabaseDateParser.parse($0) }
-            let mappedStartedPlaying = started_playing_date.flatMap { SupabaseDateParser.parse($0) }
-            let mappedPaused = paused_date.flatMap { SupabaseDateParser.parse($0) }
-            let mappedNoteUpdated = note_updated_at.flatMap { SupabaseDateParser.parse($0) }
+            let mappedLastPlayed = last_played_date.flatMap { SupabaseDateParser.parse($0) } ?? metaLastPlayedDate
+            let mappedStartedPlaying = started_playing_date.flatMap { SupabaseDateParser.parse($0) } ?? metaStartedPlayingDate
+            let mappedPaused = paused_date.flatMap { SupabaseDateParser.parse($0) } ?? metaPausedDate
+            let mappedNoteUpdated = note_updated_at.flatMap { SupabaseDateParser.parse($0) } ?? metaNoteUpdatedAt
 
             return Game(
                 id: id,
@@ -291,7 +371,7 @@ actor SupabaseSyncService {
                 todos: todos ?? [],
                 dateAdded: parsedDate,
                 playTypes: mappedPlayTypes,
-                isBacklog: is_backlog ?? isBacklog,
+                isBacklog: is_backlog ?? metaIsBacklog ?? isBacklog,
                 priority: mappedPriority,
                 lastPlayedDate: mappedLastPlayed,
                 startedPlayingDate: mappedStartedPlaying,
@@ -299,8 +379,8 @@ actor SupabaseSyncService {
                 completedYear: parsedCompletedYear,
                 completedDate: parsedCompletedDate,
                 storyProgress: mappedStoryProgress,
-                hoursPlayed: hours_played,
-                progressNote: progress_note,
+                hoursPlayed: hours_played ?? metaHoursPlayed,
+                progressNote: progress_note ?? metaProgressNote,
                 noteUpdatedAt: mappedNoteUpdated
             )
         }
@@ -379,6 +459,26 @@ actor SupabaseSyncService {
     }
 
     // MARK: - Games Sync
+    private var useCoreUserGamesSchemaOnly: Bool = false
+
+    /// Hämtar ett enskilt spel från Supabase för att säkerställa att vi inte skriver över senast sparad progress
+    func fetchRemoteGame(id: UUID) async throws -> Game? {
+        guard SupabaseConfig.isSyncEnabled else { return nil }
+        let currentUserId = await MainActor.run { SupabaseAuthManager.shared.persistentUserId }
+        guard let request = await makeRequest(
+            endpoint: "user_games?id=eq.\(id.uuidString)&user_id=eq.\(currentUserId.uuidString)&select=*&limit=1"
+        ) else {
+            return nil
+        }
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            return nil
+        }
+
+        let dtos = try JSONDecoder().decode([SupabaseGameDTO].self, from: data)
+        return dtos.first?.toDomainGame()
+    }
 
     /// Hämtar användarens spel från Supabase
     func fetchRemoteGames(forUserId explicitId: UUID? = nil) async throws -> [Game] {
@@ -416,7 +516,7 @@ actor SupabaseSyncService {
         let batchSize = 50
         for i in stride(from: 0, to: games.count, by: batchSize) {
             let chunk = Array(games[i..<min(i + batchSize, games.count)])
-            let dtos = chunk.map { SupabaseGameDTO(from: $0, userId: currentUserId) }
+            let dtos = chunk.map { SupabaseGameDTO(from: $0, userId: currentUserId, useCoreColumnsOnly: useCoreUserGamesSchemaOnly) }
             let data = try JSONEncoder().encode(dtos)
 
             guard let request = await makeRequest(
@@ -434,13 +534,11 @@ actor SupabaseSyncService {
                 let err = String(data: respData, encoding: .utf8) ?? "Kunde inte spara spel"
                 print("❌ upsertGames error (\(statusCode)): \(err)")
 
-                // Om schema saknar first_release_date, prova fallback utan det fältet
-                if err.contains("first_release_date") {
-                    let fallbackDtos = dtos.map { dto -> SupabaseGameDTO in
-                        var copy = dto
-                        copy.first_release_date = nil
-                        return copy
-                    }
+                // Om databasschemat saknar utökade kolumner (t.ex. PGRST204, first_release_date, story_progress etc.),
+                // spara med bas-kolumnerna där todos ingår och övrig metadata ligger i <!--GS_META:...-->
+                if !useCoreUserGamesSchemaOnly,
+                   statusCode == 400 || err.contains("PGRST204") || err.contains("42703") || err.contains("column") || err.contains("schema cache") || err.contains("first_release_date") {
+                    let fallbackDtos = chunk.map { SupabaseGameDTO(from: $0, userId: currentUserId, useCoreColumnsOnly: true) }
                     if let fbData = try? JSONEncoder().encode(fallbackDtos),
                        let fbReq = await makeRequest(
                            endpoint: "user_games",
@@ -450,6 +548,7 @@ actor SupabaseSyncService {
                        ),
                        let (_, fbResp) = try? await session.data(for: fbReq),
                        (200...299).contains((fbResp as? HTTPURLResponse)?.statusCode ?? 500) {
+                        useCoreUserGamesSchemaOnly = true
                         continue
                     }
                 }
@@ -631,13 +730,15 @@ actor SupabaseSyncService {
     private var walkthroughCacheByTitle: [String: GameWalkthroughTemplate] = [:]
 
     /// Hämtar en 1:1 walkthrough-mall från Supabase (först via igdb_id, sedan via normalized_title)
-    func fetchWalkthroughTemplate(igdbId: Int?, title: String) async throws -> GameWalkthroughTemplate? {
-        if let igdbId = igdbId, let cached = walkthroughCacheByIgdbId[igdbId] {
-            return cached
-        }
+    func fetchWalkthroughTemplate(igdbId: Int?, title: String, forceRefresh: Bool = false) async throws -> GameWalkthroughTemplate? {
         let normTitle = GameWalkthroughTemplate.normalizeTitle(title)
-        if !normTitle.isEmpty, let cached = walkthroughCacheByTitle[normTitle] {
-            return cached
+        if !forceRefresh {
+            if let igdbId = igdbId, let cached = walkthroughCacheByIgdbId[igdbId] {
+                return cached
+            }
+            if !normTitle.isEmpty, let cached = walkthroughCacheByTitle[normTitle] {
+                return cached
+            }
         }
 
         // 1. Slå upp via igdb_id om det finns
@@ -679,7 +780,18 @@ actor SupabaseSyncService {
         return nil
     }
 
-    /// Sparar eller uppdaterar en walkthrough-mall i public.game_walkthroughs (t.ex. efter AI-generering eller inklistring)
+    /// Sparar en ny AI-genererad mall i public.game_walkthroughs ENDAST om spelet helt saknar mall (skriver aldrig över befintlig/verifierad mall)
+    @discardableResult
+    func insertWalkthroughTemplateIfMissing(_ template: GameWalkthroughTemplate) async throws -> Bool {
+        if let existing = try? await fetchWalkthroughTemplate(igdbId: template.igdbId, title: template.title, forceRefresh: true),
+           !existing.items.isEmpty {
+            return false
+        }
+        try await upsertWalkthroughTemplate(template)
+        return true
+    }
+
+    /// Sparar eller uppdaterar en walkthrough-mall i public.game_walkthroughs (Admin-publicering)
     func upsertWalkthroughTemplate(_ template: GameWalkthroughTemplate) async throws {
         walkthroughCacheByIgdbId[template.igdbId] = template
         walkthroughCacheByTitle[template.normalizedTitle] = template

@@ -72,7 +72,7 @@ export function StatusBadge({
         <span>{title}</span>
       </span>
 
-      {showBacklog && isBacklog && (
+      {showBacklog && isBacklog && playStatus !== 'notStarted' && (
         <span
           className={`inline-flex items-center rounded-full border border-blue-500/40 bg-blue-950/70 text-blue-300 ${sizeClasses[size]}`}
           title="Ligger i din Backlog"

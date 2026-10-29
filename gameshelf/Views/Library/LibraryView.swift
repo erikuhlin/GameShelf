@@ -31,8 +31,8 @@ enum SortOption: String, CaseIterable, Identifiable {
 enum PlayStatusFilter: String, CaseIterable, Identifiable {
     case all = "Alla"
     case playing = "Spelar nu"
-    case notStarted = "Inte påbörjat"
     case paused = "Pausat"
+    case notStarted = "Backlog"
     case completed = "Genomspelat"
     case abandoned = "Avslutat"
 
@@ -42,8 +42,8 @@ enum PlayStatusFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all: return nil
         case .playing: return .playing
-        case .notStarted: return .notStarted
         case .paused: return .paused
+        case .notStarted: return .notStarted
         case .completed: return .completed
         case .abandoned: return .abandoned
         }

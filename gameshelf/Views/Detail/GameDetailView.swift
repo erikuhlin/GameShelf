@@ -3522,7 +3522,7 @@ private struct LibraryStatusSheetView: View {
                                 Text("Lägg i Backlog")
                                     .font(.subheadline.bold())
                                     .foregroundStyle(.primary)
-                                Text("Sätter status till Inte påbörjat")
+                                Text("Sätter status till Backlog")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                             }

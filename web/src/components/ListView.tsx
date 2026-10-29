@@ -3,6 +3,7 @@
 import React from 'react';
 import { Game } from '@/types/game';
 import { StatusBadge } from './StatusBadge';
+import { isMultiplayerOrOngoing } from '@/lib/statusHelper';
 import { Star, Gamepad, Clock, CheckSquare, Flame } from 'lucide-react';
 import { GameDeal, normalizeTitle } from '@/services/priceWatcherService';
 
@@ -42,7 +43,11 @@ export function ListView({ games, onSelectGame, dealsMap }: ListViewProps) {
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-800/60">
-          {games.map((game) => (
+          {games.map((game) => {
+            const completedTodos = game.todos?.filter((t) => t.isDone).length || 0;
+            const totalTodos = game.todos?.length || 0;
+
+            return (
             <tr
               key={game.id}
               onClick={() => onSelectGame(game)}
@@ -50,7 +55,7 @@ export function ListView({ games, onSelectGame, dealsMap }: ListViewProps) {
             >
               {/* Cover thumbnail */}
               <td className="py-2.5 px-4">
-                <div className="w-10 h-13 rounded overflow-hidden bg-zinc-800 border border-zinc-700 flex-shrink-0 aspect-[3/4]">
+                <div className="relative w-10 h-13 rounded overflow-hidden bg-zinc-800 border border-zinc-700 flex-shrink-0 aspect-[3/4]">
                   {game.cover_url ? (
                     <img
                       src={game.cover_url}
@@ -61,6 +66,24 @@ export function ListView({ games, onSelectGame, dealsMap }: ListViewProps) {
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <Gamepad className="w-4 h-4 text-zinc-600" />
+                    </div>
+                  )}
+
+                  {/* Tunn progressbar längst ned på thumbnail för singleplayer med progress > 0 % */}
+                  {!isMultiplayerOrOngoing(game) && totalTodos > 0 && completedTodos > 0 && (
+                    <div className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-black/60 overflow-hidden z-10">
+                      <div
+                        className={`h-full transition-all duration-300 ${
+                          game.status === 'paused'
+                            ? 'bg-amber-500'
+                            : game.status === 'completed'
+                            ? 'bg-teal-400'
+                            : game.status === 'playing'
+                            ? 'bg-emerald-500'
+                            : 'bg-blue-500'
+                        }`}
+                        style={{ width: `${Math.min(100, Math.max(4, Math.round((completedTodos / totalTodos) * 100)))}%` }}
+                      />
                     </div>
                   )}
                 </div>
@@ -138,7 +161,8 @@ export function ListView({ games, onSelectGame, dealsMap }: ListViewProps) {
                 )}
               </td>
             </tr>
-          ))}
+          );
+          })}
         </tbody>
       </table>
     </div>

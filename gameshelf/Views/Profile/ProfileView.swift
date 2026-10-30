@@ -137,7 +137,13 @@ struct ProfileView: View {
 
     // Dynamiskt beräknat Spel-DNA
     private var computedSpelDNA: SpelDNAProfile? {
-        SpelDNACalculator.calculate(games: store.games, playFor: profile.playFor)
+        SpelDNACalculator.calculate(
+            games: store.games,
+            playFor: profile.playFor,
+            favoriteGenres: profile.favoriteGenres,
+            favoriteGameIDs: profile.favoriteGameIDs,
+            playstyle: profile.playstyle
+        )
     }
 
     var body: some View {

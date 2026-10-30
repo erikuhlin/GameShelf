@@ -40,12 +40,32 @@ struct SpelDNACard: View {
             .allowsHitTesting(false)
 
             VStack(alignment: .leading, spacing: 0) {
-                // Ikon
-                Text(p.icon)
-                    .font(.system(size: 22))
-                    .frame(width: 42, height: 42)
-                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .padding(.bottom, 12)
+                // Topprad: Ikon & Dela-knapp
+                HStack {
+                    Text(p.icon)
+                        .font(.system(size: 22))
+                        .frame(width: 42, height: 42)
+                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                    Spacer()
+
+                    let shareText = "🧬 Mitt Spel-DNA på Gameshelf: \(p.icon) \(p.title)\n\n\(p.description)\n\n" + (p.secondaryArchetypes.isEmpty ? "" : "Sekundärt DNA: " + p.secondaryArchetypes.map { "\($0.icon) \($0.title) (\($0.matchPercentage)%)" }.joined(separator: ", ") + "\n\n") + "Utforska dina spelvanor på Gameshelf!"
+
+                    ShareLink(item: shareText) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 11, weight: .bold))
+                            Text("Dela DNA")
+                                .font(.system(size: 11, weight: .bold))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.white.opacity(0.12), in: Capsule())
+                        .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.bottom, 12)
 
                 // Eyebrow
                 Text("DITT SPEL-DNA • HUVUDARKETYP")
@@ -80,6 +100,49 @@ struct SpelDNACard: View {
                             .foregroundStyle(p.accentColor)
                     }
                 }
+
+                // Sekundära arketyper / Hybrider
+                if !p.secondaryArchetypes.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("SEKUNDÄRT DNA & HYBRID")
+                            .font(.system(size: 9, weight: .black))
+                            .tracking(1.0)
+                            .foregroundStyle(.white.opacity(0.55))
+
+                        HStack(spacing: 8) {
+                            ForEach(p.secondaryArchetypes) { sub in
+                                HStack(spacing: 5) {
+                                    Text(sub.icon)
+                                        .font(.system(size: 11))
+                                    Text(sub.title)
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                    Text("\(sub.matchPercentage)%")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(sub.accentColor)
+                                }
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 5)
+                                .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
+                                )
+                            }
+                        }
+                    }
+                    .padding(.top, 14)
+                }
+
+                // Fotnot
+                HStack(spacing: 4) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 9))
+                    Text("Viktat mot dina favoritspel, mästerverk och spelstil.")
+                        .font(.system(size: 10))
+                }
+                .foregroundStyle(.white.opacity(0.45))
+                .padding(.top, 12)
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)

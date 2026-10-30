@@ -20,6 +20,9 @@ enum LibrarySectionTab: String, CaseIterable, Identifiable {
 // MARK: - Sorteringsalternativ
 enum SortOption: String, CaseIterable, Identifiable {
     case dateAdded = "Senast tillagda"
+    case closestToFinish = "Närmast klart"
+    case shortestPlaytime = "Kortast speltid"
+    case longestPlaytime = "Längst speltid"
     case releaseYear = "Lanseringsdatum"
     case title = "Titel (A-Ö)"
     case rating = "Högst betyg"
@@ -150,6 +153,9 @@ struct LibraryView: View {
     /// Endast aktiv för 'Alla' och 'Genomspelat' när användaren har slagit på årsvy.
     /// För 'Spelar nu', 'Backlog/Inte påbörjat', 'Pausat' och 'Avslutat' visas alltid rent rutnät för maximalt fokus.
     private var effectiveGroupByYear: Bool {
+        if selectedSort == .closestToFinish || selectedSort == .shortestPlaytime || selectedSort == .longestPlaytime {
+            return false
+        }
         if selectedTab == .wishlist {
             return groupByYear
         }
@@ -414,6 +420,87 @@ struct LibraryView: View {
         case .dateAdded:
             if g1.dateAdded != g2.dateAdded {
                 return g1.dateAdded > g2.dateAdded
+            }
+            return g1.title.localizedCaseInsensitiveCompare(g2.title) == .orderedAscending
+
+        case .closestToFinish:
+            // 1. Story / Singleplayer före multiplayer
+            let m1 = g1.isMultiplayerOrOngoing
+            let m2 = g2.isMultiplayerOrOngoing
+            if m1 != m2 {
+                return !m1 && m2
+            }
+
+            // Om båda är multiplayer: senast spelade/påbörjade först
+            if m1 && m2 {
+                return g1.effectiveStartedPlayingDate > g2.effectiveStartedPlayingDate
+            }
+
+            // 2. För story-spel:
+            // Spel som redan är klara / avbrutna placeras sist om inte båda är det
+            let isComp1 = g1.status == .completed || g1.status == .abandoned
+            let isComp2 = g2.status == .completed || g2.status == .abandoned
+            if isComp1 != isComp2 {
+                return !isComp1 && isComp2
+            }
+            if isComp1 && isComp2 {
+                let d1 = g1.completedDate ?? g1.dateAdded
+                let d2 = g2.completedDate ?? g2.dateAdded
+                return d1 > d2
+            }
+
+            // Beräkna progress
+            let p1 = GamingGoalEngine.calculateProgress(for: g1)
+            let p2 = GamingGoalEngine.calculateProgress(for: g2)
+            let hasProg1 = p1.percentage > 0 || p1.hasTasks
+            let hasProg2 = p2.percentage > 0 || p2.hasTasks
+
+            if hasProg1 && hasProg2 {
+                if p1.percentage != p2.percentage {
+                    return p1.percentage > p2.percentage
+                }
+                if p1.hasTasks && p2.hasTasks && p1.remainingTasks != p2.remainingTasks {
+                    return p1.remainingTasks < p2.remainingTasks
+                }
+            } else if hasProg1 {
+                return true
+            } else if hasProg2 {
+                return false
+            } else {
+                // Inga har påbörjad progress (t.ex. unstarted/backlog): kortast speltid först!
+                let h1 = g1.estimatedHours ?? 0
+                let h2 = g2.estimatedHours ?? 0
+                if h1 > 0 && h2 > 0 {
+                    if h1 != h2 { return h1 < h2 }
+                } else if h1 > 0 {
+                    return true
+                } else if h2 > 0 {
+                    return false
+                }
+            }
+            return g1.title.localizedCaseInsensitiveCompare(g2.title) == .orderedAscending
+
+        case .shortestPlaytime:
+            let h1 = g1.estimatedHours ?? 0
+            let h2 = g2.estimatedHours ?? 0
+            if h1 > 0 && h2 > 0 {
+                if h1 != h2 { return h1 < h2 }
+            } else if h1 > 0 {
+                return true
+            } else if h2 > 0 {
+                return false
+            }
+            return g1.title.localizedCaseInsensitiveCompare(g2.title) == .orderedAscending
+
+        case .longestPlaytime:
+            let h1 = g1.estimatedHours ?? 0
+            let h2 = g2.estimatedHours ?? 0
+            if h1 > 0 && h2 > 0 {
+                if h1 != h2 { return h1 > h2 }
+            } else if h1 > 0 {
+                return true
+            } else if h2 > 0 {
+                return false
             }
             return g1.title.localizedCaseInsensitiveCompare(g2.title) == .orderedAscending
 
@@ -1032,18 +1119,79 @@ struct LibraryView: View {
                             }
                         } else {
                             // Platt rutnät
-                            LazyVGrid(columns: posterGridColumns, spacing: 14) {
-                                ForEach(ownedGames) { game in
-                                    NavigationLink(destination: GameDetailView(game: game)) {
-                                        GameCard(game: game, style: .libraryGrid)
+                            if selectedSort == .closestToFinish {
+                                let storyGames = ownedGames.filter { !$0.isMultiplayerOrOngoing }
+                                let multiplayerGames = ownedGames.filter { $0.isMultiplayerOrOngoing }
+
+                                if !storyGames.isEmpty {
+                                    LazyVGrid(columns: posterGridColumns, spacing: 14) {
+                                        ForEach(storyGames) { game in
+                                            NavigationLink(destination: GameDetailView(game: game)) {
+                                                GameCard(game: game, style: .libraryGrid)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .contextMenu {
+                                                gameContextMenu(for: game)
+                                            }
+                                        }
                                     }
-                                    .buttonStyle(.plain)
-                                    .contextMenu {
-                                        gameContextMenu(for: game)
+                                    .padding(.horizontal, 16)
+                                }
+
+                                if !multiplayerGames.isEmpty {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        if !storyGames.isEmpty {
+                                            Divider()
+                                                .padding(.top, 14)
+                                                .padding(.bottom, 6)
+                                        }
+
+                                        HStack(spacing: 8) {
+                                            Image(systemName: "gamecontroller.fill")
+                                                .font(.system(size: 13, weight: .bold))
+                                                .foregroundStyle(Color.red)
+
+                                            Text("Löpande spel & Multiplayer (\(multiplayerGames.count))")
+                                                .font(.subheadline.weight(.bold))
+                                                .foregroundStyle(.primary)
+
+                                            Spacer()
+                                        }
+
+                                        Text("Spel utan bestämt slut (Live-service, MMO & återkommande flerspelarspel)")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.bottom, 4)
+
+                                    LazyVGrid(columns: posterGridColumns, spacing: 14) {
+                                        ForEach(multiplayerGames) { game in
+                                            NavigationLink(destination: GameDetailView(game: game)) {
+                                                GameCard(game: game, style: .libraryGrid)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .contextMenu {
+                                                gameContextMenu(for: game)
+                                            }
+                                        }
+                                    }
+                                    .padding(.horizontal, 16)
+                                }
+                            } else {
+                                LazyVGrid(columns: posterGridColumns, spacing: 14) {
+                                    ForEach(ownedGames) { game in
+                                        NavigationLink(destination: GameDetailView(game: game)) {
+                                            GameCard(game: game, style: .libraryGrid)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .contextMenu {
+                                            gameContextMenu(for: game)
+                                        }
                                     }
                                 }
+                                .padding(.horizontal, 16)
                             }
-                            .padding(.horizontal, 16)
                         }
                     } else {
                         emptyState(
@@ -1278,18 +1426,79 @@ struct LibraryView: View {
                         }
                     }
                 } else {
-                    LazyVGrid(columns: posterGridColumns, spacing: 14) {
-                        ForEach(wishlistGames) { game in
-                            NavigationLink(destination: GameDetailView(game: game)) {
-                                GameCard(game: game, style: .libraryGrid, showWishlistInfo: true)
+                    if selectedSort == .closestToFinish {
+                        let storyGames = wishlistGames.filter { !$0.isMultiplayerOrOngoing }
+                        let multiplayerGames = wishlistGames.filter { $0.isMultiplayerOrOngoing }
+
+                        if !storyGames.isEmpty {
+                            LazyVGrid(columns: posterGridColumns, spacing: 14) {
+                                ForEach(storyGames) { game in
+                                    NavigationLink(destination: GameDetailView(game: game)) {
+                                        GameCard(game: game, style: .libraryGrid, showWishlistInfo: true)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .contextMenu {
+                                        gameContextMenu(for: game)
+                                    }
+                                }
                             }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                gameContextMenu(for: game)
+                            .padding(.horizontal, 16)
+                        }
+
+                        if !multiplayerGames.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                if !storyGames.isEmpty {
+                                    Divider()
+                                        .padding(.top, 14)
+                                        .padding(.bottom, 6)
+                                }
+
+                                HStack(spacing: 8) {
+                                    Image(systemName: "gamecontroller.fill")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundStyle(Color.red)
+
+                                    Text("Löpande spel & Multiplayer (\(multiplayerGames.count))")
+                                        .font(.subheadline.weight(.bold))
+                                        .foregroundStyle(.primary)
+
+                                    Spacer()
+                                }
+
+                                Text("Spel utan bestämt slut (Live-service, MMO & återkommande flerspelarspel)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 4)
+
+                            LazyVGrid(columns: posterGridColumns, spacing: 14) {
+                                ForEach(multiplayerGames) { game in
+                                    NavigationLink(destination: GameDetailView(game: game)) {
+                                        GameCard(game: game, style: .libraryGrid, showWishlistInfo: true)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .contextMenu {
+                                        gameContextMenu(for: game)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                        }
+                    } else {
+                        LazyVGrid(columns: posterGridColumns, spacing: 14) {
+                            ForEach(wishlistGames) { game in
+                                NavigationLink(destination: GameDetailView(game: game)) {
+                                    GameCard(game: game, style: .libraryGrid, showWishlistInfo: true)
+                                }
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    gameContextMenu(for: game)
+                                }
                             }
                         }
+                        .padding(.horizontal, 16)
                     }
-                    .padding(.horizontal, 16)
                 }
             } else if filterOnlyOnSale {
                 emptyState(
@@ -1533,6 +1742,9 @@ struct LibraryView: View {
     private func shortSortTitle(_ sort: SortOption) -> String {
         switch sort {
         case .dateAdded: return "Datum"
+        case .closestToFinish: return "Närmast klart"
+        case .shortestPlaytime: return "Kortast tid"
+        case .longestPlaytime: return "Längst tid"
         case .releaseYear: return "År"
         case .title: return "A–Ö"
         case .rating: return "Betyg"
@@ -1542,6 +1754,9 @@ struct LibraryView: View {
     private func iconForSort(_ option: SortOption) -> String {
         switch option {
         case .dateAdded: return "clock"
+        case .closestToFinish: return "target"
+        case .shortestPlaytime: return "bolt.fill"
+        case .longestPlaytime: return "hourglass"
         case .releaseYear: return "calendar"
         case .title: return "textformat"
         case .rating: return "star"

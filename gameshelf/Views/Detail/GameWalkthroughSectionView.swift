@@ -1803,30 +1803,41 @@ struct GameWalkthroughSectionView: View {
         let encodedKey = cleanKey.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? cleanKey
 
         let prompt = """
-        Task: Create the COMPLETE, chronological 1:1 main story walkthrough progression list for the video game "\(title)", structured like IGN's official Walkthrough guide.
+        Task: Create the COMPLETE, authentic, and chronological 1:1 main story walkthrough progression list for the video game "\(title)".
+        Search the live web (IGN, PowerPyx, Game8, Eurogamer, Fandom wiki) to get the real, official chapter / quest / mission structure.
 
-        STRICT RULES:
-        1. COMPLETE 1:1 LIST (NO LUMPING, NO SKIPPING):
-           - Include EVERY official main story chapter, main quest, or walkthrough area in chronological order from start to finish.
-           - NEVER combine two chapters, quests, or areas into one item (e.g., NEVER write "Chapter 1 & 2"). Each must be its own separate object in "items".
-        2. EXCLUDE MINOR SIDE CONTENT:
-           - Only include main story chapters/quests/areas (plus major optional boss areas if relevant, marked with "isOptional": true).
-        3. OFFICIAL ENGLISH TITLES:
-           - Keep the official English in-game/IGN titles for all chapters, quests, and areas. Do not translate titles to Swedish!
-        4. ACT / PHASE GROUPING ("chapterGroup"):
-           - Group every item into its overarching Act, Phase, or Region using "chapterGroup" (e.g., "Prolog", "Akt 1", "Akt 2", "Akt 3", "Final").
-        5. Output ONLY valid JSON matching this exact schema:
+        STRICT ACCURACY RULES:
+        1. SEARCH AND VERIFY BEFORE ANSWERING (NO GUESSING):
+           - Search the web for authentic walkthrough guides for "\(title)".
+           - NEVER invent, hallucinate, or guess fake chapter or quest titles!
+        2. DEMO / UPCOMING / PRE-RELEASE GAMES (e.g. Phantom Blade Zero):
+           - If the game is not yet fully released and only a demo, prologue, or preview is available, ONLY output the confirmed demo / prologue chapters or preview sections.
+           - NEVER invent a fictional 20-chapter full game walkthrough for an unreleased game!
+           - State clearly in "summary" (in Swedish) that this list covers the playable demo/preview chapters.
+        3. STORYLINE & OPEN-WORLD GAMES (e.g. Days Gone, Cyberpunk 2077, Witcher 3):
+           - Do NOT force generic "Chapter 1, Chapter 2" labels onto games that use Storylines or Quests.
+           - For Days Gone: Use the authentic main storyline quest names (e.g., "He's My Brother", "Chasing Leon", "I Remember", "Ripped Apart", etc.), grouped chronologically by Region/Camp (Cascade / Copeland, Belknap / Hot Springs, Lost Lake, Crater Lake / Wizard Island, Finale).
+        4. COMPLETE 1:1 CHRONOLOGICAL ORDER:
+           - Include EVERY official main story quest, chapter, or walkthrough mission in chronological story order.
+           - NEVER combine two quests into one item (e.g., NEVER write "Chapter 1 & 2").
+           - Exclude minor side quests and collectibles unless they are essential story milestones.
+        5. OFFICIAL ENGLISH TITLES:
+           - Keep the exact official English in-game or guide titles for all quests and chapters. Do not translate quest titles to Swedish!
+        6. ACT / REGION GROUPING ("chapterGroup"):
+           - Group every item into its overarching Act, Region, or Storyline using "chapterGroup" (e.g., "Prolog", "Akt 1", "Cascade", "Lost Lake", "Crater Lake", "Akt 2", etc.).
+        7. OUTPUT FORMAT:
+           - Output ONLY valid JSON inside a ```json ... ``` code block matching this schema:
         {
           "gameTitle": "\(title)",
           "hasLinearProgression": true,
           "progressionType": "chapters",
-          "summary": "Kort svensk sammanfattning av spelets upplägg",
+          "summary": "Kort svensk sammanfattning av spelets upplägg och källa",
           "items": [
             {
               "id": "1",
-              "title": "Exact English Chapter / Quest / Area Title",
+              "title": "Exact English Chapter / Quest Title",
               "order": 1,
-              "chapterGroup": "Akt 1",
+              "chapterGroup": "Akt 1 eller Region",
               "description": "Kort svensk info",
               "isOptional": false
             }
@@ -1866,8 +1877,8 @@ struct GameWalkthroughSectionView: View {
         }
 
         do {
-            // 1. Hämta aktiva modeller dynamiskt från Google (precis som i webbtestet), med gemini-3.8-flash som primär standard
-            var candidateModels = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-2.5-flash"]
+            // 1. Hämta aktiva modeller dynamiskt från Google (med stabila Flash-modeller som primär standard)
+            var candidateModels = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
 
             if let listURL = URL(string: "https://generativelanguage.googleapis.com/v1beta/models?key=\(encodedKey)") {
                 var listReq = URLRequest(url: listURL)
@@ -1915,27 +1926,28 @@ struct GameWalkthroughSectionView: View {
                 }
             }
 
-            // 2. Anropa kandidatmodellerna i tur och ordning med thinkingBudget: 0 (och 400-fallback utan thinkingConfig)
+            // 2. Anropa kandidatmodellerna med Google Search Grounding för verifierad källfakta
             var lastError: Error? = nil
             var parsedTemplateItems: [GameWalkthroughTemplateItem] = []
             var parsedSummary = "Kapitellista genererad för \(title)."
             var parsedProgressionType = "chapters"
-            var usedModelName = candidateModels.first ?? "gemini-3.8-flash"
+            var usedModelName = candidateModels.first ?? "gemini-2.5-flash"
 
             for modelName in candidateModels {
                 guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(modelName):generateContent?key=\(encodedKey)") else {
                     continue
                 }
 
-                let payloadWithThinking: [String: Any] = [
+                let payloadWithSearch: [String: Any] = [
                     "contents": [
                         ["parts": [["text": prompt]]]
                     ],
+                    "tools": [
+                        ["googleSearch": [:]]
+                    ],
                     "generationConfig": [
                         "temperature": 0.1,
-                        "responseMimeType": "application/json",
-                        "maxOutputTokens": 8192,
-                        "thinkingConfig": ["thinkingBudget": 0]
+                        "maxOutputTokens": 8192
                     ]
                 ]
 
@@ -1955,18 +1967,27 @@ struct GameWalkthroughSectionView: View {
                     request.httpMethod = "POST"
                     request.timeoutInterval = 45
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    request.httpBody = try JSONSerialization.data(withJSONObject: payloadWithThinking)
+                    request.httpBody = try JSONSerialization.data(withJSONObject: payloadWithSearch)
 
                     var (data, response) = try await URLSession.shared.data(for: request)
                     guard var http = response as? HTTPURLResponse else {
                         throw URLError(.badServerResponse)
                     }
 
-                    // Om modellen inte stödjer thinkingConfig (HTTP 400), prova direkt utan thinkingConfig
+                    // Om modellen inte stödjer search-verktyg (HTTP 400), prova direkt reservanrop utan tools
                     if http.statusCode == 400 {
                         var retryRequest = URLRequest(url: url)
                         retryRequest.httpMethod = "POST"
                         retryRequest.timeoutInterval = 45
+                        retryRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                        retryRequest.httpBody = try JSONSerialization.data(withJSONObject: payloadWithoutThinking)
+
+                        let (retryData, retryResponse) = try await URLSession.shared.data(for: retryRequest)
+                        if let retryHttp = retryResponse as? HTTPURLResponse {
+                            data = retryData
+                            http = retryHttp
+                        }
+                    }
                         retryRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
                         retryRequest.httpBody = try JSONSerialization.data(withJSONObject: payloadWithoutThinking)
 

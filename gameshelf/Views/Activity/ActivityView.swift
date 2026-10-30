@@ -45,8 +45,15 @@ struct ActivityView: View {
 
     /// Spel klarade under innevarande år
     private var thisYearCompletedCount: Int {
-        libraryGames.filter {
-            $0.status == .completed && $0.completedYear == currentYear
+        libraryGames.filter { game in
+            guard game.status == .completed else { return false }
+            if let y = game.completedYear, y > 0 {
+                return y == currentYear
+            }
+            if let d = game.completedDate {
+                return Calendar.current.component(.year, from: d) == currentYear
+            }
+            return false
         }.count
     }
 
@@ -70,14 +77,6 @@ struct ActivityView: View {
         let baseCount = libraryGames.count
         guard baseCount > 0 else { return 0 }
         return Int(round(Double(completedGamesCount) / Double(baseCount) * 100.0))
-    }
-
-    /// Beräknad total speltid (timmar) från avklarade och pågående spel
-    private var totalEstimatedHours: Int {
-        libraryGames.reduce(0) { total, game in
-            guard game.status != .notStarted else { return total }
-            return total + (game.estimatedHours ?? 0)
-        }
     }
 
     /// Genomsnittligt personligt betyg (1–10)
@@ -109,35 +108,42 @@ struct ActivityView: View {
             .sorted { $0.count > $1.count }
     }
 
-    /// Plattformsfördelning
-    private var platformCounts: [(name: String, count: Int, percentage: Double)] {
-        var counts: [String: Int] = [:]
-        for game in games {
-            for platform in game.platforms where !platform.isEmpty {
-                let norm = normalizePlatformName(platform)
-                counts[norm, default: 0] += 1
+    /// Epoker & Årtionden
+    private var eraCounts: [(name: String, sub: String, count: Int, percentage: Double, color: Color)] {
+        var count2020 = 0
+        var count2010 = 0
+        var count2000 = 0
+        var count1990 = 0
+        var countRetro = 0
+
+        let datedGames = games.filter { $0.releaseYear > 0 }
+        for game in datedGames {
+            let y = game.releaseYear
+            if y >= 2020 {
+                count2020 += 1
+            } else if y >= 2010 {
+                count2010 += 1
+            } else if y >= 2000 {
+                count2000 += 1
+            } else if y >= 1990 {
+                count1990 += 1
+            } else {
+                countRetro += 1
             }
         }
-        let total = Double(max(1, games.count))
-        return counts
-            .map { (name: $0.key, count: $0.value, percentage: Double($0.value) / total) }
-            .sorted { $0.count > $1.count }
-    }
 
-    private func normalizePlatformName(_ name: String) -> String {
-        let lower = name.lowercased()
-        if lower.contains("playstation 5") || lower == "ps5" { return "PlayStation 5" }
-        if lower.contains("playstation 4") || lower == "ps4" { return "PlayStation 4" }
-        if lower.contains("playstation 3") || lower == "ps3" { return "PlayStation 3" }
-        if lower.contains("switch") { return "Nintendo Switch" }
-        if lower.contains("series x") || lower.contains("series s") || lower.contains("xbox series") { return "Xbox Series X|S" }
-        if lower.contains("xbox one") { return "Xbox One" }
-        if lower.contains("xbox 360") { return "Xbox 360" }
-        if lower.contains("pc") || lower.contains("windows") { return "PC" }
-        if lower.contains("mac") { return "Mac" }
-        if lower.contains("ios") || lower.contains("iphone") || lower.contains("ipad") { return "iOS" }
-        if lower.contains("android") { return "Android" }
-        return name
+        let total = Double(max(1, datedGames.count))
+        let items: [(String, String, Int, Color)] = [
+            ("2020-talet", "2020 – nutid", count2020, .blue),
+            ("2010-talet", "2010 – 2019", count2010, .purple),
+            ("2000-talet", "2000 – 2009", count2000, .orange),
+            ("90-talet", "1990 – 1999", count1990, .teal),
+            ("Retro & Klassiker", "Före 1990", countRetro, .red)
+        ]
+
+        return items
+            .filter { $0.2 > 0 }
+            .map { (name: $0.0, sub: $0.1, count: $0.2, percentage: Double($0.2) / total, color: $0.3) }
     }
 
     /// Spel fördelade över lanseringsår (toppår)
@@ -190,7 +196,9 @@ struct ActivityView: View {
                     gamingGoalCard
                     statusDistributionCard
                     genreDistributionCard
-                    platformDistributionCard
+                    if !eraCounts.isEmpty {
+                        eraDistributionCard
+                    }
                     if !releaseYearCounts.isEmpty {
                         releaseYearsCard
                     }
@@ -298,11 +306,11 @@ struct ActivityView: View {
                 )
 
                 kpiBox(
-                    icon: "clock.fill",
+                    icon: "trophy.fill",
                     iconColor: .orange,
-                    title: "Speltid",
-                    value: totalEstimatedHours > 0 ? "\(totalEstimatedHours) tim" : "—",
-                    subtitle: "Beräknad speltid"
+                    title: "Spelmål \(String(currentYear))",
+                    value: "\(thisYearCompletedCount) / \(max(1, profile.annualGamingGoal))",
+                    subtitle: "\(min(100, Int(round(Double(thisYearCompletedCount) / Double(max(1, profile.annualGamingGoal)) * 100.0))))% av målet"
                 )
 
                 kpiBox(
@@ -500,29 +508,38 @@ struct ActivityView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    /// 4. Plattformsfördelning
-    private var platformDistributionCard: some View {
+    /// 4. Epoker & Tidsresan
+    private var eraDistributionCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Plattformar")
-                .font(.headline)
-                .foregroundStyle(.primary)
+            HStack(spacing: 8) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .foregroundStyle(.blue)
+                Text("Tidsresan: Spel per epok")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+            }
 
-            if platformCounts.isEmpty {
-                Text("Inga plattformar registrerade ännu.")
+            if eraCounts.isEmpty {
+                Text("Inga lanseringsår registrerade ännu.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
                 VStack(spacing: 12) {
-                    ForEach(platformCounts, id: \.name) { item in
+                    ForEach(eraCounts, id: \.name) { item in
                         VStack(alignment: .leading, spacing: 5) {
                             HStack {
-                                Label(item.name, systemImage: iconForPlatform(item.name))
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(.primary)
+                                HStack(spacing: 6) {
+                                    Text(item.name)
+                                        .font(.subheadline.weight(.medium))
+                                        .foregroundStyle(.primary)
+                                    Text("(\(item.sub))")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
 
                                 Spacer()
 
-                                Text("\(item.count) spel")
+                                Text("\(item.count) spel (\(Int(round(item.percentage * 100))) %)")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -534,7 +551,7 @@ struct ActivityView: View {
                                         .frame(height: 8)
 
                                     Capsule()
-                                        .fill(Color.blue.opacity(0.85))
+                                        .fill(item.color.opacity(0.85))
                                         .frame(width: max(8, geo.size.width * CGFloat(item.percentage)), height: 8)
                                 }
                             }
@@ -674,22 +691,6 @@ struct ActivityView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.tertiarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-
-    private func iconForPlatform(_ name: String) -> String {
-        let lower = name.lowercased()
-        if lower.contains("playstation") || lower.contains("ps") {
-            return "gamecontroller.fill"
-        } else if lower.contains("xbox") {
-            return "xbox.logo"
-        } else if lower.contains("nintendo") || lower.contains("switch") {
-            return "gamecontroller"
-        } else if lower.contains("pc") || lower.contains("mac") || lower.contains("windows") {
-            return "desktopcomputer"
-        } else if lower.contains("ios") || lower.contains("android") || lower.contains("mobil") {
-            return "iphone"
-        }
-        return "gamecontroller.fill"
     }
 
     private var emptyStateView: some View {

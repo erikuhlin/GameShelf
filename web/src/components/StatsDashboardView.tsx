@@ -198,7 +198,14 @@ export function StatsDashboardView({
   // 6. Spel-DNA Profil
   const spelDNA = useMemo(() => {
     try {
-      return calculateSpelDNA(games);
+      const stored = typeof window !== 'undefined' ? loadUserProfile() : null;
+      return calculateSpelDNA(
+        games,
+        stored?.playFor || [],
+        stored?.favoriteGenres || [],
+        stored?.favoriteGameIDs || [],
+        stored?.playstyle || []
+      );
     } catch (e) {
       return null;
     }
@@ -504,22 +511,48 @@ export function StatsDashboardView({
                   </div>
                 </div>
 
-                {spelDNA.supportingStats && spelDNA.supportingStats.length > 0 && (
-                  <div className="flex items-center gap-1.5 flex-wrap sm:justify-end">
-                    {spelDNA.supportingStats.slice(0, 3).map((stat, i) => (
-                      <span
-                        key={i}
-                        style={{
-                          borderColor: `${spelDNA.accentHex || '#a855f7'}40`,
-                          color: spelDNA.accentHex || '#e9d5ff',
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-zinc-950/70 border text-[11px] font-semibold flex items-center gap-1"
-                      >
-                        <span>{stat}</span>
+                <div className="flex flex-col sm:items-end gap-2 shrink-0">
+                  {spelDNA.supportingStats && spelDNA.supportingStats.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap sm:justify-end">
+                      {spelDNA.supportingStats.slice(0, 3).map((stat, i) => (
+                        <span
+                          key={i}
+                          style={{
+                            borderColor: `${spelDNA.accentHex || '#a855f7'}40`,
+                            color: spelDNA.accentHex || '#e9d5ff',
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-zinc-950/70 border text-[11px] font-semibold flex items-center gap-1"
+                        >
+                          <span>{stat}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {spelDNA.secondaryArchetypes && spelDNA.secondaryArchetypes.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap sm:justify-end">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                        Sekundärt:
                       </span>
-                    ))}
-                  </div>
-                )}
+                      {spelDNA.secondaryArchetypes.map((sec) => (
+                        <span
+                          key={sec.archetypeID}
+                          style={{
+                            borderColor: `${sec.accentHex}40`,
+                            background: `${sec.accentHex}15`,
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[11px] font-bold text-white shadow-sm"
+                        >
+                          <span>{sec.icon}</span>
+                          <span>{sec.title}</span>
+                          <span style={{ color: sec.accentHex }} className="text-[10px] font-black">
+                            {sec.matchPercentage}%
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

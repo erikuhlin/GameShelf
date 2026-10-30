@@ -56,11 +56,15 @@ import {
   Gamepad2,
   Gamepad,
   ChevronDown,
+  Target,
 } from 'lucide-react';
 import { fetchDealsForGames, normalizeTitle, GameDeal } from '@/services/priceWatcherService';
 
 export type LibrarySortOption =
   | 'dateAdded'
+  | 'closestToFinish'
+  | 'shortestPlaytime'
+  | 'longestPlaytime'
   | 'titleAsc'
   | 'titleDesc'
   | 'rating'
@@ -970,10 +974,84 @@ export default function HomePage() {
           return a.title.localeCompare(b.title, 'sv');
         });
         break;
+      case 'closestToFinish':
+        result.sort((a, b) => {
+          // 1. Singleplayer/Story före Multiplayer/Löpande
+          const mA = isMultiplayerOrOngoing(a);
+          const mB = isMultiplayerOrOngoing(b);
+          if (mA !== mB) return !mA && mB ? -1 : 1;
+
+          // Om båda är multiplayer: senast spelat först
+          if (mA && mB) {
+            const dA = a.last_played_date || a.started_playing_date || a.created_at || '';
+            const dB = b.last_played_date || b.started_playing_date || b.created_at || '';
+            return dB.localeCompare(dA);
+          }
+
+          // 2. För story-spel:
+          // Avklarade / avbrutna spel placeras sist om inte båda är det
+          const isCompA = a.status === 'completed' || a.status === 'abandoned';
+          const isCompB = b.status === 'completed' || b.status === 'abandoned';
+          if (isCompA !== isCompB) return !isCompA && isCompB ? -1 : 1;
+          if (isCompA && isCompB) {
+            const dA = a.completed_date || a.created_at || '';
+            const dB = b.completed_date || b.created_at || '';
+            return dB.localeCompare(dA);
+          }
+
+          // Beräkna progress
+          const pA = GamingGoalEngine.calculateProgress(a);
+          const pB = GamingGoalEngine.calculateProgress(b);
+          const hasProgA = pA.percentage > 0 || pA.hasTasks;
+          const hasProgB = pB.percentage > 0 || pB.hasTasks;
+
+          if (hasProgA && hasProgB) {
+            if (pA.percentage !== pB.percentage) return pB.percentage - pA.percentage;
+            if (pA.hasTasks && pB.hasTasks && pA.remainingTasks !== pB.remainingTasks) {
+              return pA.remainingTasks - pB.remainingTasks;
+            }
+          } else if (hasProgA) {
+            return -1;
+          } else if (hasProgB) {
+            return 1;
+          } else {
+            // Ospelade / utan progress: kortast speltid först!
+            const hA = a.estimated_hours || 0;
+            const hB = b.estimated_hours || 0;
+            if (hA > 0 && hB > 0) {
+              if (hA !== hB) return hA - hB;
+            } else if (hA > 0) {
+              return -1;
+            } else if (hB > 0) {
+              return 1;
+            }
+          }
+
+          return a.title.localeCompare(b.title, 'sv');
+        });
+        break;
+      case 'shortestPlaytime':
+        result.sort((a, b) => {
+          const hA = a.estimated_hours || 0;
+          const hB = b.estimated_hours || 0;
+          if (hA > 0 && hB > 0) {
+            if (hA !== hB) return hA - hB;
+          } else if (hA > 0) return -1;
+          else if (hB > 0) return 1;
+          return a.title.localeCompare(b.title, 'sv');
+        });
+        break;
+      case 'longestPlaytime':
       case 'hours':
-        result.sort(
-          (a, b) => (Number(b.estimated_hours) || 0) - (Number(a.estimated_hours) || 0)
-        );
+        result.sort((a, b) => {
+          const hA = a.estimated_hours || 0;
+          const hB = b.estimated_hours || 0;
+          if (hA > 0 && hB > 0) {
+            if (hA !== hB) return hB - hA;
+          } else if (hA > 0) return -1;
+          else if (hB > 0) return 1;
+          return a.title.localeCompare(b.title, 'sv');
+        });
         break;
       case 'dateAdded':
       default:
@@ -1688,12 +1766,14 @@ export default function HomePage() {
                     className="bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs rounded-xl pl-8 pr-7 py-1.5 focus:outline-none focus:border-brand-red cursor-pointer font-medium hover:border-zinc-700 transition appearance-none"
                   >
                     <option value="dateAdded">Senast tillagda</option>
+                    <option value="closestToFinish">Närmast klart 🎯</option>
+                    <option value="shortestPlaytime">Kortast speltid ⚡</option>
+                    <option value="longestPlaytime">Längst speltid ⌛</option>
+                    <option value="rating">Högst betyg ⭐</option>
                     <option value="titleAsc">Titel (A–Ö)</option>
                     <option value="titleDesc">Titel (Ö–A)</option>
-                    <option value="rating">Högst betyg ⭐</option>
                     <option value="releaseYearDesc">Lanseringsdatum (Nyast först)</option>
                     <option value="releaseYearAsc">Lanseringsdatum (Äldst först)</option>
-                    <option value="hours">Speltid ⏱️</option>
                   </select>
                   <ChevronDown className="w-3 h-3 text-zinc-500 absolute right-2.5 pointer-events-none" />
                 </div>
@@ -1946,8 +2026,8 @@ export default function HomePage() {
                 </div>
               )}
 
-            {/* Sektionsuppdelning i Spelar nu: Aktiva äventyr vs Löpande multiplayer */}
-            {selectedStatus === 'playing' &&
+            {/* Sektionsuppdelning vid Spelar nu eller vid sorterat på Närmast klart: Aktiva äventyr vs Löpande multiplayer med divider */}
+            {(selectedStatus === 'playing' || librarySort === 'closestToFinish') &&
               (() => {
                 const progressGames = filteredGames.filter((g) => !isMultiplayerOrOngoing(g));
                 const ongoingGames = filteredGames.filter((g) => isMultiplayerOrOngoing(g));
@@ -1979,12 +2059,18 @@ export default function HomePage() {
                     {/* 1. Aktiva äventyr (Singleplayer / Story) */}
                     <div className="space-y-3">
                       <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        {selectedStatus === 'playing' ? (
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        ) : (
+                          <Target className="w-4 h-4 text-brand-red" />
+                        )}
                         <h3 className="text-xs font-bold uppercase tracking-wider text-white">
-                          Aktiva äventyr ({progressGames.length})
+                          {selectedStatus === 'playing' ? 'Aktiva äventyr' : 'Story & Berättelsespel'} ({progressGames.length})
                         </h3>
                         <span className="text-xs text-zinc-500">
-                          Berättelsespel med kapitel och uppdrag
+                          {selectedStatus === 'playing'
+                            ? 'Berättelsespel med kapitel och uppdrag'
+                            : 'Sorterat efter närmast i mål'}
                         </span>
                       </div>
                       {viewMode === 'shelf' && (
@@ -2033,7 +2119,7 @@ export default function HomePage() {
                 );
               })()}
 
-            {selectedStatus !== 'playing' && (
+            {selectedStatus !== 'playing' && librarySort !== 'closestToFinish' && (
               <>
                 {viewMode === 'shelf' && (
                   <ShelfView games={filteredGames} onSelectGame={setSelectedGame} dealsMap={dealsMap} />

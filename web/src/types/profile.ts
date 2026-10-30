@@ -30,6 +30,14 @@ export interface SpelDNATile {
   detail: string;
 }
 
+export interface SpelDNASubArchetype {
+  archetypeID: SpelDNAArchetypeID;
+  title: string;
+  icon: string;
+  accentHex: string;
+  matchPercentage: number;
+}
+
 export interface SpelDNAProfile {
   archetypeID: SpelDNAArchetypeID;
   title: string;
@@ -38,6 +46,7 @@ export interface SpelDNAProfile {
   accentHex: string;
   supportingStats: string[];
   tiles?: SpelDNATile[];
+  secondaryArchetypes?: SpelDNASubArchetype[];
 }
 
 export interface AvatarPreset {

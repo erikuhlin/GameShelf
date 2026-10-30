@@ -217,7 +217,7 @@ struct GameCard: View {
         if !game.isMultiplayerOrOngoing {
             let progressInfo = GamingGoalEngine.calculateProgress(for: game)
             let hasTaskProgress = progressInfo.hasTasks && progressInfo.percentage > 0
-            let hasStoryProgress = !progressInfo.hasTasks && (game.storyProgress != nil && !game.storyProgress!.isEmpty) && progressInfo.percentage > 0
+            let hasStoryProgress = !progressInfo.hasTasks && game.storyProgress != nil && progressInfo.percentage > 0
             if hasTaskProgress || hasStoryProgress {
                 let ratio = min(max(Double(progressInfo.percentage) / 100.0, 0.0), 1.0)
                 self.coverProgressRatio = ratio

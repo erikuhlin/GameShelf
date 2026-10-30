@@ -44,6 +44,20 @@ struct SpelDNATile: Identifiable, Sendable {
     }
 }
 
+struct SpelDNASubArchetype: Identifiable, Sendable {
+    let archetypeID: SpelDNAArchetypeID
+    let title: String
+    let icon: String
+    let accentHex: String
+    let matchPercentage: Int
+
+    var id: String { archetypeID.rawValue }
+
+    var accentColor: Color {
+        Color(hex: accentHex)
+    }
+}
+
 struct SpelDNAProfile: Identifiable, Sendable {
     let archetypeID: SpelDNAArchetypeID
     let title: String
@@ -52,6 +66,7 @@ struct SpelDNAProfile: Identifiable, Sendable {
     let accentHex: String
     let supportingStats: [String]
     var tiles: [SpelDNATile] = []
+    var secondaryArchetypes: [SpelDNASubArchetype] = []
 
     var id: String { archetypeID.rawValue }
 

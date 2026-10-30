@@ -1988,15 +1988,6 @@ struct GameWalkthroughSectionView: View {
                             http = retryHttp
                         }
                     }
-                        retryRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                        retryRequest.httpBody = try JSONSerialization.data(withJSONObject: payloadWithoutThinking)
-
-                        let (retryData, retryResponse) = try await URLSession.shared.data(for: retryRequest)
-                        if let retryHttp = retryResponse as? HTTPURLResponse {
-                            data = retryData
-                            http = retryHttp
-                        }
-                    }
 
                     if !(200...299).contains(http.statusCode) {
                         if let errResp = try? JSONDecoder().decode(GeminiApiErrorResponse.self, from: data),

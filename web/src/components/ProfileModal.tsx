@@ -16,6 +16,7 @@ import {
   HelpCircle,
   Upload,
   Crown,
+  Share2,
 } from 'lucide-react';
 import { Game } from '@/types/game';
 import { UserProfile } from '@/types/profile';
@@ -57,11 +58,32 @@ export function ProfileModal({
   const [isAddingFavorite, setIsAddingFavorite] = useState(false);
   const [favoriteSearch, setFavoriteSearch] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [copiedDnaText, setCopiedDnaText] = useState(false);
 
-  // Beräkna Spel-DNA
+  // Beräkna Spel-DNA med full profilinformation och favoriter
   const spelDNA = useMemo(() => {
-    return calculateSpelDNA(libraryGames, profile.playFor);
-  }, [libraryGames, profile.playFor]);
+    return calculateSpelDNA(
+      libraryGames,
+      profile.playFor,
+      profile.favoriteGenres,
+      profile.favoriteGameIDs,
+      profile.playstyle
+    );
+  }, [libraryGames, profile.playFor, profile.favoriteGenres, profile.favoriteGameIDs, profile.playstyle]);
+
+  const handleShareSpelDNA = () => {
+    if (!spelDNA) return;
+    const secondaries = spelDNA.secondaryArchetypes && spelDNA.secondaryArchetypes.length > 0
+      ? `\n🧬 Sekundärt: ${spelDNA.secondaryArchetypes.map((s) => `${s.icon} ${s.title} (${s.matchPercentage}%)`).join(', ')}`
+      : '';
+    const shareText = `🎮 Mitt Spel-DNA i Gameshelf:\n\n${spelDNA.icon} Huvudarketyp: ${spelDNA.title}\n"${spelDNA.description}"${secondaries}\n\nSpelarprofil för ${profile.username || 'Gamer'}`;
+
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(shareText);
+      setCopiedDnaText(true);
+      setTimeout(() => setCopiedDnaText(false), 2500);
+    }
+  };
 
   // Hämta favoritspelobjekt med skiftlägesokänslig UUID och IGDB ID matchning
   const favoriteGames = useMemo(() => {
@@ -548,7 +570,18 @@ export function ProfileModal({
                         <span className="text-[11px] font-black uppercase tracking-widest text-zinc-400">
                           Ditt Spel-DNA • Huvudarketyp
                         </span>
-                        <span className="text-2xl">{spelDNA.icon}</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleShareSpelDNA}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/15 text-zinc-200 text-xs font-semibold border border-white/10 transition cursor-pointer"
+                            title="Dela eller kopiera ditt Spel-DNA"
+                          >
+                            <Share2 className="w-3.5 h-3.5" />
+                            <span>{copiedDnaText ? 'Kopierat! ✨' : 'Dela'}</span>
+                          </button>
+                          <span className="text-2xl">{spelDNA.icon}</span>
+                        </div>
                       </div>
 
                       <div>
@@ -579,6 +612,34 @@ export function ProfileModal({
                           </span>
                         ))}
                       </div>
+
+                      {/* Sekundärt DNA (Runner-ups / Hybriddrag) */}
+                      {spelDNA.secondaryArchetypes && spelDNA.secondaryArchetypes.length > 0 && (
+                        <div className="pt-2 border-t border-white/10 mt-3 flex items-center gap-2 flex-wrap">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                            Sekundärt DNA:
+                          </span>
+                          {spelDNA.secondaryArchetypes.map((sec) => (
+                            <span
+                              key={sec.archetypeID}
+                              style={{
+                                borderColor: `${sec.accentHex}40`,
+                                background: `${sec.accentHex}15`,
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg border text-xs font-bold text-white shadow-sm"
+                            >
+                              <span>{sec.icon}</span>
+                              <span>{sec.title}</span>
+                              <span
+                                style={{ color: sec.accentHex }}
+                                className="text-[10px] font-black ml-0.5 opacity-90"
+                              >
+                                {sec.matchPercentage}%
+                              </span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 

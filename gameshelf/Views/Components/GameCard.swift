@@ -118,6 +118,8 @@ struct GameCard: View {
     var statusBadgeConfig: GameCardStatusBadgeConfig? = nil
     var showWishlistInfo: Bool = false
     var deal: GameDealInfo? = nil
+    var coverProgressRatio: Double? = nil
+    var coverProgressColor: Color? = nil
     var pausedProgressRatio: Double? = nil
 
     static func shortPlatform(from platforms: [String]) -> String {
@@ -156,6 +158,8 @@ struct GameCard: View {
         statusBadgeConfig: GameCardStatusBadgeConfig? = nil,
         showWishlistInfo: Bool = false,
         deal: GameDealInfo? = nil,
+        coverProgressRatio: Double? = nil,
+        coverProgressColor: Color? = nil,
         pausedProgressRatio: Double? = nil
     ) {
         self.title = title
@@ -173,7 +177,10 @@ struct GameCard: View {
         self.statusBadgeConfig = statusBadgeConfig
         self.showWishlistInfo = showWishlistInfo
         self.deal = deal
-        self.pausedProgressRatio = pausedProgressRatio
+        let effectiveRatio = coverProgressRatio ?? pausedProgressRatio
+        self.coverProgressRatio = effectiveRatio
+        self.coverProgressColor = coverProgressColor ?? (effectiveRatio != nil ? Color(hex: "#FF9500") : nil)
+        self.pausedProgressRatio = effectiveRatio
     }
 
     // Convenience Init from standard Game model
@@ -207,15 +214,33 @@ struct GameCard: View {
         self.platform = GameCard.shortPlatform(from: game.platforms)
         self.statusBadgeConfig = GameCardStatusBadgeConfig.from(game: game)
         self.deal = PriceWatcherService.shared.deal(for: game)
-        if game.status == .paused && !game.isMultiplayerOrOngoing {
+        if !game.isMultiplayerOrOngoing {
             let progressInfo = GamingGoalEngine.calculateProgress(for: game)
-            if progressInfo.hasTasks && progressInfo.percentage > 0 {
-                self.pausedProgressRatio = min(max(Double(progressInfo.percentage) / 100.0, 0.0), 1.0)
+            let hasTaskProgress = progressInfo.hasTasks && progressInfo.percentage > 0
+            let hasStoryProgress = !progressInfo.hasTasks && (game.storyProgress != nil && !game.storyProgress!.isEmpty) && progressInfo.percentage > 0
+            if hasTaskProgress || hasStoryProgress {
+                let ratio = min(max(Double(progressInfo.percentage) / 100.0, 0.0), 1.0)
+                self.coverProgressRatio = ratio
+                self.pausedProgressRatio = ratio
+                switch game.status {
+                case .playing:
+                    self.coverProgressColor = Color(hex: "#34C759")
+                case .paused:
+                    self.coverProgressColor = Color(hex: "#FF9500")
+                case .completed:
+                    self.coverProgressColor = Color.teal
+                default:
+                    self.coverProgressColor = Color(hex: "#007AFF")
+                }
             } else {
+                self.coverProgressRatio = nil
                 self.pausedProgressRatio = nil
+                self.coverProgressColor = nil
             }
         } else {
+            self.coverProgressRatio = nil
             self.pausedProgressRatio = nil
+            self.coverProgressColor = nil
         }
         self.width = width
         self.coverHeight = coverHeight
@@ -371,15 +396,16 @@ struct GameCard: View {
                                     placeholderFallback
                                 }
 
-                                // Tunn 3.5 px progressbar längst ned på omslaget för pausade spel med progress > 0 %
-                                if let ratio = pausedProgressRatio, ratio > 0 {
+                                // Tunn 3.5 px progressbar längst ned på omslaget för spel med progress > 0 %
+                                if let ratio = coverProgressRatio ?? pausedProgressRatio, ratio > 0 {
+                                    let barColor = coverProgressColor ?? Color(hex: "#FF9500")
                                     ZStack(alignment: .leading) {
                                         Rectangle()
-                                            .fill(Color.black.opacity(0.45))
+                                            .fill(Color.black.opacity(0.6))
                                             .frame(width: geo.size.width, height: 3.5)
 
                                         Rectangle()
-                                            .fill(Color(hex: "#FF9500").opacity(0.88))
+                                            .fill(barColor.opacity(0.92))
                                             .frame(
                                                 width: max(4, min(geo.size.width, geo.size.width * ratio)),
                                                 height: 3.5
@@ -607,6 +633,24 @@ struct GameCard: View {
             }
             .frame(width: width, height: coverHeight)
             .clipped()
+
+            // Tunn 3.5 px progressbar längst ned på omslaget för spel med progress > 0 %
+            if let ratio = coverProgressRatio ?? pausedProgressRatio, ratio > 0 {
+                let barColor = coverProgressColor ?? Color(hex: "#FF9500")
+                ZStack(alignment: .leading) {
+                    Rectangle()
+                        .fill(Color.black.opacity(0.6))
+                        .frame(width: width, height: 3.5)
+
+                    Rectangle()
+                        .fill(barColor.opacity(0.92))
+                        .frame(
+                            width: max(4, min(width, width * ratio)),
+                            height: 3.5
+                        )
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            }
 
             // Badge Overlay (Top-Left)
             if let badge = badge {

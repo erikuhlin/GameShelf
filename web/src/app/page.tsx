@@ -1816,6 +1816,8 @@ export default function HomePage() {
             games={games}
             onSelectGame={setSelectedGame}
             onOpenWrapped={() => setIsWrappedModalOpen(true)}
+            onOpenGamingGoal={() => setIsGamingGoalModalOpen(true)}
+            annualGoal={userProfile.annualGamingGoal}
           />
         ) : games.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 sm:py-28 text-center px-4 rounded-3xl border border-zinc-800/80 bg-gradient-to-b from-zinc-900/40 via-zinc-950/60 to-zinc-950/80 shadow-2xl max-w-2xl mx-auto my-6">

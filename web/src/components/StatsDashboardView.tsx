@@ -3,41 +3,77 @@
 import React, { useState, useMemo } from 'react';
 import { Game, PlayStatus, PLAY_STATUSES } from '@/types/game';
 import { getStatusDisplayTitle } from '@/lib/statusHelper';
-import { isGotySeason } from '@/lib/profileStore';
+import { isGotySeason, loadUserProfile } from '@/lib/profileStore';
+import { calculateSpelDNA } from '@/lib/spelDNA';
+import { GamingGoalEngine } from '@/lib/gamingGoalEngine';
 import {
   BarChart3,
   Trophy,
-  Clock,
+  Target,
   Star,
   Gamepad2,
   Sparkles,
   BookOpen,
   Calendar,
   Archive,
-  ChevronDown,
   Crown,
+  CheckCircle2,
+  Dna,
+  History,
+  TrendingUp,
 } from 'lucide-react';
 
 interface StatsDashboardViewProps {
   games: Game[];
   onSelectGame: (game: Game) => void;
   onOpenWrapped?: () => void;
+  onOpenGamingGoal?: () => void;
+  annualGoal?: number;
 }
 
-export function StatsDashboardView({ games, onSelectGame, onOpenWrapped }: StatsDashboardViewProps) {
+export function StatsDashboardView({
+  games,
+  onSelectGame,
+  onOpenWrapped,
+  onOpenGamingGoal,
+  annualGoal,
+}: StatsDashboardViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'diary'>('overview');
   const [diaryMode, setDiaryMode] = useState<'active' | 'memories'>('active');
   const [selectedYear, setSelectedYear] = useState<number | 'all'>(new Date().getFullYear());
+
+  const currentYear = new Date().getFullYear();
 
   // 1. Beräkningar för KPI-kort
   const totalGames = games.length;
   const ownedGames = games.filter((g) => g.is_owned).length;
   const completedGames = games.filter((g) => g.status === 'completed' && g.is_owned).length;
 
-  const totalEstimatedHours = games.reduce((acc, g) => acc + (g.estimated_hours || 0), 0);
-  const backlogHours = games
-    .filter((g) => (g.is_backlog || g.status === 'playing') && g.is_owned)
-    .reduce((acc, g) => acc + (g.estimated_hours || 0), 0);
+  // Spelmål beräkningar för innevarande år
+  const completedThisYearGames = useMemo(() => {
+    return GamingGoalEngine.completedGames(games, currentYear);
+  }, [games, currentYear]);
+  const completedThisYear = completedThisYearGames.length;
+
+  const effectiveAnnualGoal = useMemo(() => {
+    if (annualGoal && annualGoal > 0) return annualGoal;
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = loadUserProfile();
+        if (stored?.annualGamingGoal && stored.annualGamingGoal > 0) {
+          return stored.annualGamingGoal;
+        }
+      } catch (e) {
+        // Fallback
+      }
+    }
+    return 12;
+  }, [annualGoal]);
+
+  const goalProgressPct = Math.min(
+    100,
+    Math.round((completedThisYear / (effectiveAnnualGoal || 1)) * 100)
+  );
 
   const ratedGames = games.filter((g) => g.rating !== null && g.rating !== undefined && g.rating > 0);
   const averageRating =
@@ -45,9 +81,8 @@ export function StatsDashboardView({ games, onSelectGame, onOpenWrapped }: Stats
       ? (ratedGames.reduce((acc, g) => acc + (g.rating || 0), 0) / ratedGames.length).toFixed(1)
       : null;
 
-  const playedCount = ownedGames;
   const completionRate =
-    playedCount > 0 ? Math.round((completedGames / playedCount) * 100) : 0;
+    ownedGames > 0 ? Math.round((completedGames / ownedGames) * 100) : 0;
 
   // 2. Statusfördelning
   const statusStats = useMemo(() => {
@@ -71,46 +106,105 @@ export function StatsDashboardView({ games, onSelectGame, onOpenWrapped }: Stats
     };
   }, [games, ownedGames]);
 
-  // 3. Plattformsfördelning
-  const platformStats = useMemo(() => {
-    const counts: { [p: string]: number } = {};
-    games.forEach((g) => {
-      const plats = g.platforms && g.platforms.length > 0 ? g.platforms : ['Övrigt'];
-      plats.forEach((p) => {
-        counts[p] = (counts[p] || 0) + 1;
-      });
-    });
-
-    return Object.entries(counts)
-      .map(([platform, count]) => ({
-        platform,
-        count,
-        percentage: totalGames > 0 ? Math.round((count / totalGames) * 100) : 0,
-      }))
-      .sort((a, b) => b.count - a.count);
-  }, [games, totalGames]);
-
-  // 4. Genrefördelning
+  // 3. Genrefördelning (ersätter plattformar som var felaktiga)
   const genreStats = useMemo(() => {
     const counts: { [g: string]: number } = {};
-    games.forEach((g) => {
+    const targetGames = ownedGames > 0 ? games.filter((g) => g.is_owned) : games;
+    targetGames.forEach((g) => {
       const genres = g.genres && g.genres.length > 0 ? g.genres : ['Övrigt'];
       genres.forEach((genre) => {
-        counts[genre] = (counts[genre] || 0) + 1;
+        const clean = genre.trim();
+        if (clean) {
+          counts[clean] = (counts[clean] || 0) + 1;
+        }
       });
     });
 
+    const baseCount = targetGames.length;
     return Object.entries(counts)
       .map(([genre, count]) => ({
         genre,
         count,
-        percentage: totalGames > 0 ? Math.round((count / totalGames) * 100) : 0,
+        percentage: baseCount > 0 ? Math.round((count / baseCount) * 100) : 0,
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
-  }, [games, totalGames]);
+  }, [games, ownedGames]);
 
-  // 5. Topprankade spel (Betyg 8-10)
+  // 4. Epoker & Tidsresan (Lanseringsårtionden)
+  const eraStats = useMemo(() => {
+    const datedGames = games.filter((g) => g.release_year && g.release_year > 0);
+    const totalDated = datedGames.length;
+    if (totalDated === 0) return [];
+
+    let c2020 = 0;
+    let c2010 = 0;
+    let c2000 = 0;
+    let c1990 = 0;
+    let cRetro = 0;
+
+    datedGames.forEach((g) => {
+      const y = g.release_year!;
+      if (y >= 2020) c2020++;
+      else if (y >= 2010) c2010++;
+      else if (y >= 2000) c2000++;
+      else if (y >= 1990) c1990++;
+      else cRetro++;
+    });
+
+    const eras = [
+      { label: '2020-talet', sub: '2020 – nutid', count: c2020, barColor: 'bg-gradient-to-r from-blue-500 to-indigo-500' },
+      { label: '2010-talet', sub: '2010 – 2019', count: c2010, barColor: 'bg-gradient-to-r from-purple-500 to-pink-500' },
+      { label: '2000-talet', sub: '2000 – 2009', count: c2000, barColor: 'bg-gradient-to-r from-amber-500 to-yellow-500' },
+      { label: '90-talet', sub: '1990 – 1999', count: c1990, barColor: 'bg-gradient-to-r from-teal-500 to-emerald-500' },
+      { label: 'Retro & Klassiker', sub: 'Före 1990', count: cRetro, barColor: 'bg-gradient-to-r from-rose-500 to-red-600' },
+    ];
+
+    return eras
+      .filter((e) => e.count > 0)
+      .map((e) => ({
+        ...e,
+        percentage: Math.round((e.count / totalDated) * 100),
+      }));
+  }, [games]);
+
+  // 5. Betygsfördelning (1–10)
+  const ratingDistribution = useMemo(() => {
+    const counts: Record<number, number> = { 10: 0, 9: 0, 8: 0, 7: 0, 6: 0, 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    let maxCount = 0;
+    let totalRatings = 0;
+
+    games.forEach((g) => {
+      if (g.rating && g.rating >= 1 && g.rating <= 10) {
+        counts[g.rating] = (counts[g.rating] || 0) + 1;
+        totalRatings++;
+        if (counts[g.rating] > maxCount) maxCount = counts[g.rating];
+      }
+    });
+
+    const items = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((rating) => ({
+      rating,
+      count: counts[rating],
+      percentage: totalRatings > 0 ? Math.round((counts[rating] / totalRatings) * 100) : 0,
+    }));
+
+    return {
+      items,
+      totalRatings,
+      maxCount,
+    };
+  }, [games]);
+
+  // 6. Spel-DNA Profil
+  const spelDNA = useMemo(() => {
+    try {
+      return calculateSpelDNA(games);
+    } catch (e) {
+      return null;
+    }
+  }, [games]);
+
+  // 7. Topprankade spel (Betyg 8-10)
   const topRatedGames = useMemo(() => {
     return games
       .filter((g) => g.rating && g.rating >= 8)
@@ -119,53 +213,86 @@ export function StatsDashboardView({ games, onSelectGame, onOpenWrapped }: Stats
   }, [games]);
 
   // ==================== SPELDAGBOK DATA ====================
-  // Aktiva genomspelningar med loggat datum
+  // Aktiva genomspelningar med loggat datum ELLER avklarat år
   const activeDiaryGames = useMemo(() => {
     return games
-      .filter((g) => g.status === 'completed' && g.completed_date)
-      .sort((a, b) => new Date(b.completed_date!).getTime() - new Date(a.completed_date!).getTime());
+      .filter(
+        (g) =>
+          g.status === 'completed' &&
+          (Boolean(g.completed_date) || (Boolean(g.completed_year) && g.completed_year! > 0))
+      )
+      .sort((a, b) => {
+        const timeA = a.completed_date
+          ? new Date(a.completed_date).getTime()
+          : new Date(a.completed_year!, 0, 1).getTime();
+        const timeB = b.completed_date
+          ? new Date(b.completed_date).getTime()
+          : new Date(b.completed_year!, 0, 1).getTime();
+        return timeB - timeA;
+      });
   }, [games]);
 
-  // Spelminnen (completed utan klardatum)
+  // Spelminnen (completed utan varken klardatum eller avklarat år)
   const memoryGames = useMemo(() => {
     return games
-      .filter((g) => g.status === 'completed' && !g.completed_date)
+      .filter(
+        (g) =>
+          g.status === 'completed' &&
+          !g.completed_date &&
+          (!g.completed_year || g.completed_year <= 0)
+      )
       .sort((a, b) => (b.release_year || 0) - (a.release_year || 0));
   }, [games]);
 
   // Tillgängliga år för aktiv dagbok
   const availableYears = useMemo(() => {
-    const currentY = new Date().getFullYear();
     const years = new Set<number>();
-    years.add(currentY);
+    years.add(currentYear);
     activeDiaryGames.forEach((g) => {
-      const y = new Date(g.completed_date!).getFullYear();
-      if (!isNaN(y)) years.add(y);
+      if (g.completed_date) {
+        const y = new Date(g.completed_date).getFullYear();
+        if (!isNaN(y)) years.add(y);
+      } else if (g.completed_year && g.completed_year > 0) {
+        years.add(g.completed_year);
+      }
     });
     return Array.from(years).sort((a, b) => b - a);
-  }, [activeDiaryGames]);
+  }, [activeDiaryGames, currentYear]);
 
   // Filtrerade spel för vald period
   const filteredActiveDiaryGames = useMemo(() => {
     if (selectedYear === 'all') return activeDiaryGames;
     return activeDiaryGames.filter((g) => {
-      const y = new Date(g.completed_date!).getFullYear();
-      return y === selectedYear;
+      if (g.completed_date) {
+        return new Date(g.completed_date).getFullYear() === selectedYear;
+      }
+      return g.completed_year === selectedYear;
     });
   }, [activeDiaryGames, selectedYear]);
 
-  // Gruppering per månad
+  // Gruppering per månad / år
   const groupedByMonth = useMemo(() => {
     const groups: { [key: string]: { monthTitle: string; games: Game[] } } = {};
     const order: string[] = [];
 
     filteredActiveDiaryGames.forEach((game) => {
-      const d = new Date(game.completed_date!);
-      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      let key: string;
+      let monthTitle: string;
+
+      if (game.completed_date) {
+        const d = new Date(game.completed_date);
+        key = `${d.getFullYear()}-${d.getMonth()}`;
+        const rawTitle = d.toLocaleDateString('sv-SE', { month: 'long', year: 'numeric' });
+        monthTitle = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);
+      } else {
+        const y = game.completed_year || currentYear;
+        key = `${y}-undated`;
+        monthTitle = `År ${y} (Genomspelat)`;
+      }
+
       if (!groups[key]) {
-        const monthTitle = d.toLocaleDateString('sv-SE', { month: 'long', year: 'numeric' });
         groups[key] = {
-          monthTitle: monthTitle.charAt(0).toUpperCase() + monthTitle.slice(1),
+          monthTitle,
           games: [],
         };
         order.push(key);
@@ -174,7 +301,7 @@ export function StatsDashboardView({ games, onSelectGame, onOpenWrapped }: Stats
     });
 
     return order.map((key) => groups[key]);
-  }, [filteredActiveDiaryGames]);
+  }, [filteredActiveDiaryGames, currentYear]);
 
   if (games.length === 0) {
     return (
@@ -259,25 +386,42 @@ export function StatsDashboardView({ games, onSelectGame, onOpenWrapped }: Stats
               <div className="mt-3 sm:mt-4">
                 <div className="text-2xl sm:text-3xl font-extrabold text-white">{totalGames}</div>
                 <div className="text-[11px] sm:text-xs text-zinc-400 mt-1">
-                  {ownedGames} ägda titlar
+                  {ownedGames} i samlingen
                 </div>
               </div>
             </div>
 
-            {/* Total Playtime */}
-            <div className="p-3.5 sm:p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 shadow-md flex flex-col justify-between">
+            {/* Spelmål {currentYear} (Ersätter missvisande speltid) */}
+            <div
+              onClick={onOpenGamingGoal}
+              className={`p-3.5 sm:p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800 shadow-md flex flex-col justify-between transition ${
+                onOpenGamingGoal ? 'cursor-pointer hover:border-amber-500/40 hover:bg-zinc-900/90 group' : ''
+              }`}
+            >
               <div className="flex items-center justify-between">
-                <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-zinc-400">Speltid (est.)</span>
-                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                  <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-zinc-400 group-hover:text-amber-400 transition">
+                  Spelmål {currentYear}
+                </span>
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 group-hover:scale-105 transition">
+                  <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </div>
               </div>
               <div className="mt-3 sm:mt-4">
-                <div className="text-2xl sm:text-3xl font-extrabold text-white">
-                  {totalEstimatedHours > 0 ? `${totalEstimatedHours}h` : '—'}
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl sm:text-3xl font-extrabold text-white">{completedThisYear}</span>
+                  <span className="text-xs font-semibold text-zinc-500">/ {effectiveAnnualGoal} klara</span>
                 </div>
-                <div className="text-[11px] sm:text-xs text-zinc-400 mt-1">
-                  {backlogHours > 0 ? `${backlogHours}h i backlog` : 'Beräknad HLTB-tid'}
+                <div className="mt-2 w-full h-1.5 rounded-full bg-zinc-950 overflow-hidden">
+                  <div
+                    style={{ width: `${goalProgressPct}%` }}
+                    className="h-full bg-gradient-to-r from-amber-500 to-yellow-400 rounded-full transition-all duration-500"
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[11px] sm:text-xs text-amber-400 font-medium mt-1.5">
+                  <span>{goalProgressPct}% uppnått</span>
+                  {onOpenGamingGoal && (
+                    <span className="text-[10px] text-zinc-500 group-hover:text-amber-300 transition">Mål →</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -287,7 +431,7 @@ export function StatsDashboardView({ games, onSelectGame, onOpenWrapped }: Stats
               <div className="flex items-center justify-between">
                 <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-zinc-400">Avklarat</span>
                 <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400">
-                  <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </div>
               </div>
               <div className="mt-3 sm:mt-4">
@@ -319,7 +463,68 @@ export function StatsDashboardView({ games, onSelectGame, onOpenWrapped }: Stats
             </div>
           </div>
 
-          {/* Grids: Status och Plattformar */}
+          {/* SPEL-DNA / GAMER PROFILE HIGHLIGHT */}
+          {spelDNA && (
+            <div
+              style={{
+                borderColor: `${spelDNA.accentHex || '#a855f7'}30`,
+              }}
+              className="p-4 sm:p-6 rounded-2xl bg-gradient-to-r from-purple-950/20 via-zinc-900/80 to-zinc-900/60 border shadow-lg relative overflow-hidden"
+            >
+              <div
+                style={{ background: spelDNA.accentHex || '#a855f7' }}
+                className="absolute top-0 right-0 w-64 h-64 opacity-10 rounded-full blur-3xl pointer-events-none"
+              />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative">
+                <div className="flex items-start sm:items-center gap-3.5">
+                  <div
+                    style={{
+                      background: `${spelDNA.accentHex || '#a855f7'}20`,
+                      borderColor: `${spelDNA.accentHex || '#a855f7'}40`,
+                    }}
+                    className="w-12 h-12 rounded-2xl border flex items-center justify-center text-2xl shrink-0 shadow-sm"
+                  >
+                    {spelDNA.icon || '🎮'}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        style={{ color: spelDNA.accentHex || '#c084fc' }}
+                        className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1"
+                      >
+                        <Dna className="w-3 h-3" /> Ditt Spel-DNA
+                      </span>
+                    </div>
+                    <h3 className="text-base sm:text-lg font-extrabold text-white">
+                      {spelDNA.title}
+                    </h3>
+                    <p className="text-xs text-zinc-400 max-w-xl mt-0.5">
+                      {spelDNA.description}
+                    </p>
+                  </div>
+                </div>
+
+                {spelDNA.supportingStats && spelDNA.supportingStats.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap sm:justify-end">
+                    {spelDNA.supportingStats.slice(0, 3).map((stat, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          borderColor: `${spelDNA.accentHex || '#a855f7'}40`,
+                          color: spelDNA.accentHex || '#e9d5ff',
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-zinc-950/70 border text-[11px] font-semibold flex items-center gap-1"
+                      >
+                        <span>{stat}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Sektion 1: Statusfördelning & Mest spelade genrer */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             {/* Status Distribution */}
             <div className="p-4 sm:p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800 shadow-md space-y-4">
@@ -348,31 +553,128 @@ export function StatsDashboardView({ games, onSelectGame, onOpenWrapped }: Stats
               </div>
             </div>
 
-            {/* Platform Distribution */}
+            {/* Mest spelade genrer (Ersätter Topp-plattformar) */}
             <div className="p-4 sm:p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800 shadow-md space-y-4">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <Gamepad2 className="w-4 h-4 text-purple-400" />
-                <span>Topp-plattformar</span>
+                <span>Mest spelade genrer</span>
               </h3>
 
-              <div className="space-y-3">
-                {platformStats.slice(0, 5).map((item) => (
-                  <div key={item.platform} className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-medium text-zinc-200 truncate">{item.platform}</span>
-                      <span className="text-zinc-400">
-                        {item.count} spel ({item.percentage}%)
-                      </span>
+              {genreStats.length === 0 ? (
+                <div className="text-xs text-zinc-500 py-6 text-center">Inga genrer registrerade än.</div>
+              ) : (
+                <div className="space-y-3">
+                  {genreStats.map((item) => (
+                    <div key={item.genre} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-medium text-zinc-200 truncate">{item.genre}</span>
+                        <span className="text-zinc-400">
+                          {item.count} spel ({item.percentage}%)
+                        </span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-zinc-950 overflow-hidden">
+                        <div
+                          style={{ width: `${item.percentage}%` }}
+                          className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full transition-all duration-500"
+                        />
+                      </div>
                     </div>
-                    <div className="w-full h-2 rounded-full bg-zinc-950 overflow-hidden">
-                      <div
-                        style={{ width: `${item.percentage}%` }}
-                        className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full transition-all duration-500"
-                      />
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Sektion 2: Epoker (Tidsresan) & Betygsfördelning */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+            {/* Epoker / Lanseringsårtionden */}
+            <div className="p-4 sm:p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800 shadow-md space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <History className="w-4 h-4 text-blue-400" />
+                  <span>Tidsresan: Spel per epok</span>
+                </h3>
               </div>
+
+              {eraStats.length === 0 ? (
+                <div className="text-xs text-zinc-500 py-6 text-center">Inga lanseringsår tillgängliga.</div>
+              ) : (
+                <div className="space-y-3">
+                  {eraStats.map((era) => (
+                    <div key={era.label} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium text-zinc-200">{era.label}</span>
+                          <span className="text-[10px] text-zinc-500">({era.sub})</span>
+                        </div>
+                        <span className="text-zinc-400">
+                          {era.count} spel ({era.percentage}%)
+                        </span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-zinc-950 overflow-hidden">
+                        <div
+                          style={{ width: `${era.percentage}%` }}
+                          className={`h-full ${era.barColor} rounded-full transition-all duration-500`}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Betygsfördelning (1–10) */}
+            <div className="p-4 sm:p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800 shadow-md space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Star className="w-4 h-4 text-yellow-400 fill-current" />
+                  <span>Betygsfördelning (1–10)</span>
+                </h3>
+                <span className="text-xs text-zinc-500">{ratingDistribution.totalRatings} satta betyg</span>
+              </div>
+
+              {ratingDistribution.totalRatings === 0 ? (
+                <div className="text-xs text-zinc-500 py-6 text-center">
+                  Sätt betyg på dina spel i biblioteket för att se hur du betygsätter.
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {ratingDistribution.items
+                    .filter((item) => item.rating >= 5 || item.count > 0)
+                    .map((item) => {
+                      const barWidth =
+                        ratingDistribution.maxCount > 0
+                          ? Math.round((item.count / ratingDistribution.maxCount) * 100)
+                          : 0;
+
+                      return (
+                        <div key={item.rating} className="flex items-center gap-2.5 text-xs">
+                          <div className="w-8 flex items-center gap-0.5 justify-end font-semibold text-zinc-300">
+                            <span>{item.rating}</span>
+                            <Star className="w-2.5 h-2.5 text-yellow-500 fill-current" />
+                          </div>
+
+                          <div className="flex-1 h-3 rounded bg-zinc-950 overflow-hidden flex items-center">
+                            <div
+                              style={{ width: `${barWidth}%` }}
+                              className={`h-full rounded transition-all duration-500 ${
+                                item.rating >= 8
+                                  ? 'bg-gradient-to-r from-amber-500 to-yellow-400'
+                                  : item.rating >= 6
+                                  ? 'bg-teal-500'
+                                  : 'bg-zinc-600'
+                              }`}
+                            />
+                          </div>
+
+                          <div className="w-7 text-right font-medium text-[11px] text-zinc-400">
+                            {item.count > 0 ? item.count : '—'}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
             </div>
           </div>
 
@@ -417,7 +719,7 @@ export function StatsDashboardView({ games, onSelectGame, onOpenWrapped }: Stats
                         {game.title}
                       </h4>
                       <p className="text-[10px] text-zinc-500 truncate mt-0.5">
-                        {game.platforms?.[0] || 'Spel'}
+                        {game.genres?.[0] || 'Spel'}
                       </p>
                     </div>
                   </div>
@@ -483,9 +785,9 @@ export function StatsDashboardView({ games, onSelectGame, onOpenWrapped }: Stats
               {groupedByMonth.length === 0 ? (
                 <div className="text-center py-16 bg-zinc-900/30 border border-dashed border-zinc-800 rounded-2xl p-6">
                   <BookOpen className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
-                  <h4 className="text-sm font-bold text-zinc-300">Inga genomspelningar med klardatum</h4>
+                  <h4 className="text-sm font-bold text-zinc-300">Inga genomspelningar med klardatum för valt år</h4>
                   <p className="text-xs text-zinc-500 mt-1 max-w-sm mx-auto">
-                    När du klarar spel i Gameshelf och sparar med ett klardatum dyker de upp här i din månadsvisa speldagbok.
+                    När du klarar spel i Gameshelf och sparar med ett klardatum eller avklarat år dyker de upp här i din tidslinje.
                   </p>
                 </div>
               ) : (
@@ -539,18 +841,22 @@ export function StatsDashboardView({ games, onSelectGame, onOpenWrapped }: Stats
                               </div>
 
                               <div className="flex items-center gap-2 mt-1 text-[11px] text-zinc-400">
-                                {game.completed_date && (
+                                {game.completed_date ? (
                                   <span className="text-purple-400 font-semibold">
                                     {new Date(game.completed_date).toLocaleDateString('sv-SE', {
                                       day: 'numeric',
                                       month: 'short',
                                     })}
                                   </span>
-                                )}
-                                {game.platforms?.[0] && (
+                                ) : game.completed_year ? (
+                                  <span className="text-purple-400 font-semibold">
+                                    År {game.completed_year}
+                                  </span>
+                                ) : null}
+                                {game.genres?.[0] && (
                                   <>
                                     <span>•</span>
-                                    <span className="truncate">{game.platforms[0]}</span>
+                                    <span className="truncate">{game.genres[0]}</span>
                                   </>
                                 )}
                               </div>
@@ -577,16 +883,16 @@ export function StatsDashboardView({ games, onSelectGame, onOpenWrapped }: Stats
               <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/20 text-xs text-purple-300 flex items-center gap-3">
                 <Archive className="w-5 h-5 text-purple-400 shrink-0" />
                 <span>
-                  Här samlas äldre spel du redan klarat tidigare i livet (retro/barndomsspel). De räknas som avklarade i din samling men förorenar inte årets månadsvisa tidslinje.
+                  Här samlas äldre spel du redan klarat tidigare i livet utan loggat klardatum eller år. De räknas som avklarade i din samling men förorenar inte årets månadsvisa tidslinje.
                 </span>
               </div>
 
               {memoryGames.length === 0 ? (
                 <div className="text-center py-16 bg-zinc-900/30 border border-dashed border-zinc-800 rounded-2xl p-6">
                   <Archive className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
-                  <h4 className="text-sm font-bold text-zinc-300">Inga spelminnen tillagda än</h4>
+                  <h4 className="text-sm font-bold text-zinc-300">Inga odaterade spelminnen sparade</h4>
                   <p className="text-xs text-zinc-500 mt-1 max-w-sm mx-auto">
-                    När du söker och snabbt lägger till gamla spel du redan klarat sparas de här.
+                    När du söker och snabbt lägger till gamla barndomsspel utan årtal sparas de här.
                   </p>
                 </div>
               ) : (
@@ -624,7 +930,7 @@ export function StatsDashboardView({ games, onSelectGame, onOpenWrapped }: Stats
                         </h4>
                         <div className="flex items-center justify-between text-[10px] text-zinc-500 mt-0.5">
                           <span>{game.release_year || 'Klarat'}</span>
-                          <span className="truncate max-w-[70px]">{game.platforms?.[0]}</span>
+                          <span className="truncate max-w-[70px]">{game.genres?.[0] || 'Klarat'}</span>
                         </div>
                       </div>
                     </div>

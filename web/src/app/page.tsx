@@ -72,6 +72,16 @@ export type LibrarySortOption =
   | 'releaseYearAsc'
   | 'hours';
 
+export const DEFAULT_TAB_SORTS: Record<string, LibrarySortOption> = {
+  Alla: 'dateAdded',
+  playing: 'closestToFinish',
+  paused: 'closestToFinish',
+  notStarted: 'dateAdded',
+  completed: 'dateAdded',
+  abandoned: 'dateAdded',
+  wishlist: 'dateAdded',
+};
+
 export default function HomePage() {
   const [games, setGames] = useState<Game[]>([]);
   const [collections, setCollections] = useState<GameCollection[]>([]);
@@ -84,8 +94,9 @@ export default function HomePage() {
   const [pairedUserId, setPairedUserId] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile>(DEFAULT_PROFILE);
 
-  // Library Sorting & Filtering state
-  const [librarySort, setLibrarySort] = useState<LibrarySortOption>('dateAdded');
+  // Library Sorting & Filtering state (med separat sortering per flik)
+  const [tabSorts, setTabSorts] = useState<Record<string, LibrarySortOption>>(DEFAULT_TAB_SORTS);
+  const librarySort = tabSorts[selectedStatus] || DEFAULT_TAB_SORTS[selectedStatus] || 'dateAdded';
   const [libraryPlatformFilter, setLibraryPlatformFilter] = useState<string>('Alla');
   const [libraryPlaytimeFilter, setLibraryPlaytimeFilter] = useState<'all' | 'short' | 'medium' | 'long' | 'epic'>('all');
   const [filterOnlyOnSale, setFilterOnlyOnSale] = useState(false);
@@ -148,8 +159,17 @@ export default function HomePage() {
         } catch (e) {}
       }
 
-      const savedSort = localStorage.getItem('gameshelf_library_sort') as LibrarySortOption;
-      if (savedSort) setLibrarySort(savedSort);
+      try {
+        const savedTabSorts = localStorage.getItem('gameshelf_tab_sorts');
+        if (savedTabSorts) {
+          setTabSorts((prev) => ({ ...prev, ...JSON.parse(savedTabSorts) }));
+        } else {
+          const oldSavedSort = localStorage.getItem('gameshelf_library_sort') as LibrarySortOption;
+          if (oldSavedSort) {
+            setTabSorts((prev) => ({ ...prev, Alla: oldSavedSort }));
+          }
+        }
+      } catch {}
       const savedPlatform = localStorage.getItem('gameshelf_library_platform');
       if (savedPlatform) setLibraryPlatformFilter(savedPlatform);
       const savedOwnership = localStorage.getItem('gameshelf_library_ownership') as any;
@@ -742,10 +762,17 @@ export default function HomePage() {
     };
   }, [pairedUserId]);
 
-  // Filterändringshandlers med localStorage-persistens
+  // Filterändringshandlers med localStorage-persistens (sortering sparas per flik)
   const handleSortChange = (sort: LibrarySortOption) => {
-    setLibrarySort(sort);
-    if (typeof window !== 'undefined') localStorage.setItem('gameshelf_library_sort', sort);
+    setTabSorts((prev) => {
+      const updated = { ...prev, [selectedStatus]: sort };
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('gameshelf_tab_sorts', JSON.stringify(updated));
+        } catch {}
+      }
+      return updated;
+    });
   };
   const handlePlatformChange = (p: string) => {
     setLibraryPlatformFilter(p);

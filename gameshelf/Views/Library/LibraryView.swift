@@ -135,7 +135,52 @@ struct LibraryView: View {
 
     @State private var selectedTab: LibrarySectionTab = .owned
     @State private var selectedStatusFilter: PlayStatusFilter = .all
-    @State private var selectedSort: SortOption = .title
+    @AppStorage("library_tab_sorts") private var tabSortsRaw: String = ""
+
+    private var currentTabKey: String {
+        if selectedTab == .wishlist {
+            return "wishlist"
+        }
+        return selectedStatusFilter.rawValue
+    }
+
+    private var defaultSortForCurrentTab: SortOption {
+        if selectedTab == .wishlist {
+            return .dateAdded
+        }
+        switch selectedStatusFilter {
+        case .playing, .paused:
+            return .closestToFinish
+        case .all, .notStarted:
+            return .title
+        case .completed, .abandoned:
+            return .dateAdded
+        }
+    }
+
+    private var selectedSort: SortOption {
+        get {
+            if let data = tabSortsRaw.data(using: .utf8),
+               let dict = try? JSONDecoder().decode([String: String].self, from: data),
+               let raw = dict[currentTabKey],
+               let option = SortOption(rawValue: raw) {
+                return option
+            }
+            return defaultSortForCurrentTab
+        }
+        nonmutating set {
+            var dict: [String: String] = [:]
+            if let data = tabSortsRaw.data(using: .utf8),
+               let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
+                dict = decoded
+            }
+            dict[currentTabKey] = newValue.rawValue
+            if let encoded = try? JSONEncoder().encode(dict),
+               let str = String(data: encoded, encoding: .utf8) {
+                tabSortsRaw = str
+            }
+        }
+    }
     @State private var showingCreateCollectionSheet = false
     @State private var showingProfileSheet = false
     @State private var searchText = ""
@@ -812,7 +857,11 @@ struct LibraryView: View {
                     Button {
                         selectedSort = option
                     } label: {
-                        Label(option.rawValue, systemImage: iconForSort(option))
+                        if selectedSort == option {
+                            Label(option.rawValue, systemImage: "checkmark")
+                        } else {
+                            Label(option.rawValue, systemImage: iconForSort(option))
+                        }
                     }
                 }
             }

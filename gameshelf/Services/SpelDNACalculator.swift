@@ -330,7 +330,7 @@ enum SpelDNACalculator {
                 icon: "🎯",
                 accentHex: "#c7c23a",
                 supportingStats: ["\(min(99, max(30, Int(shooterShare * 100))))% Shooters", "Taktiskt fokus"],
-                score: (shooterShare * 100.0) + (hasFavGenre("fps") ? 25.0 : 0.0)
+                score: (shooterShare * 100.0) + (prefersCompetition ? 20.0 : 0.0) + (hasFavGenre("fps") ? 25.0 : 0.0)
             ),
 
             // 14. Squad Strategist
@@ -341,7 +341,7 @@ enum SpelDNACalculator {
                 icon: "🤝",
                 accentHex: "#3cc8aa",
                 supportingStats: ["\(min(99, Int(multiplayerShare * 100)))% Multiplayer", "Lagspelare"],
-                score: (multiplayerShare * 100.0) + (prefersCoop ? 30.0 : 0.0)
+                score: (multiplayerShare * 100.0) + (prefersCoop ? 30.0 : 0.0) + (prefersCompetition ? 15.0 : 0.0)
             ),
 
             // 15. Completionist Prime

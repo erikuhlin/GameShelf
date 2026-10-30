@@ -529,12 +529,12 @@ struct GameGoalsShareSheet: View {
             for game in allGames {
                 guard let url = game.coverURL else { continue }
                 group.addTask {
-                    if let cached = CoverImageCache.shared.image(for: url) {
+                    if let cached = await CoverImageCache.shared.image(for: url) {
                         return (game.id, cached)
                     }
                     if let (data, _) = try? await URLSession.shared.data(from: url),
                        let img = UIImage(data: data) {
-                        CoverImageCache.shared.insert(img, data: data, for: url)
+                        await CoverImageCache.shared.insert(img, data: data, for: url)
                         return (game.id, img)
                     }
                     return (game.id, nil)

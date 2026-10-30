@@ -440,6 +440,7 @@ export function calculateSpelDNA(
       supportingStats: [`${Math.min(99, Math.max(30, Math.round(shooterShare * 100)))}% Shooters`, 'Taktiskt fokus'],
       score:
         (shooterShare * 100) +
+        (prefersCompetition ? 20 : 0) +
         (hasFavGenre('fps') ? 25 : 0),
     },
 
@@ -454,7 +455,8 @@ export function calculateSpelDNA(
       supportingStats: [`${Math.min(99, Math.round(multiplayerShare * 100))}% Multiplayer`, 'Lagspelare'],
       score:
         (multiplayerShare * 100) +
-        (prefersCoop ? 30 : 0),
+        (prefersCoop ? 30 : 0) +
+        (prefersCompetition ? 15 : 0),
     },
 
     // 15. Completionist Prime

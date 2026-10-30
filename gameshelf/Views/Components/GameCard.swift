@@ -214,7 +214,8 @@ struct GameCard: View {
         self.platform = GameCard.shortPlatform(from: game.platforms)
         self.statusBadgeConfig = GameCardStatusBadgeConfig.from(game: game)
         self.deal = PriceWatcherService.shared.deal(for: game)
-        if !game.isMultiplayerOrOngoing {
+        // Tunn progressbar visas på pågående eller pausade spel, men döljs för klarade spel
+        if !game.isMultiplayerOrOngoing && game.status != .completed {
             let progressInfo = GamingGoalEngine.calculateProgress(for: game)
             let hasTaskProgress = progressInfo.hasTasks && progressInfo.percentage > 0
             let hasStoryProgress = !progressInfo.hasTasks && game.storyProgress != nil && progressInfo.percentage > 0
@@ -227,8 +228,6 @@ struct GameCard: View {
                     self.coverProgressColor = Color(hex: "#34C759")
                 case .paused:
                     self.coverProgressColor = Color(hex: "#FF9500")
-                case .completed:
-                    self.coverProgressColor = Color.teal
                 default:
                     self.coverProgressColor = Color(hex: "#007AFF")
                 }

@@ -69,15 +69,13 @@ export function ListView({ games, onSelectGame, dealsMap }: ListViewProps) {
                     </div>
                   )}
 
-                  {/* Tunn progressbar längst ned på thumbnail för singleplayer med progress > 0 % */}
-                  {!isMultiplayerOrOngoing(game) && totalTodos > 0 && completedTodos > 0 && (
+                  {/* Tunn progressbar längst ned på thumbnail för singleplayer med progress > 0 % (döljs för klara spel) */}
+                  {!isMultiplayerOrOngoing(game) && game.status !== 'completed' && totalTodos > 0 && completedTodos > 0 && (
                     <div className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-black/60 overflow-hidden z-10">
                       <div
                         className={`h-full transition-all duration-300 ${
                           game.status === 'paused'
                             ? 'bg-amber-500'
-                            : game.status === 'completed'
-                            ? 'bg-teal-400'
                             : game.status === 'playing'
                             ? 'bg-emerald-500'
                             : 'bg-blue-500'

@@ -77,6 +77,7 @@ struct GameDiaryView: View {
     @State private var selectedMemoryEra: MemoryEra = .all
     @State private var selectedMemorySort: MemorySort = .releaseDesc
     @State private var spotlightGameID: UUID? = nil
+    @State private var showingShareSheet: Bool = false
 
     private var currentYear: Int {
         Calendar.current.component(.year, from: Date())
@@ -242,6 +243,36 @@ struct GameDiaryView: View {
         .navigationDestination(item: $selectedGameForDetail) { game in
             GameDetailView(game: game)
         }
+        .sheet(isPresented: $showingShareSheet) {
+            let yr = selectedYear ?? currentYear
+            let crownedGoty: Game? = {
+                guard let gotyID = profile.getGoty(forYear: yr) else { return nil }
+                return store.games.first { $0.id == gotyID }
+            }()
+            GameDiaryShareSheet(
+                year: yr,
+                completedGames: filteredActiveGames,
+                crownedGoty: crownedGoty,
+                username: profile.username.isEmpty ? "Spelare" : profile.username
+            )
+        }
+        .toolbar {
+            if selectedMode == .active && !filteredActiveGames.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingShareSheet = true
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.purple)
+                            .padding(8)
+                            .background(Color(.secondarySystemGroupedBackground))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 
     // MARK: - Active Diary
@@ -262,38 +293,53 @@ struct GameDiaryView: View {
 
                     Spacer()
 
-                    // Year Picker Menu
-                    Menu {
-                        Button {
-                            selectedYear = nil
-                        } label: {
-                            HStack {
-                                Text("Alla år")
-                                if selectedYear == nil { Image(systemName: "checkmark") }
-                            }
-                        }
-
-                        ForEach(availableYears, id: \.self) { yr in
+                    // Year Picker Menu & Quick Share
+                    HStack(spacing: 8) {
+                        Menu {
                             Button {
-                                selectedYear = yr
+                                selectedYear = nil
                             } label: {
                                 HStack {
-                                    Text("\(String(yr))")
-                                    if selectedYear == yr { Image(systemName: "checkmark") }
+                                    Text("Alla år")
+                                    if selectedYear == nil { Image(systemName: "checkmark") }
                                 }
                             }
+
+                            ForEach(availableYears, id: \.self) { yr in
+                                Button {
+                                    selectedYear = yr
+                                } label: {
+                                    HStack {
+                                        Text("\(String(yr))")
+                                        if selectedYear == yr { Image(systemName: "checkmark") }
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(selectedYear.map { String($0) } ?? "Alla år")
+                                    .font(.subheadline.bold())
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.caption2)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(Color(.tertiarySystemFill), in: Capsule())
+                            .foregroundStyle(.purple)
                         }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(selectedYear.map { String($0) } ?? "Alla år")
-                                .font(.subheadline.bold())
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.caption2)
+
+                        if !filteredActiveGames.isEmpty {
+                            Button {
+                                showingShareSheet = true
+                            } label: {
+                                Image(systemName: "square.and.arrow.up")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(.purple)
+                                    .padding(7.5)
+                                    .background(Color(.tertiarySystemFill), in: Circle())
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(Color(.tertiarySystemFill), in: Capsule())
-                        .foregroundStyle(.purple)
                     }
                 }
 

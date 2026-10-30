@@ -27,6 +27,10 @@ struct GameGoalsView: View {
         GamingGoalEngine.completedCount(in: store.games, for: currentYear)
     }
 
+    private var completedGamesThisYear: [Game] {
+        GamingGoalEngine.completedGames(in: store.games, for: currentYear)
+    }
+
     private var abandonedThisYear: Int {
         GamingGoalEngine.abandonedCount(in: store.games, for: currentYear)
     }
@@ -169,7 +173,15 @@ struct GameGoalsView: View {
                     .environmentObject(profile)
             }
             .sheet(isPresented: $showingShareSheet) {
-                ShareGoalsSheet(completed: completedThisYear, abandoned: abandonedThisYear, goal: annualGoal, year: currentYear)
+                GameGoalsShareSheet(
+                    year: currentYear,
+                    completedCount: completedThisYear,
+                    annualGoal: annualGoal,
+                    completedGames: completedGamesThisYear,
+                    focusGames: focusGames,
+                    tempoText: tempoInfo.displayText,
+                    username: profile.username.isEmpty ? "Spelare" : profile.username
+                )
             }
             .navigationDestination(item: $selectedGameForDetail) { game in
                 GameDetailView(game: game)
@@ -1036,6 +1048,10 @@ struct GameFinishChoiceSheet: View {
         GamingGoalEngine.completedCount(in: store.games, for: currentYear)
     }
 
+    private var completedGamesThisYear: [Game] {
+        GamingGoalEngine.completedGames(in: store.games, for: currentYear)
+    }
+
     private var annualGoal: Int {
         max(1, profile.annualGamingGoal)
     }
@@ -1302,70 +1318,4 @@ struct GameFinishChoiceSheet: View {
     }
 }
 
-// MARK: - Hjälpvy för Delning
-private struct ShareGoalsSheet: View {
-    let completed: Int
-    let abandoned: Int
-    let goal: Int
-    let year: Int
-    @Environment(\.dismiss) private var dismiss
 
-    var shareText: String {
-        if abandoned > 0 {
-            return "🎮 Mitt spelmål för \(year): \(completed) av \(goal) spel klarade (\(abandoned) avslutat) på GameShelf!"
-        }
-        return "🎮 Mitt spelmål för \(year): \(completed) av \(goal) spel klarade på GameShelf!"
-    }
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                VStack(spacing: 12) {
-                    Image(systemName: "trophy.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(Color.yellow)
-
-                    Text("Spelmål \(String(year))")
-                        .font(.title2.bold())
-
-                    Text("\(completed) av \(goal) klarade")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.secondary)
-
-                    if abandoned > 0 {
-                        Text("\(completed) klarade, \(abandoned) avslutat")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(24)
-                .frame(maxWidth: .infinity)
-                .background(Color(.secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .padding(.horizontal, 24)
-                .padding(.top, 24)
-
-                ShareLink(item: shareText) {
-                    Label("Dela spelmål", systemImage: "square.and.arrow.up")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.red)
-                        .foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
-                .padding(.horizontal, 24)
-
-                Spacer()
-            }
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
-            .navigationTitle("Dela spelmål")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Klar") { dismiss() }
-                }
-            }
-        }
-    }
-}

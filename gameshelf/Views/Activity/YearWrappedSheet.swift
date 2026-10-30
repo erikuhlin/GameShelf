@@ -608,10 +608,16 @@ struct YearWrappedShareView: View {
     let avatarType: String
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.displayScale) private var displayScale
+    @State private var renderedImage: UIImage? = nil
+    @State private var showingActivitySheet = false
+    @State private var isRendering = false
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
+            VStack(spacing: 16) {
+                Spacer()
+
                 // Själva story-kortet
                 storyCardContent
                     .frame(maxWidth: 340, maxHeight: 580)
@@ -620,17 +626,65 @@ struct YearWrappedShareView: View {
 
                 Spacer()
 
-                Button("Stäng") {
-                    dismiss()
+                Button {
+                    Task {
+                        await renderAndShare()
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        if isRendering {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                        Text(isRendering ? "Förbereder bild..." : "Dela eller spara bild")
+                            .font(.headline)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        LinearGradient(colors: [Color.red, Color.amber], startPoint: .leading, endPoint: .trailing)
+                    )
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .shadow(color: Color.red.opacity(0.35), radius: 8, x: 0, y: 4)
                 }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .disabled(isRendering)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 12)
             }
-            .padding(.vertical, 20)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.black.ignoresSafeArea())
             .navigationTitle("Dela Story")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Klar") {
+                        dismiss()
+                    }
+                    .foregroundStyle(.white)
+                }
+            }
+            .sheet(isPresented: $showingActivitySheet) {
+                if let img = renderedImage {
+                    ShareActivityView(activityItems: [img])
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func renderAndShare() async {
+        isRendering = true
+        defer { isRendering = false }
+
+        let renderer = ImageRenderer(content: storyCardContent.frame(width: 340, height: 580))
+        renderer.scale = displayScale > 0 ? displayScale : 3.0
+
+        if let uiImage = renderer.uiImage {
+            self.renderedImage = uiImage
+            self.showingActivitySheet = true
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         }
     }
 

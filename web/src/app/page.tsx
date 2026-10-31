@@ -60,7 +60,7 @@ import {
 } from 'lucide-react';
 import { fetchDealsForGames, normalizeTitle, GameDeal } from '@/services/priceWatcherService';
 
-export type LibrarySortOption =
+type LibrarySortOption =
   | 'dateAdded'
   | 'closestToFinish'
   | 'shortestPlaytime'
@@ -72,7 +72,7 @@ export type LibrarySortOption =
   | 'releaseYearAsc'
   | 'hours';
 
-export const DEFAULT_TAB_SORTS: Record<string, LibrarySortOption> = {
+const DEFAULT_TAB_SORTS: Record<string, LibrarySortOption> = {
   Alla: 'dateAdded',
   playing: 'closestToFinish',
   paused: 'closestToFinish',

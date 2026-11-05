@@ -168,6 +168,7 @@ struct AdvancedSearchFilterSheet: View {
         PlatformOption(id: 49, name: "Xbox One", icon: "xbox.logo"),
         PlatformOption(id: 12, name: "Xbox 360", icon: "xbox.logo"),
         PlatformOption(id: 130, name: "Nintendo Switch", icon: "gamecontroller"),
+        PlatformOption(id: 508, name: "Nintendo Switch 2", icon: "gamecontroller"),
         PlatformOption(id: 6, name: "PC (Windows)", icon: "desktopcomputer")
     ]
 

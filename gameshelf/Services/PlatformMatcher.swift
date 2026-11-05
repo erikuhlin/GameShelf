@@ -28,7 +28,8 @@ struct PlatformMatcher {
             else if lower.contains("xbox series") || lower.contains("series x") || lower.contains("series s") { ids.append(169) }
             else if lower.contains("xbox one") { ids.append(49) }
             else if lower.contains("xbox 360") { ids.append(12) }
-            else if lower.contains("switch") { ids.append(130) }
+            else if lower.contains("switch 2") { ids.append(508) }
+            else if lower.contains("switch") { ids.append(contentsOf: [130, 508]) }
             else if lower.contains("3ds") { ids.append(37) }
             else if lower.contains("gamecube") { ids.append(21) }
             else if lower.contains("mac") { ids.append(14) }
@@ -106,7 +107,7 @@ struct PlatformMatcher {
 
         // 2. Fallback: Inget matchade användarens profil
         // Prioritera vanliga moderna plattformar framför nedlagda/nischade som Stadia, Ouya etc.
-        let priorityList = ["PlayStation 5", "PC (Microsoft Windows)", "Xbox Series X|S", "Nintendo Switch", "PlayStation 4", "Xbox One"]
+        let priorityList = ["PlayStation 5", "PC (Microsoft Windows)", "Xbox Series X|S", "Nintendo Switch 2", "Nintendo Switch", "PlayStation 4", "Xbox One"]
         for p in priorityList {
             if let found = availableIGDBPlatforms.first(where: { isMatch(igdb: $0.lowercased(), user: p.lowercased()) }) {
                 return [found]
@@ -139,6 +140,11 @@ struct PlatformMatcher {
         // PlayStation 4 / PS4
         if (user.contains("playstation 4") || user.contains("ps4")) {
             if igdb.contains("playstation 4") || igdb == "ps4" { return true }
+        }
+
+        // Nintendo Switch 2
+        if user.contains("switch 2") {
+            if igdb.contains("switch 2") { return true }
         }
 
         // Nintendo Switch
@@ -226,6 +232,10 @@ struct PlatformMatcher {
     }
 
     /// Returnerar ett kompakt, snyggt plattformsnamn anpassat för kort och kompakta etiketter
+    static func shortName(for name: String) -> String {
+        shortName(name)
+    }
+
     static func shortName(_ name: String) -> String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = trimmed.lowercased()
@@ -241,6 +251,7 @@ struct PlatformMatcher {
         if lower.contains("xbox one") { return "Xbox One" }
         if lower.contains("xbox 360") { return "Xbox 360" }
         if lower == "xbox" { return "Xbox" }
+        if lower.contains("switch 2") { return "Switch 2" }
         if lower.contains("switch") { return "Switch" }
         if lower.contains("3ds") { return "3DS" }
         if lower.contains("game boy") || lower.contains("gba") { return "GBA" }

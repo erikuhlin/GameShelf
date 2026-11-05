@@ -14,7 +14,7 @@ export async function GET(
   try {
     const query = `
       where id = ${igdbId};
-      fields name, summary, storyline, first_release_date, cover.url, cover.image_id, platforms.name, genres.name, total_rating, rating, aggregated_rating, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, collection.name, similar_games.name, similar_games.cover.image_id, similar_games.first_release_date, similar_games.total_rating, screenshots.image_id, artworks.image_id, videos.name, videos.video_id, game_modes.name, themes.name, age_ratings.category, age_ratings.rating;
+      fields name, summary, storyline, first_release_date, cover.url, cover.image_id, platforms.name, genres.name, total_rating, total_rating_count, rating, rating_count, aggregated_rating, aggregated_rating_count, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, collection.name, similar_games.name, similar_games.cover.image_id, similar_games.first_release_date, similar_games.total_rating, screenshots.image_id, artworks.image_id, videos.name, videos.video_id, game_modes.name, themes.name, age_ratings.category, age_ratings.rating, external_games.category, external_games.external_game_source, external_games.uid, external_games.url;
       limit 1;
     `;
 

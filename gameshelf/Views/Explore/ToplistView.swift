@@ -34,6 +34,7 @@ struct ToplistView: View {
         "PC (Microsoft Windows)",
         "PlayStation 5",
         "PlayStation 4",
+        "Nintendo Switch 2",
         "Nintendo Switch",
         "Xbox Series X|S",
         "Xbox One",

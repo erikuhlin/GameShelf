@@ -11,6 +11,9 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
     let genres: [IGDBGenre]?
     let totalRating: Double?
     let aggregatedRating: Double?
+    let rating: Double?
+    let ratingCount: Int?
+    let aggregatedRatingCount: Int?
     let involvedCompanies: [IGDBInvolvedCompany]?
     let collection: IGDBCollection?
     let similarGames: [IGDBRelatedGame]?
@@ -30,6 +33,7 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
     let versionParent: Int?
     let hypes: Int?
     let franchises: [IGDBFranchise]?
+    let externalGames: [IGDBExternalGame]?
 
     nonisolated init(
         id: Int,
@@ -41,6 +45,9 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
         genres: [IGDBGenre]? = nil,
         totalRating: Double? = nil,
         aggregatedRating: Double? = nil,
+        rating: Double? = nil,
+        ratingCount: Int? = nil,
+        aggregatedRatingCount: Int? = nil,
         involvedCompanies: [IGDBInvolvedCompany]? = nil,
         collection: IGDBCollection? = nil,
         similarGames: [IGDBRelatedGame]? = nil,
@@ -59,7 +66,8 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
         parentGame: Int? = nil,
         versionParent: Int? = nil,
         hypes: Int? = nil,
-        franchises: [IGDBFranchise]? = nil
+        franchises: [IGDBFranchise]? = nil,
+        externalGames: [IGDBExternalGame]? = nil
     ) {
         self.id = id
         self.name = name
@@ -70,6 +78,9 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
         self.genres = genres
         self.totalRating = totalRating
         self.aggregatedRating = aggregatedRating
+        self.rating = rating
+        self.ratingCount = ratingCount
+        self.aggregatedRatingCount = aggregatedRatingCount
         self.involvedCompanies = involvedCompanies
         self.collection = collection
         self.similarGames = similarGames
@@ -89,6 +100,7 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
         self.versionParent = versionParent
         self.hypes = hypes
         self.franchises = franchises
+        self.externalGames = externalGames
     }
 
     enum CodingKeys: String, CodingKey {
@@ -100,12 +112,31 @@ struct IGDBGame: Decodable, Identifiable, Sendable {
         case firstReleaseDate = "first_release_date"
         case totalRating = "total_rating"
         case aggregatedRating = "aggregated_rating"
+        case rating
+        case ratingCount = "rating_count"
+        case aggregatedRatingCount = "aggregated_rating_count"
         case involvedCompanies = "involved_companies"
         case similarGames = "similar_games"
         case gameModes = "game_modes"
         case ageRatings = "age_ratings"
         case timeToBeat = "time_to_beat"
         case totalRatingCount = "total_rating_count"
+        case externalGames = "external_games"
+    }
+
+    /// Returnerar Steam App ID om det är kopplat via IGDB external_games
+    nonisolated var steamAppID: String? {
+        if let match = externalGames?.first(where: { ($0.externalGameSource == 1 || $0.category == 1) }), let uid = match.uid, !uid.isEmpty {
+            return uid
+        }
+        if let steamURL = externalGames?.first(where: { $0.url?.contains("store.steampowered.com/app/") == true || $0.url?.contains("steamcommunity.com/app/") == true })?.url {
+            let components = steamURL.components(separatedBy: "/app/")
+            if components.count > 1 {
+                let idPart = components[1].components(separatedBy: "/").first?.components(separatedBy: "?").first
+                if let id = idPart, !id.isEmpty { return id }
+            }
+        }
+        return nil
     }
 
     nonisolated var isDLC: Bool {
@@ -520,5 +551,21 @@ struct IGDBTimeToBeat: Decodable, Sendable {
         [("Snabb", hastily), ("Huvudstory", normally), ("Komplett", completely)].compactMap { label, seconds in
             seconds.map { (label, $0) }
         }
+    }
+}
+
+public struct IGDBExternalGame: Decodable, Sendable {
+    public let id: Int?
+    public let category: Int? // Äldre IGDB-fält
+    public let externalGameSource: Int? // Nyare IGDB v4 fält (1 = Steam)
+    public let uid: String?   // t.ex. Steam App ID
+    public let url: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case category
+        case externalGameSource = "external_game_source"
+        case uid
+        case url
     }
 }

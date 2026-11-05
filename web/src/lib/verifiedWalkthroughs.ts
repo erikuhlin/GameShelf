@@ -209,25 +209,34 @@ export const VERIFIED_WALKTHROUGHS: VerifiedWalkthrough[] = [
   },
 
   // ============================================================================
-  // 5. CYBERPUNK 2077 (28 officiella Main Jobs 1:1)
+  // 5. CYBERPUNK 2077 (Autentiska Main Jobs 1:1)
   // ============================================================================
   {
     igdbId: 1877,
+    alternateIgdbIds: [278787],
     title: 'Cyberpunk 2077',
+    aliases: ['Cyberpunk 2077: Ultimate Edition', 'Cyberpunk 2077 Ultimate Edition'],
     hasLinearProgression: true,
     progressionType: 'main_quests',
-    summary: 'V:s resa i Night City genom samtliga 28 officiella huvuduppdrag (Main Jobs) från Lifepath-prologen till efterspelet.',
+    summary: 'V:s resa i Night City genom samtliga officiella huvuduppdrag (Main Jobs) från prologens tre livsvägar och Watson-kuppen, till Akt 2:s fyra parallella utredningar och de förgrenade sluten efter Nocturne Op55N1.',
     sourceUrl: 'https://www.ign.com/wikis/cyberpunk-2077/Walkthrough',
     items: [
-      { id: 'cp-1', title: 'Lifepath Prologue (The Nomad / The Streetkid / The Corpo-Rat)', order: 1, chapterGroup: 'Prolog' },
-      { id: 'cp-2', title: 'Practice Makes Perfect', order: 2, chapterGroup: 'Prolog' },
+      // Prolog
+      { id: 'cp-1', title: 'The Nomad / The Streetkid / The Corpo-Rat (Lifepath)', order: 1, chapterGroup: 'Prolog' },
+      { id: 'cp-2', title: 'Practice Makes Perfect (Tutorial)', order: 2, chapterGroup: 'Prolog' },
       { id: 'cp-3', title: 'The Rescue', order: 3, chapterGroup: 'Prolog' },
+
+      // Akt 1
       { id: 'cp-4', title: 'The Ripperdoc', order: 4, chapterGroup: 'Akt 1' },
       { id: 'cp-5', title: 'The Ride', order: 5, chapterGroup: 'Akt 1' },
-      { id: 'cp-6', title: 'The Information', order: 6, chapterGroup: 'Akt 1' },
-      { id: 'cp-7', title: 'The Pickup', order: 7, chapterGroup: 'Akt 1' },
+      { id: 'cp-6', title: 'The Pickup', order: 6, chapterGroup: 'Akt 1' },
+      { id: 'cp-7', title: 'The Information', order: 7, chapterGroup: 'Akt 1' },
       { id: 'cp-8', title: 'The Heist', order: 8, chapterGroup: 'Akt 1' },
-      { id: 'cp-9', title: 'Love Like Fire', order: 9, chapterGroup: 'Akt 1' },
+
+      // Mellanspel (Interlude)
+      { id: 'cp-9', title: 'Love Like Fire (Interlude)', order: 9, chapterGroup: 'Mellanspel (Johnny Silverhand)' },
+
+      // Akt 2
       { id: 'cp-10', title: 'Playing for Time', order: 10, chapterGroup: 'Akt 2' },
       { id: 'cp-11', title: 'Automatic Love', order: 11, chapterGroup: 'Akt 2 (Evelyn & Judy)' },
       { id: 'cp-12', title: 'The Space in Between', order: 12, chapterGroup: 'Akt 2 (Evelyn & Judy)' },
@@ -244,9 +253,32 @@ export const VERIFIED_WALKTHROUGHS: VerifiedWalkthrough[] = [
       { id: 'cp-23', title: 'Gimme Danger', order: 23, chapterGroup: 'Akt 2 (Takemura)' },
       { id: 'cp-24', title: 'Play It Safe', order: 24, chapterGroup: 'Akt 2 (Takemura)' },
       { id: 'cp-25', title: 'Search and Destroy', order: 25, chapterGroup: 'Akt 2 (Takemura)' },
-      { id: 'cp-26', title: 'Tapeworm', order: 26, chapterGroup: 'Akt 2' },
-      { id: 'cp-27', title: 'Nocturne Op55N1 (Point of No Return)', order: 27, chapterGroup: 'Akt 3 & Final' },
-      { id: 'cp-28', title: 'Final Run & Epilogue (Mikoshi)', order: 28, chapterGroup: 'Akt 3 & Final' },
+      { id: 'cp-26', title: "Tapeworm (Johnny's Conversations)", order: 26, chapterGroup: 'Akt 2' },
+
+      // Akt 3: Point of No Return
+      { id: 'cp-27', title: 'Nocturne Op55N1 (Point of No Return)', order: 27, chapterGroup: 'Akt 3: Point of No Return' },
+
+      // Final: Hanako & Arasaka (The Devil)
+      { id: 'cp-28', title: 'Last Caress', order: 28, chapterGroup: 'Final: Hanako & Arasaka (The Devil)' },
+      { id: 'cp-29', title: 'Totalimmortal', order: 29, chapterGroup: 'Final: Hanako & Arasaka (The Devil)' },
+      { id: 'cp-30', title: 'Where Is My Mind? (Epilogue)', order: 30, chapterGroup: 'Final: Hanako & Arasaka (The Devil)' },
+
+      // Final: Panam & Aldecaldos (The Star)
+      { id: 'cp-31', title: 'We Gotta Live Together', order: 31, chapterGroup: 'Final: Panam & Aldecaldos (The Star)' },
+      { id: 'cp-32', title: 'Forward to Death', order: 32, chapterGroup: 'Final: Panam & Aldecaldos (The Star)' },
+      { id: 'cp-33', title: 'Belly of the Beast', order: 33, chapterGroup: 'Final: Panam & Aldecaldos (The Star)' },
+      { id: 'cp-34', title: 'All Along the Watchtower (Epilogue)', order: 34, chapterGroup: 'Final: Panam & Aldecaldos (The Star)' },
+
+      // Final: Rogue & Afterlife (The Sun)
+      { id: 'cp-35', title: 'For Whom the Bell Tolls', order: 35, chapterGroup: 'Final: Rogue & Afterlife (The Sun)' },
+      { id: 'cp-36', title: "Knockin' on Heaven's Door", order: 36, chapterGroup: 'Final: Rogue & Afterlife (The Sun)' },
+      { id: 'cp-37', title: 'Path of Glory (Epilogue)', order: 37, chapterGroup: 'Final: Rogue & Afterlife (The Sun)' },
+
+      // Final: Alternativa slut & Mikoshi
+      { id: 'cp-38', title: 'Changes (Mikoshi Cyberspace)', order: 38, chapterGroup: 'Final: Alternativa slut & Epiloger' },
+      { id: 'cp-39', title: 'New Dawn Fades (Epilogue - Johnny)', order: 39, chapterGroup: 'Final: Alternativa slut & Epiloger' },
+      { id: 'cp-40', title: '(Don’t Fear) The Reaper (Secret Ending)', order: 40, chapterGroup: 'Final: Alternativa slut & Epiloger' },
+      { id: 'cp-41', title: 'The Path of Least Resistance', order: 41, chapterGroup: 'Final: Alternativa slut & Epiloger' },
     ],
   },
 

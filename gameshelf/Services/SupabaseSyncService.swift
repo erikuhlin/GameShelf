@@ -566,9 +566,8 @@ actor SupabaseSyncService {
     /// Tar bort ett spel från Supabase
     func deleteGame(id: UUID) async throws {
         guard SupabaseConfig.isSyncEnabled else { return }
-        let currentUserId = await MainActor.run { SupabaseAuthManager.shared.persistentUserId }
         guard let request = await makeRequest(
-            endpoint: "user_games?id=eq.\(id.uuidString)&user_id=eq.\(currentUserId.uuidString)",
+            endpoint: "user_games?id=eq.\(id.uuidString)",
             method: "DELETE"
         ) else {
             throw URLError(.badURL)

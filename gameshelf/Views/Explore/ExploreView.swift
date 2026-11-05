@@ -808,7 +808,7 @@ struct ExploreView: View {
                         if days == 0 && Calendar.current.isDateInToday(date) {
                             return "Idag"
                         } else if days > 0 {
-                            return "Om \(days) daga    r"
+                            return "Om \(days) dagar"
                         }
                     } else if let yr = upcoming.releaseYear {
                         return "\(yr)"
@@ -1256,15 +1256,16 @@ struct ExploreView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // 4. Hype Indicator (🔥 14 / 🔥 48)
-            let hypes = game.hypes ?? 14
-            Text("🔥 \(hypes)")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color(hex: "#FF9500"))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Color(hex: "#FF9500").opacity(0.10), in: Capsule())
-                .overlay(Capsule().stroke(Color(hex: "#FF9500").opacity(0.20), lineWidth: 1))
+            // 4. Hype Indicator (Visas endast om spelet har faktisk förväntan registrerad)
+            if let hypes = game.hypes, hypes > 0 {
+                Text("🔥 \(hypes)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color(hex: "#FF9500"))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color(hex: "#FF9500").opacity(0.10), in: Capsule())
+                    .overlay(Capsule().stroke(Color(hex: "#FF9500").opacity(0.20), lineWidth: 1))
+            }
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 2)
@@ -1291,7 +1292,7 @@ struct ExploreView: View {
     private func upcomingPlatformGenreText(for game: IGDBGame) -> String {
         var parts: [String] = []
         if let platforms = game.platforms, !platforms.isEmpty {
-            let names = platforms.prefix(2).map(\.name)
+            let names = platforms.prefix(2).map { PlatformMatcher.shortName($0.name) }
             parts.append(names.joined(separator: ", "))
         }
         if let genre = game.genres?.first?.name {
@@ -1306,23 +1307,70 @@ struct ExploreView: View {
         }
 
         do {
-            let platformIDs = profile.platforms.flatMap { p -> [Int] in
-                let lower = p.lowercased()
-                if lower.contains("playstation 5") || lower == "ps5" { return [167] }
-                if lower.contains("xbox") { return [169] }
-                if lower.contains("switch") { return [130] }
-                if lower.contains("pc") || lower.contains("windows") { return [6] }
-                return []
-            }
-
-            let fetched = try await IGDBService.shared.fetchUpcomingReleases(
-                platformIDs: platformIDs,
+            // Hämta kommande spelsläpp för alla plattformar (precis som i kalendern) med minst 1 i förväntan/hype
+            var fetched = try await IGDBService.shared.fetchUpcomingReleases(
+                platformIDs: [],
                 fromDate: Calendar.current.startOfDay(for: Date()),
-                limit: 16
+                minHype: 1,
+                limit: 60
             )
 
+            // Fallback om väldigt få registrerade släpp med hype hittades
+            if fetched.count < 8 {
+                fetched = try await IGDBService.shared.fetchUpcomingReleases(
+                    platformIDs: [],
+                    fromDate: Calendar.current.startOfDay(for: Date()),
+                    limit: 40
+                )
+            }
+
+            let cal = Calendar.current
+            let now = Date()
+
+            // Gruppera spelen per datum (ÅÅÅÅ-MM-DD)
+            var dayGroups: [String: [IGDBGame]] = [:]
+            var dayOrder: [String: Date] = [:]
+            let keyFormatter = DateFormatter()
+            keyFormatter.dateFormat = "yyyy-MM-dd"
+
+            for game in fetched {
+                guard let ts = game.firstReleaseDate else { continue }
+                let date = Date(timeIntervalSince1970: TimeInterval(ts))
+                let key = keyFormatter.string(from: date)
+                dayGroups[key, default: []].append(game)
+                if dayOrder[key] == nil {
+                    dayOrder[key] = date
+                }
+            }
+
+            let sortedDayKeys = dayGroups.keys.sorted { (k1, k2) in
+                (dayOrder[k1] ?? now) < (dayOrder[k2] ?? now)
+            }
+
+            // För varje datum: sortera med högst förväntan/hype först, och ta max 5 spel per datum
+            var curatedUpcoming: [IGDBGame] = []
+            for key in sortedDayKeys {
+                let gamesForDay = dayGroups[key] ?? []
+                let sortedGames = gamesForDay.sorted { g1, g2 in
+                    let h1 = g1.hypes ?? 0
+                    let h2 = g2.hypes ?? 0
+                    if h1 != h2 {
+                        return h1 > h2
+                    }
+                    let r1 = g1.totalRatingCount ?? 0
+                    let r2 = g2.totalRatingCount ?? 0
+                    if r1 != r2 {
+                        return r1 > r2
+                    }
+                    return g1.name.localizedCaseInsensitiveCompare(g2.name) == .orderedAscending
+                }
+                // Begränsa till max 5 spel per datum så inte ett enskilt datum monopoliserar snurran
+                let topForDay = sortedGames.prefix(5)
+                curatedUpcoming.append(contentsOf: topForDay)
+            }
+
             await MainActor.run {
-                self.upcomingGames = fetched
+                self.upcomingGames = Array(curatedUpcoming.prefix(16))
                 self.isLoadingUpcoming = false
             }
         } catch {

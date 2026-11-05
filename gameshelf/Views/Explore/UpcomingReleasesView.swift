@@ -45,7 +45,7 @@ struct UpcomingReleasesView: View {
         UpcomingPlatformOption(id: "all", name: "Alla", igdbIDs: [], icon: "sparkles"),
         UpcomingPlatformOption(id: "ps5", name: "PS5", igdbIDs: [167], icon: "playstation.logo"),
         UpcomingPlatformOption(id: "pc", name: "PC", igdbIDs: [6], icon: "desktopcomputer"),
-        UpcomingPlatformOption(id: "switch", name: "Switch", igdbIDs: [130], icon: "gamecontroller"),
+        UpcomingPlatformOption(id: "switch", name: "Switch", igdbIDs: [130, 508], icon: "gamecontroller"),
         UpcomingPlatformOption(id: "xbox", name: "Xbox Series", igdbIDs: [169], icon: "xbox.logo")
     ]
 
@@ -202,11 +202,26 @@ struct UpcomingReleasesView: View {
                 }
             }
 
+            // Sortera spelen för samma dag så att spel med högst förväntan (hype) visas först
+            let sortedDayGames = (groups[key] ?? []).sorted { g1, g2 in
+                let h1 = g1.hypes ?? 0
+                let h2 = g2.hypes ?? 0
+                if h1 != h2 {
+                    return h1 > h2
+                }
+                let r1 = g1.totalRatingCount ?? 0
+                let r2 = g2.totalRatingCount ?? 0
+                if r1 != r2 {
+                    return r1 > r2
+                }
+                return g1.name.localizedCaseInsensitiveCompare(g2.name) == .orderedAscending
+            }
+
             return (
                 dateString: key,
                 displayDate: displayDate,
                 countdown: countdown,
-                games: groups[key] ?? []
+                games: sortedDayGames
             )
         }
     }
@@ -882,6 +897,7 @@ struct UpcomingReleasesView: View {
         if lower.contains("playstation 4") || lower == "ps4" { return "PS4" }
         if lower.contains("series") { return "XSX" }
         if lower.contains("xbox") { return "Xbox" }
+        if lower.contains("switch 2") { return "Switch 2" }
         if lower.contains("switch") { return "Switch" }
         if lower.contains("windows") || lower.contains("pc") { return "PC" }
         if lower.contains("mac") { return "Mac" }

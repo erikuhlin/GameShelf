@@ -199,6 +199,44 @@ function GameDetailModalContent({
   const [activeLightboxImg, setActiveLightboxImg] = useState<string | null>(null);
   const [deal, setDeal] = useState<GameDeal | null>(null);
   const [storeLinks, setStoreLinks] = useState<StoreQuickLink[]>([]);
+  const [showRatingsModal, setShowRatingsModal] = useState(false);
+  const [steamData, setSteamData] = useState<{
+    query_summary?: {
+      num_reviews: number;
+      review_score_desc: string;
+      total_positive: number;
+      total_negative: number;
+      total_reviews: number;
+    };
+    reviews?: Array<{
+      recommendationid: string;
+      review: string;
+      voted_up: boolean;
+      votes_up: number;
+      author?: {
+        playtime_forever?: number;
+      };
+    }>;
+  } | null>(null);
+
+  const fetchSteamReviews = (appId?: string | null, title?: string | null) => {
+    let url = '';
+    if (appId) {
+      url = `/api/steam/reviews?appId=${encodeURIComponent(appId)}`;
+    } else if (title) {
+      url = `/api/steam/reviews?title=${encodeURIComponent(title)}`;
+    } else {
+      return;
+    }
+    fetch(url)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.success === 1 && data.query_summary) {
+          setSteamData(data);
+        }
+      })
+      .catch(() => {});
+  };
 
   // Remote data state
   const [remoteDetails, setRemoteDetails] = useState<RemoteDetails | null>(null);
@@ -231,6 +269,7 @@ function GameDetailModalContent({
       setNoteUpdatedAt(game.note_updated_at || null);
       setLiveReleaseDate(game.first_release_date || null);
       setRemoteDetails(null);
+      setSteamData(null);
       setShowMovePicker(false);
       setShowCollectionPicker(false);
 
@@ -240,6 +279,7 @@ function GameDetailModalContent({
       fetchGameDeal(game.title).then((d) => {
         setDeal(d);
         setStoreLinks(getStoreLinks(game, d));
+        fetchSteamReviews(d?.steamAppID, game.title);
       });
 
       // Hämta ev. topplist-ranking från game_ratings
@@ -371,6 +411,16 @@ function GameDetailModalContent({
             ratingCount: detailsData.rating_count ?? null,
             aggregatedRatingCount: detailsData.aggregated_rating_count ?? null,
           });
+
+          if (detailsData?.external_games) {
+            const steamMatch = detailsData.external_games.find(
+              (eg: any) => eg.external_game_source === 1 || eg.category === 1 || eg.url?.includes('steampowered.com/app/')
+            );
+            if (steamMatch) {
+              const uid = steamMatch.uid || steamMatch.url?.split('/app/')[1]?.split('/')[0]?.split('?')[0];
+              if (uid) fetchSteamReviews(uid);
+            }
+          }
 
           if (date && date !== game?.first_release_date) {
             setLiveReleaseDate(date);
@@ -1080,33 +1130,57 @@ function GameDetailModalContent({
               {/* Betygsbrickor */}
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
                 {playerRating ? (
-                  <div
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-bold"
-                    title={remoteDetails?.ratingCount ? `${remoteDetails.ratingCount} spelarbetyg på IGDB` : 'IGDB Spelarbetyg'}
+                  <button
+                    type="button"
+                    onClick={() => setShowRatingsModal(true)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 transition border border-zinc-800 text-xs font-bold cursor-pointer"
+                    title={remoteDetails?.ratingCount ? `${remoteDetails.ratingCount.toLocaleString('sv-SE')} spelarbetyg på IGDB (klicka för detaljer)` : 'IGDB Spelarbetyg (klicka för detaljer)'}
                   >
                     <span className="text-amber-400">★</span>
                     <span className="text-zinc-200">{playerRating}%</span>
                     <span className="text-zinc-500 font-normal">Spelare</span>
-                  </div>
+                  </button>
                 ) : null}
 
                 {criticRating ? (
-                  <div
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 border border-blue-500/30 text-xs font-bold"
-                    title={remoteDetails?.aggregatedRatingCount ? `${remoteDetails.aggregatedRatingCount} kritikerrecensioner på IGDB` : 'IGDB Kritikerbetyg'}
+                  <button
+                    type="button"
+                    onClick={() => setShowRatingsModal(true)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 transition border border-blue-500/30 text-xs font-bold cursor-pointer"
+                    title={remoteDetails?.aggregatedRatingCount ? `${remoteDetails.aggregatedRatingCount.toLocaleString('sv-SE')} kritikerrecensioner på IGDB (klicka för detaljer)` : 'IGDB Kritikerbetyg (klicka för detaljer)'}
                   >
                     <span className="text-blue-400">✓</span>
                     <span className="text-blue-300">{criticRating}%</span>
                     <span className="text-zinc-500 font-normal">Kritiker</span>
-                  </div>
+                  </button>
+                ) : null}
+
+                {steamData?.query_summary && steamData.query_summary.total_reviews > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowRatingsModal(true)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 transition border border-sky-500/30 text-xs font-bold cursor-pointer"
+                    title={`${steamData.query_summary.total_positive.toLocaleString('sv-SE')} av ${steamData.query_summary.total_reviews.toLocaleString('sv-SE')} positiva omdömen på Steam (klicka för detaljer)`}
+                  >
+                    <span className="text-sky-400">👍</span>
+                    <span className="text-sky-200">
+                      {Math.round((steamData.query_summary.total_positive / steamData.query_summary.total_reviews) * 100)}%
+                    </span>
+                    <span className="text-zinc-500 font-normal">Steam</span>
+                  </button>
                 ) : null}
 
                 {game.rating ? (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 border border-amber-500/30 text-xs font-bold text-amber-400">
+                  <button
+                    type="button"
+                    onClick={() => setShowRatingsModal(true)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 transition border border-amber-500/30 text-xs font-bold text-amber-400 cursor-pointer"
+                    title="Ditt personliga betyg"
+                  >
                     <span>★</span>
                     <span>{game.rating}/10</span>
                     <span className="text-zinc-500 font-normal">Ditt betyg</span>
-                  </div>
+                  </button>
                 ) : null}
 
                 {/* Topplist-indikator */}
@@ -1898,6 +1972,59 @@ function GameDetailModalContent({
                 </div>
               )}
 
+              {/* Spelaromdömen från Steam */}
+              {steamData?.query_summary && steamData.query_summary.total_reviews > 0 && (
+                <div className="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-4 sm:p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
+                      Spelaromdömen
+                    </h3>
+                    <span className="text-[10px] font-bold text-sky-400 bg-sky-950/60 border border-sky-800/60 px-2 py-0.5 rounded-full">
+                      Steam
+                    </span>
+                  </div>
+
+                  <div className="flex items-baseline gap-3 p-3 bg-zinc-950/60 border border-zinc-800/60 rounded-xl">
+                    <div className="text-2xl font-black text-sky-400">
+                      {Math.round(
+                        (steamData.query_summary.total_positive / steamData.query_summary.total_reviews) * 100
+                      )}%
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-zinc-200">
+                        {steamData.query_summary.review_score_desc}
+                      </div>
+                      <div className="text-[11px] text-zinc-500">
+                        Baserat på {steamData.query_summary.total_reviews.toLocaleString('sv-SE')} recensioner
+                      </div>
+                    </div>
+                  </div>
+
+                  {steamData.reviews && steamData.reviews.length > 0 && (
+                    <div className="space-y-2 pt-1">
+                      <div className="text-[11px] font-semibold text-zinc-400">Mest hjälpsamma recensioner</div>
+                      {steamData.reviews.slice(0, 2).map((rev: any, idx: number) => (
+                        <div key={idx} className="p-3 bg-zinc-950/40 border border-zinc-800/50 rounded-xl text-xs space-y-1.5">
+                          <div className="flex items-center gap-2 text-[11px]">
+                            <span className={rev.voted_up ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
+                              {rev.voted_up ? '👍 Rekommenderas' : '👎 Avrådes'}
+                            </span>
+                            {rev.author?.playtime_forever ? (
+                              <span className="text-zinc-500">
+                                • {Math.round(rev.author.playtime_forever / 60)} tim speltid
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="text-zinc-300 line-clamp-3 leading-relaxed">
+                            {rev.review.replace(/\[\/?(b|i|u|h1|h2|h3|url|list|\*)[^\]]*\]/gi, '').trim()}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Skärmdumpar */}
               {remoteDetails?.screenshots && remoteDetails.screenshots.length > 0 && (
                 <div className="space-y-2.5">
@@ -2299,6 +2426,107 @@ function GameDetailModalContent({
           )}
         </div>
       </div>
+
+      {/* Betygsdetaljer Modal */}
+      {showRatingsModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-white">Betyg & Recensioner</h3>
+                <p className="text-xs text-zinc-400">{game.title}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRatingsModal(false)}
+                className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {steamData?.query_summary && steamData.query_summary.total_reviews > 0 && (
+                <div className="p-3.5 bg-zinc-950/60 border border-sky-500/30 rounded-xl space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sky-400">👍</span>
+                      <span className="text-sm font-bold text-white">Steam Spelaromdömen</span>
+                    </div>
+                    <span className="text-xs font-extrabold text-sky-400">
+                      {Math.round(
+                        (steamData.query_summary.total_positive / steamData.query_summary.total_reviews) * 100
+                      )}%
+                    </span>
+                  </div>
+                  <div className="text-xs font-semibold text-zinc-300">
+                    {steamData.query_summary.review_score_desc}
+                  </div>
+                  <div className="text-xs text-zinc-400">
+                    Baserat på <strong className="text-zinc-200">{steamData.query_summary.total_reviews.toLocaleString('sv-SE')}</strong> recensioner ({steamData.query_summary.total_positive.toLocaleString('sv-SE')} positiva, {steamData.query_summary.total_negative.toLocaleString('sv-SE')} negativa).
+                  </div>
+                </div>
+              )}
+
+              {playerRating && (
+                <div className="p-3.5 bg-zinc-950/60 border border-amber-500/30 rounded-xl space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-amber-400">★</span>
+                      <span className="text-sm font-bold text-white">IGDB Community</span>
+                    </div>
+                    <span className="text-xs font-extrabold text-amber-400">{playerRating}%</span>
+                  </div>
+                  <div className="text-xs text-zinc-400">
+                    {remoteDetails?.ratingCount ? (
+                      <>Baserat på <strong className="text-zinc-200">{remoteDetails.ratingCount.toLocaleString('sv-SE')}</strong> spelarröster på IGDB.</>
+                    ) : (
+                      <>Spelarnas communitybetyg på IGDB.</>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {criticRating && (
+                <div className="p-3.5 bg-zinc-950/60 border border-blue-500/30 rounded-xl space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-blue-400">✓</span>
+                      <span className="text-sm font-bold text-white">Kritikerbetyg</span>
+                    </div>
+                    <span className="text-xs font-extrabold text-blue-300">{criticRating}%</span>
+                  </div>
+                  <div className="text-xs text-zinc-400">
+                    {remoteDetails?.aggregatedRatingCount ? (
+                      <>Baserat på <strong className="text-zinc-200">{remoteDetails.aggregatedRatingCount.toLocaleString('sv-SE')}</strong> professionella spelrecensioner.</>
+                    ) : (
+                      <>Aggregerat genomsnitt från speltidningar och sajter.</>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {game.rating && (
+                <div className="p-3.5 bg-zinc-950/60 border border-zinc-800 rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-400">★</span>
+                    <span className="text-sm font-bold text-white">Ditt personliga betyg</span>
+                  </div>
+                  <span className="text-sm font-black text-amber-400">{game.rating} / 10</span>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowRatingsModal(false)}
+              className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+            >
+              Stäng
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Delningsmodal */}
       <GameShareModal

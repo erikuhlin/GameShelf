@@ -60,6 +60,7 @@ final class ProfileStore: ObservableObject {
         "Xbox Series X|S",
         "Xbox One",
         "Xbox 360",
+        "Nintendo Switch 2",
         "Nintendo Switch",
         "Nintendo 3DS / DS",
         "Game Boy / GBA",

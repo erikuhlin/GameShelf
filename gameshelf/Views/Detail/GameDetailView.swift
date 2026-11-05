@@ -67,6 +67,9 @@ struct GameDetailView: View {
     @State private var toplistBadgeTitle: String? = nil
     @State private var toplistBadgeGenre: String? = nil
     @State private var showingToplistSheet = false
+    @State private var steamReviews: SteamReviewsResponse? = nil
+    @State private var isLoadingSteamReviews = false
+    @State private var showingRatingsDetailSheet = false
 
     // Spelframsteg state
     @State private var isEditingProgressNote = false
@@ -280,6 +283,11 @@ struct GameDetailView: View {
         }
         .toolbar { toolbarContent }
         .onAppear { configureInitialState() }
+        .onChange(of: priceWatcher.deals.count) { _ in
+            if steamReviews == nil && resolvedSteamAppID != nil {
+                Task { await loadSteamReviews() }
+            }
+        }
         .fullScreenCover(isPresented: Binding<Bool>(
             get: { selectedScreenshotIndex != nil },
             set: { if !$0 { selectedScreenshotIndex = nil } }
@@ -354,6 +362,20 @@ struct GameDetailView: View {
                     .environmentObject(profile)
             }
             .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingRatingsDetailSheet) {
+            GameRatingsDetailSheet(
+                gameTitle: currentGame?.title ?? remote?.name ?? "Spel",
+                communityRating: effectiveCommunityRating,
+                communityVotes: remote?.ratingCount ?? remote?.totalRatingCount,
+                criticRating: effectiveCriticRating,
+                criticReviewsCount: remote?.aggregatedRatingCount,
+                steamSummary: steamReviews?.querySummary,
+                steamAppID: resolvedSteamAppID,
+                userRating: currentGame?.rating
+            )
+            .presentationDetents([.fraction(0.55), .large])
             .presentationDragIndicator(.visible)
         }
         .confirmationDialog(
@@ -463,6 +485,17 @@ struct GameDetailView: View {
 
     // MARK: - Subviews
 
+    private var effectiveCommunityRating: Double? {
+        if let tr = remote?.totalRating, tr > 0 { return tr / 10.0 }
+        if let ir = currentGame?.igdbRating, ir > 0 { return ir }
+        return nil
+    }
+
+    private var effectiveCriticRating: Double? {
+        if let cr = remote?.aggregatedRating, cr > 0 { return cr / 10.0 }
+        return nil
+    }
+
     private var heroHeader: some View {
         let title: String = {
             if let localTitle = currentGame?.title, !localTitle.isEmpty {
@@ -481,16 +514,8 @@ struct GameDetailView: View {
         let genresList = currentGame?.genres.isEmpty == false ? currentGame?.genres : remote?.genres?.map(\.name)
         let genresText = genresList?.prefix(3).joined(separator: ", ")
 
-        let communityRating: Double? = {
-            if let tr = remote?.totalRating, tr > 0 { return tr / 10.0 }
-            if let ir = currentGame?.igdbRating, ir > 0 { return ir }
-            return nil
-        }()
-
-        let criticRating: Double? = {
-            if let cr = remote?.aggregatedRating, cr > 0 { return cr / 10.0 }
-            return nil
-        }()
+        let communityRating = effectiveCommunityRating
+        let criticRating = effectiveCriticRating
 
         let developer = remote?.developerName ?? currentGame?.developers.first
         let platforms = allGamePlatforms
@@ -510,47 +535,84 @@ struct GameDetailView: View {
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    // IGDB- och kritikerbetyg (dölj om betyg saknas)
-                    if communityRating != nil || criticRating != nil {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 6) {
-                                if let cRating = communityRating {
-                                    HStack(spacing: 4) {
+                    // Betyg: IGDB, Kritiker och Steam – alla ryms på en rad och är klickbara för fullständig röstinformation
+                    let hasSteamRating = (steamReviews?.querySummary?.totalReviews ?? 0) > 0
+                    if communityRating != nil || criticRating != nil || hasSteamRating {
+                        HStack(spacing: 5) {
+                            if let cRating = communityRating {
+                                Button {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    showingRatingsDetailSheet = true
+                                } label: {
+                                    HStack(spacing: 3) {
                                         Image(systemName: "star.fill")
-                                            .font(.system(size: 10))
+                                            .font(.system(size: 9))
                                             .foregroundStyle(.yellow)
                                         Text(cRating.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(cRating))" : String(format: "%.1f", cRating))
-                                            .font(.caption.bold())
+                                            .font(.system(size: 11, weight: .bold))
                                             .foregroundStyle(.primary)
                                         Text("IGDB")
-                                            .font(.system(size: 9))
+                                            .font(.system(size: 8.5, weight: .medium))
                                             .foregroundStyle(.secondary)
                                     }
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3.5)
                                     .background(Color(.tertiarySystemFill))
                                     .clipShape(Capsule())
                                 }
+                                .buttonStyle(.plain)
+                            }
 
-                                if let cr = criticRating {
-                                    HStack(spacing: 4) {
+                            if let cr = criticRating {
+                                Button {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    showingRatingsDetailSheet = true
+                                } label: {
+                                    HStack(spacing: 3) {
                                         Image(systemName: "checkmark.seal.fill")
-                                            .font(.system(size: 10))
+                                            .font(.system(size: 9))
                                             .foregroundStyle(.blue)
                                         Text(cr.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(cr))" : String(format: "%.1f", cr))
-                                            .font(.caption.bold())
+                                            .font(.system(size: 11, weight: .bold))
                                             .foregroundStyle(.primary)
                                         Text("Kritiker")
-                                            .font(.system(size: 9))
+                                            .font(.system(size: 8.5, weight: .medium))
                                             .foregroundStyle(.secondary)
                                     }
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3.5)
                                     .background(Color(.tertiarySystemFill))
                                     .clipShape(Capsule())
                                 }
+                                .buttonStyle(.plain)
+                            }
+
+                            if let steamSummary = steamReviews?.querySummary, (steamSummary.totalReviews ?? 0) > 0 {
+                                Button {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    showingRatingsDetailSheet = true
+                                } label: {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "hand.thumbsup.fill")
+                                            .font(.system(size: 9))
+                                            .foregroundStyle(steamSummary.positivePercent >= 70 ? .blue : (steamSummary.positivePercent >= 40 ? .orange : .red))
+                                        Text("\(steamSummary.positivePercent)%")
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundStyle(.primary)
+                                        Text("Steam")
+                                            .font(.system(size: 8.5, weight: .medium))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3.5)
+                                    .background(Color(.tertiarySystemFill))
+                                    .clipShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                         .padding(.vertical, 1)
                     }
 
@@ -1571,7 +1633,17 @@ struct GameDetailView: View {
                 compactTimeToBeatSection(remote?.timeToBeat)
             }
 
-            // 3. Media (Skärmdumpar & Horisontell Trailerkarusell)
+            // 3. Spelaromdömen (Steam)
+            if let appID = resolvedSteamAppID, (steamReviews?.querySummary?.totalReviews ?? 0) > 0 || isLoadingSteamReviews {
+                SteamReviewsSectionView(
+                    summary: steamReviews?.querySummary,
+                    reviews: steamReviews?.reviews,
+                    steamAppID: appID,
+                    isLoading: isLoadingSteamReviews
+                )
+            }
+
+            // 4. Media (Skärmdumpar & Horisontell Trailerkarusell)
             if let screenshots = remote?.screenshots, !screenshots.isEmpty {
                 screenshotsSection(screenshots)
             }
@@ -2809,8 +2881,11 @@ struct GameDetailView: View {
     private func configureInitialState() {
         print("[GameDetailView] configureInitialState triggered for mode: \(mode)")
         
-        // Om vi redan laddat IGDB-informationen, gör inget (undvik onödig omladdning vid sheet eller flikbyte)
-        if case .loaded = remoteState {
+        // Om vi redan laddat IGDB-informationen, gör inget (men hämta Steam-reviews om de saknas)
+        if case .loaded(let game) = remoteState {
+            if steamReviews == nil {
+                Task { await loadSteamReviews(for: game) }
+            }
             return
         }
 
@@ -2826,10 +2901,13 @@ struct GameDetailView: View {
         if let id = effectiveIGDBID {
             Task { await loadRemote(id: id) }
             Task { await loadToplistBadge(id: id) }
+            Task { await loadSteamReviews() }
         } else if let g = currentGame {
             Task { await ensureRemoteForLocal(g) }
+            Task { await loadSteamReviews() }
         } else if case .local(let g) = mode {
             Task { await ensureRemoteForLocal(g) }
+            Task { await loadSteamReviews() }
         }
 
         if let g = currentGame {
@@ -2986,11 +3064,55 @@ struct GameDetailView: View {
             Task {
                 await loadToplistBadge(id: game.id)
             }
+            Task {
+                await loadSteamReviews(for: game)
+            }
         } catch {
             print("[GameDetailView] Failed loadRemote for IGDB ID \(id): \(error.localizedDescription)")
             await MainActor.run {
                 remoteState = .error("Kunde inte hämta detaljer från IGDB (\(error.localizedDescription)).")
             }
+        }
+    }
+
+    private var resolvedSteamAppID: String? {
+        if let id = steamReviews?.appID, !id.isEmpty {
+            return id
+        }
+        if let appID = remote?.steamAppID, !appID.isEmpty {
+            return appID
+        }
+        let title = currentGame?.title ?? remote?.name ?? ""
+        if let deal = priceWatcher.deal(forTitle: title), let appID = deal.steamAppID, !appID.isEmpty {
+            return appID
+        }
+        return nil
+    }
+
+    private func loadSteamReviews(for igdbGame: IGDBGame? = nil) async {
+        let appID: String? = {
+            if let id = (igdbGame ?? remote)?.steamAppID, !id.isEmpty {
+                return id
+            }
+            let title = currentGame?.title ?? igdbGame?.name ?? remote?.name ?? ""
+            if let deal = priceWatcher.deal(forTitle: title), let id = deal.steamAppID, !id.isEmpty {
+                return id
+            }
+            return nil
+        }()
+
+        let title = currentGame?.title ?? igdbGame?.name ?? remote?.name ?? ""
+        guard (appID != nil && !appID!.isEmpty) || (!title.isEmpty) else { return }
+
+        await MainActor.run {
+            self.isLoadingSteamReviews = true
+        }
+
+        let result = await SteamReviewService.shared.fetchReviews(appID: appID, title: title, limit: 3)
+
+        await MainActor.run {
+            self.steamReviews = result
+            self.isLoadingSteamReviews = false
         }
     }
 

@@ -77,7 +77,7 @@ actor IGDBService {
         
         let bodyString = """
         where id = \(id);
-        fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, total_rating, aggregated_rating, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, collection.name, collection.games.name, collection.games.cover.image_id, collection.games.first_release_date, franchises.name, franchises.games.name, franchises.games.cover.image_id, franchises.games.first_release_date, similar_games.name, similar_games.cover.image_id, similar_games.first_release_date, similar_games.total_rating, similar_games.rating, dlcs.name, dlcs.cover.image_id, dlcs.first_release_date, expansions.name, expansions.cover.image_id, expansions.first_release_date, screenshots.image_id, artworks.image_id, videos.name, videos.video_id, game_modes.name, themes.name, age_ratings.category, age_ratings.rating, category, game_type, parent_game, version_parent;
+        fields name, summary, first_release_date, cover.image_id, platforms.name, genres.name, total_rating, total_rating_count, aggregated_rating, aggregated_rating_count, rating, rating_count, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, collection.name, collection.games.name, collection.games.cover.image_id, collection.games.first_release_date, franchises.name, franchises.games.name, franchises.games.cover.image_id, franchises.games.first_release_date, similar_games.name, similar_games.cover.image_id, similar_games.first_release_date, similar_games.total_rating, similar_games.rating, dlcs.name, dlcs.cover.image_id, dlcs.first_release_date, expansions.name, expansions.cover.image_id, expansions.first_release_date, screenshots.image_id, artworks.image_id, videos.name, videos.video_id, game_modes.name, themes.name, age_ratings.category, age_ratings.rating, category, game_type, parent_game, version_parent, external_games.category, external_games.external_game_source, external_games.uid, external_games.url;
         """
         
         // Hämta speldetaljer och speltid (HowLongToBeat) parallellt för att halvera laddtiden
@@ -101,6 +101,9 @@ actor IGDBService {
                 genres: game.genres,
                 totalRating: game.totalRating,
                 aggregatedRating: game.aggregatedRating,
+                rating: game.rating,
+                ratingCount: game.ratingCount,
+                aggregatedRatingCount: game.aggregatedRatingCount,
                 involvedCompanies: game.involvedCompanies,
                 collection: game.collection,
                 similarGames: game.similarGames,
@@ -119,7 +122,8 @@ actor IGDBService {
                 parentGame: game.parentGame,
                 versionParent: game.versionParent,
                 hypes: game.hypes,
-                franchises: game.franchises
+                franchises: game.franchises,
+                externalGames: game.externalGames
             )
         }
         
@@ -756,7 +760,54 @@ struct TrendingGameResult: Sendable {
         """
 
         let games = try await requestGames(body: bodyString, url: url, token: token)
-        return games.filter { !$0.isDLC }
+        let filtered = games.filter {
+            !$0.isDLC &&
+            !$0.isSpecialEditionOrBundle &&
+            !($0.themes?.contains(where: { $0.id == 42 || $0.name.lowercased().contains("erotic") }) ?? false)
+        }
+
+        if sortByHype {
+            return filtered.sorted { g1, g2 in
+                let h1 = g1.hypes ?? 0
+                let h2 = g2.hypes ?? 0
+                if h1 != h2 { return h1 > h2 }
+                let r1 = g1.totalRatingCount ?? 0
+                let r2 = g2.totalRatingCount ?? 0
+                if r1 != r2 { return r1 > r2 }
+                return g1.name.localizedCaseInsensitiveCompare(g2.name) == .orderedAscending
+            }
+        } else {
+            // Sortera efter datum, men för spel som släpps samma kalenderdag: högst förväntan (hype) först
+            return filtered.sorted { g1, g2 in
+                guard let ts1 = g1.firstReleaseDate else { return false }
+                guard let ts2 = g2.firstReleaseDate else { return true }
+
+                let d1 = Date(timeIntervalSince1970: TimeInterval(ts1))
+                let d2 = Date(timeIntervalSince1970: TimeInterval(ts2))
+
+                let day1 = cal.startOfDay(for: d1)
+                let day2 = cal.startOfDay(for: d2)
+
+                if day1 != day2 {
+                    return sortByRecent ? (day1 > day2) : (day1 < day2)
+                }
+
+                // Samma dag: högst förväntan / hype först
+                let h1 = g1.hypes ?? 0
+                let h2 = g2.hypes ?? 0
+                if h1 != h2 {
+                    return h1 > h2
+                }
+
+                let r1 = g1.totalRatingCount ?? 0
+                let r2 = g2.totalRatingCount ?? 0
+                if r1 != r2 {
+                    return r1 > r2
+                }
+
+                return g1.name.localizedCaseInsensitiveCompare(g2.name) == .orderedAscending
+            }
+        }
     }
 
     /// Hämtar företagsinformation (bio, logotyp, grundat år) från IGDB

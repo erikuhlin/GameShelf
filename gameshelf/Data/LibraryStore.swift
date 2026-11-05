@@ -242,8 +242,14 @@ final class LibraryStore: ObservableObject {
                     }
                 }
 
-                // Identifiera lokala spel som inte finns i molnet än
-                let localOnlyGames = self.games.filter { remoteMap[$0.id] == nil && !pendingDeletedGameIDs.contains($0.id) }
+                // Identifiera lokala spel som inte finns i molnet än.
+                // Endast spel som skapats/ändrats lokalt offline (och finns i pendingSyncGameIDs) eller vid allra första synken ska laddas upp.
+                // Om ett spel varken finns i molnet, i pendingDeletedGameIDs eller i pendingSyncGameIDs betyder det att det raderades i molnet!
+                let localOnlyGames = self.games.filter {
+                    remoteMap[$0.id] == nil &&
+                    !pendingDeletedGameIDs.contains($0.id) &&
+                    (isFirstSync || pendingSyncGameIDs.contains($0.id))
+                }
                 if !localOnlyGames.isEmpty {
                     mergedGames.append(contentsOf: localOnlyGames)
                     gamesToPushToCloud.append(contentsOf: localOnlyGames)
@@ -265,9 +271,15 @@ final class LibraryStore: ObservableObject {
                         }
                     }
                 }
-            } else if !self.games.isEmpty {
-                // Om servern var tom men vi har lokala spel: ladda upp alla lokala spel till servern i batch
+            } else if isFirstSync && !self.games.isEmpty {
+                // Om servern var tom vid ALLRA FÖRSTA anslutningen: ladda upp alla lokala spel till servern i batch
                 try? await SupabaseSyncService.shared.upsertGames(self.games)
+            } else if !isFirstSync && remoteGames.isEmpty {
+                // Servern är tom och det är inte första synken (alla spel har raderats i molnet).
+                // Behåll endast lokalt nyskapade spel som väntar på synk.
+                let localPendingOnly = self.games.filter { pendingSyncGameIDs.contains($0.id) && !pendingDeletedGameIDs.contains($0.id) }
+                self.games = localPendingOnly
+                try? saveGames()
             }
             UserDefaults.standard.set(true, forKey: initialMigrationKey)
         } catch {
@@ -393,6 +405,9 @@ final class LibraryStore: ObservableObject {
         if let idx = games.firstIndex(of: game) {
             games.remove(at: idx)
             removeGameFromAllCollections(gameId)
+            ProfileStore.shared.removeTargetGoal(gameID: gameId)
+            try? saveGames()
+            try? saveCollections()
         }
         pendingSyncGameIDs.remove(gameId)
         pendingDeletedGameIDs.insert(gameId)
@@ -411,6 +426,7 @@ final class LibraryStore: ObservableObject {
         games.remove(atOffsets: offsets)
         for id in removedIDs {
             removeGameFromAllCollections(id)
+            ProfileStore.shared.removeTargetGoal(gameID: id)
             pendingSyncGameIDs.remove(id)
             pendingDeletedGameIDs.insert(id)
             Task { [weak self] in
@@ -422,6 +438,8 @@ final class LibraryStore: ObservableObject {
                 }
             }
         }
+        try? saveGames()
+        try? saveCollections()
     }
 
     func update(_ game: Game) {
@@ -493,6 +511,7 @@ final class LibraryStore: ObservableObject {
     func deleteCollection(_ collection: GameCollection) {
         let id = collection.id
         collections.removeAll(where: { $0.id == id })
+        try? saveCollections()
         Task {
             try? await SupabaseSyncService.shared.deleteCollection(id: id)
         }
@@ -543,8 +562,20 @@ final class LibraryStore: ObservableObject {
     }
 
     private func removeGameFromAllCollections(_ gameID: UUID) {
+        var updatedCollections: [GameCollection] = []
         for idx in collections.indices {
-            collections[idx].gameIDs.removeAll(where: { $0 == gameID })
+            if collections[idx].gameIDs.contains(gameID) {
+                collections[idx].gameIDs.removeAll(where: { $0 == gameID })
+                updatedCollections.append(collections[idx])
+            }
+        }
+        if !updatedCollections.isEmpty {
+            try? saveCollections()
+            Task {
+                for col in updatedCollections {
+                    try? await SupabaseSyncService.shared.upsertCollection(col)
+                }
+            }
         }
     }
 

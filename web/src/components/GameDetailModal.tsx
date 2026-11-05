@@ -1180,14 +1180,15 @@ function GameDetailModalContent({
 
                 const hasAnyReliable = hasMetascore || hasSteam || (Boolean(criticRating) && isCritReliable) || (Boolean(playerRating) && isCommReliable);
 
-                const showCommunityBadge = Boolean(playerRating) && (isCommReliable || !hasAnyReliable);
-                const showCriticBadge = Boolean(criticRating) && (isCritReliable || !hasAnyReliable);
-                const showSteamBadge = hasSteam;
-                const showMetascoreBadge = hasMetascore;
+                const showMetascore = hasMetascore;
+                const showIGDBCritic = !hasMetascore && Boolean(criticRating) && (isCritReliable || !hasAnyReliable);
+                const showSteam = hasSteam;
+                const showIGDBCommunity = !hasSteam && Boolean(playerRating) && (isCommReliable || !hasAnyReliable);
 
                 return (
                   <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                    {showMetascoreBadge && (
+                    {/* 1. Kritikerbetyg: Metascore i första hand, annars IGDB Kritiker */}
+                    {showMetascore ? (
                       <button
                         type="button"
                         onClick={() => setShowRatingsModal(true)}
@@ -1202,23 +1203,7 @@ function GameDetailModalContent({
                         <span className="text-zinc-200">{metascore}</span>
                         <span className="text-zinc-500 font-normal">Metascore</span>
                       </button>
-                    )}
-                    {showCommunityBadge && (
-                      <button
-                        type="button"
-                        onClick={() => setShowRatingsModal(true)}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 transition border border-zinc-800 text-xs font-bold cursor-pointer"
-                        title={commVotes ? `${commVotes.toLocaleString('sv-SE')} spelarbetyg på IGDB (klicka för detaljer)` : 'IGDB Spelarbetyg (klicka för detaljer)'}
-                      >
-                        <span className="text-amber-400">★</span>
-                        <span className="text-zinc-200">{playerRating}%</span>
-                        <span className={`font-normal ${isCommReliable ? 'text-zinc-500' : 'text-amber-500/80 text-[10px]'}`}>
-                          {isCommReliable ? 'Spelare' : 'Få röster'}
-                        </span>
-                      </button>
-                    )}
-
-                    {showCriticBadge && (
+                    ) : showIGDBCritic ? (
                       <button
                         type="button"
                         onClick={() => setShowRatingsModal(true)}
@@ -1231,9 +1216,10 @@ function GameDetailModalContent({
                           {isCritReliable ? 'Kritiker' : 'Få rec.'}
                         </span>
                       </button>
-                    )}
+                    ) : null}
 
-                    {showSteamBadge && steamData?.query_summary && (
+                    {/* 2. Spelarbetyg: Steam i första hand, annars IGDB Community */}
+                    {showSteam && steamData?.query_summary ? (
                       <button
                         type="button"
                         onClick={() => setShowRatingsModal(true)}
@@ -1246,7 +1232,20 @@ function GameDetailModalContent({
                         </span>
                         <span className="text-zinc-500 font-normal">Steam</span>
                       </button>
-                    )}
+                    ) : showIGDBCommunity ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowRatingsModal(true)}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 transition border border-zinc-800 text-xs font-bold cursor-pointer"
+                        title={commVotes ? `${commVotes.toLocaleString('sv-SE')} spelarbetyg på IGDB (klicka för detaljer)` : 'IGDB Spelarbetyg (klicka för detaljer)'}
+                      >
+                        <span className="text-amber-400">★</span>
+                        <span className="text-zinc-200">{playerRating}%</span>
+                        <span className={`font-normal ${isCommReliable ? 'text-zinc-500' : 'text-amber-500/80 text-[10px]'}`}>
+                          {isCommReliable ? 'Spelare' : 'Få röster'}
+                        </span>
+                      </button>
+                    ) : null}
 
                     {game.rating ? (
                       <button
@@ -1301,25 +1300,33 @@ function GameDetailModalContent({
                 );
               })()}
 
-              {/* Genrer & Singleplayer */}
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 pt-1">
-                {game.genres?.map((g) => (
-                  <span
-                    key={g}
-                    className="px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-800/80 text-[11px] font-medium text-zinc-400"
-                  >
-                    {g}
-                  </span>
-                ))}
-                {playTypes?.map((pt) => (
-                  <span
-                    key={pt}
-                    className="px-2 py-0.5 rounded-md bg-brand-red/10 border border-brand-red/25 text-[11px] font-medium text-brand-red"
-                  >
-                    👤 {pt === 'singlePlayer' ? 'Single player' : pt === 'multiplayer' ? 'Multiplayer' : pt}
-                  </span>
-                ))}
-              </div>
+              {/* Rena genrer (max 2) & Spellägen som diskret text */}
+              {(() => {
+                const cleanedGenres = game.genres?.slice(0, 2).map((g) => {
+                  if (g.includes('Role-playing') || g.includes('(RPG)')) return 'RPG';
+                  if (g.includes('Turn-based strategy') || g.includes('(TBS)')) return 'Turordningsstrategi';
+                  if (g.includes('Real Time Strategy') || g.includes('(RTS)')) return 'RTS';
+                  if (g.includes('First person shooter') || g.includes('(FPS)')) return 'FPS';
+                  if (g.includes('Hack and slash')) return 'Hack & slash';
+                  return g.replace(/\s*\(.*?\)/g, '').trim();
+                });
+                const genreText = cleanedGenres?.join(' · ');
+
+                if (!genreText && (!playTypes || playTypes.length === 0)) return null;
+
+                return (
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 pt-0.5 text-xs text-zinc-400">
+                    {genreText && <span className="text-zinc-300">{genreText}</span>}
+                    {genreText && playTypes && playTypes.length > 0 && <span className="text-zinc-600">·</span>}
+                    {playTypes?.map((pt, i) => (
+                      <span key={pt} className="text-zinc-400">
+                        {pt === 'singlePlayer' ? '👤 Enspelare' : pt === 'multiplayer' ? '👥 Flerspelare' : pt === 'coOp' ? '🤝 Co-op' : pt}
+                        {i < playTypes.length - 1 ? ', ' : ''}
+                      </span>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 

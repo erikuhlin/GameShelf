@@ -499,6 +499,24 @@ struct GameDetailView: View {
         return nil
     }
 
+    private var cleanGenresHeader: String? {
+        let rawList = currentGame?.genres.isEmpty == false ? currentGame?.genres : remote?.genres?.map(\.name)
+        guard let list = rawList, !list.isEmpty else { return nil }
+
+        let cleaned = list.prefix(2).map { g in
+            var name = g
+            if name.contains("Role-playing") || name.contains("(RPG)") { return "RPG" }
+            if name.contains("Turn-based strategy") || name.contains("(TBS)") { return "Turordningsstrategi" }
+            if name.contains("Real Time Strategy") || name.contains("(RTS)") { return "RTS" }
+            if name.contains("First person shooter") || name.contains("(FPS)") { return "FPS" }
+            if name.contains("Hack and slash") { return "Hack & slash" }
+            if name.contains("Point-and-click") { return "Äventyr" }
+            name = name.replacingOccurrences(of: #"\s*\(.*?\)"#, with: "", options: .regularExpression)
+            return name.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return cleaned.joined(separator: " · ")
+    }
+
     private var heroHeader: some View {
         let title: String = {
             if let localTitle = currentGame?.title, !localTitle.isEmpty {
@@ -538,7 +556,8 @@ struct GameDetailView: View {
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    // Betyg: Metacritic, IGDB, Kritiker och Steam – alla ryms på en rad och är klickbara för fullständig röstinformation
+                    // Betyg: Max 2 brickor i headern (1 Kritiker + 1 Spelare)
+                    // Båda är klickbara för fullständig röstinformation (alla 4 källor)
                     let preferredPlatform = currentGame?.platforms.first ?? remote?.platforms?.first?.name
                     let effectiveMetascore = metacriticData?.score(forPlatform: preferredPlatform)
                     let hasMetascore = (effectiveMetascore ?? 0) > 0
@@ -547,20 +566,23 @@ struct GameDetailView: View {
                     let communityVotes = remote?.ratingCount ?? remote?.totalRatingCount
                     let criticCount = remote?.aggregatedRatingCount
 
-                    // Tillförlitlighetströsklar: Minst 5 spelarröster för IGDB Community, minst 3 för Kritiker
+                    // Tillförlitlighetströsklar
                     let isCommunityReliable = (communityVotes ?? 0) >= 5
                     let isCriticReliable = (criticCount ?? 0) >= 3
-
-                    // Om ett betyg har för få röster döljs det från headern om det finns ett annat pålitligt betyg
                     let hasAnyReliableRating = hasMetascore || hasSteamRating || (criticRating != nil && isCriticReliable) || (communityRating != nil && isCommunityReliable)
-                    let showCommunityInHeader = communityRating != nil && (isCommunityReliable || !hasAnyReliableRating)
-                    let showCriticInHeader = criticRating != nil && (isCriticReliable || !hasAnyReliableRating)
-                    let showSteamInHeader = hasSteamRating
-                    let showMetascoreInHeader = hasMetascore
 
-                    if showMetascoreInHeader || showCommunityInHeader || showCriticInHeader || showSteamInHeader {
-                        HStack(spacing: 5) {
-                            if let ms = effectiveMetascore, showMetascoreInHeader {
+                    // 1. Kritiker: Metascore i första hand, annars IGDB Kritiker
+                    let showMetascore = hasMetascore
+                    let showIGDBCritic = !hasMetascore && (criticRating != nil) && (isCriticReliable || !hasAnyReliableRating)
+
+                    // 2. Spelare: Steam i första hand, annars IGDB Community
+                    let showSteam = hasSteamRating
+                    let showIGDBCommunity = !hasSteamRating && (communityRating != nil) && (isCommunityReliable || !hasAnyReliableRating)
+
+                    if showMetascore || showIGDBCritic || showSteam || showIGDBCommunity {
+                        HStack(spacing: 6) {
+                            // Kritikerbetyg
+                            if let ms = effectiveMetascore, showMetascore {
                                 Button {
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                     showingRatingsDetailSheet = true
@@ -586,32 +608,7 @@ struct GameDetailView: View {
                                     .clipShape(Capsule())
                                 }
                                 .buttonStyle(.plain)
-                            }
-                            if let cRating = communityRating, showCommunityInHeader {
-                                Button {
-                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                    showingRatingsDetailSheet = true
-                                } label: {
-                                    HStack(spacing: 3) {
-                                        Image(systemName: "star.fill")
-                                            .font(.system(size: 9))
-                                            .foregroundStyle(.yellow)
-                                        Text(cRating.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(cRating))" : String(format: "%.1f", cRating))
-                                            .font(.system(size: 11, weight: .bold))
-                                            .foregroundStyle(.primary)
-                                        Text(isCommunityReliable ? "IGDB" : "Få röster")
-                                            .font(.system(size: 8.5, weight: .medium))
-                                            .foregroundStyle(isCommunityReliable ? Color.secondary : Color.orange)
-                                    }
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3.5)
-                                    .background(Color(.tertiarySystemFill))
-                                    .clipShape(Capsule())
-                                }
-                                .buttonStyle(.plain)
-                            }
-
-                            if let cr = criticRating, showCriticInHeader {
+                            } else if let cr = criticRating, showIGDBCritic {
                                 Button {
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                     showingRatingsDetailSheet = true
@@ -635,7 +632,8 @@ struct GameDetailView: View {
                                 .buttonStyle(.plain)
                             }
 
-                            if let steamSummary = steamReviews?.querySummary, showSteamInHeader {
+                            // Spelarbetyg
+                            if let steamSummary = steamReviews?.querySummary, showSteam {
                                 Button {
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                     showingRatingsDetailSheet = true
@@ -657,23 +655,48 @@ struct GameDetailView: View {
                                     .clipShape(Capsule())
                                 }
                                 .buttonStyle(.plain)
+                            } else if let cRating = communityRating, showIGDBCommunity {
+                                Button {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    showingRatingsDetailSheet = true
+                                } label: {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "star.fill")
+                                            .font(.system(size: 9))
+                                            .foregroundStyle(.yellow)
+                                        Text(cRating.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(cRating))" : String(format: "%.1f", cRating))
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundStyle(.primary)
+                                        Text(isCommunityReliable ? "IGDB" : "Få röster")
+                                            .font(.system(size: 8.5, weight: .medium))
+                                            .foregroundStyle(isCommunityReliable ? Color.secondary : Color.orange)
+                                    }
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3.5)
+                                    .background(Color(.tertiarySystemFill))
+                                    .clipShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                         .lineLimit(1)
-                        .minimumScaleFactor(0.85)
                         .padding(.vertical, 1)
                     }
 
-                    // Släppdatum & Utvecklare (ViewThatFits förhindrar fula radbrytningar när namnet är långt)
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 5) {
-                            if let dateText = formattedReleaseDate {
-                                Text(dateText)
+                    // Släppår & Utvecklare (Kompakt: t.ex. "2023 · Larian Studios")
+                    let yearString: String? = {
+                        if let y = effectiveReleaseYear { return "\(y)" }
+                        return formattedReleaseDate
+                    }()
+
+                    if yearString != nil || (developer != nil && !developer!.isEmpty) {
+                        HStack(spacing: 4) {
+                            if let y = yearString {
+                                Text(y)
                                     .font(.caption.weight(.medium))
                                     .foregroundStyle(.secondary)
-                                    .lineLimit(1)
                             }
-                            if formattedReleaseDate != nil && developer != nil && !(developer?.isEmpty ?? true) {
+                            if yearString != nil && developer != nil && !(developer?.isEmpty ?? true) {
                                 Text("·")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -686,87 +709,30 @@ struct GameDetailView: View {
                             }
                         }
                         .lineLimit(1)
-                        .minimumScaleFactor(0.85)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            if let dev = developer, !dev.isEmpty {
-                                Text(dev)
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.primary)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                            }
-                            if let dateText = formattedReleaseDate {
-                                Text(dateText)
-                                    .font(.caption.weight(.medium))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                        }
                     }
 
-                    // Genre
-                    if let gText = genresText, !gText.isEmpty {
+                    // Korta, rena genrer (max 2)
+                    if let gText = cleanGenresHeader, !gText.isEmpty {
                         Text(gText)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
 
-                    // Alla plattformar som små chips under genre-raden
-                    if !platforms.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 5) {
-                                ForEach(platforms, id: \.self) { plat in
-                                    HStack(spacing: 3) {
-                                        Image(systemName: platformHeaderIcon(for: plat))
-                                            .font(.system(size: 8.5, weight: .bold))
-                                            .foregroundStyle(platformColor(for: plat))
-                                        Text(compactPlatformName(plat))
-                                            .font(.system(size: 9.5, weight: .semibold))
-                                            .foregroundStyle(.primary)
-                                    }
-                                    .padding(.horizontal, 7)
-                                    .padding(.vertical, 3.5)
-                                    .background(Color(.tertiarySystemFill))
-                                    .clipShape(Capsule())
-                                }
-                            }
+                    // Ägd plattform (om spelet finns i biblioteket)
+                    if let ownedPlat = currentGame?.platforms.first, !ownedPlat.isEmpty {
+                        HStack(spacing: 4) {
+                            Image(systemName: platformHeaderIcon(for: ownedPlat))
+                                .font(.system(size: 8.5, weight: .bold))
+                                .foregroundStyle(platformColor(for: ownedPlat))
+                            Text(compactPlatformName(ownedPlat))
+                                .font(.system(size: 9.5, weight: .semibold))
+                                .foregroundStyle(.primary)
                         }
-                    }
-
-                    // Spelläge-chips & Åldersmärkningar
-                    let modes = remote?.gameModes ?? []
-                    let ageLabels = remote?.ageRatings?.compactMap({ $0.label }) ?? []
-                    if !modes.isEmpty || !ageLabels.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 5) {
-                                ForEach(modes.prefix(3)) { mode in
-                                    HStack(spacing: 3) {
-                                        Image(systemName: gameModeIcon(mode.name))
-                                            .font(.system(size: 8, weight: .bold))
-                                            .foregroundStyle(.secondary)
-                                        Text(mode.name)
-                                            .font(.system(size: 9, weight: .semibold))
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                                    .background(Color(.tertiarySystemFill).opacity(0.65))
-                                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                                }
-
-                                ForEach(ageLabels, id: \.self) { label in
-                                    Text(label)
-                                        .font(.system(size: 9, weight: .bold))
-                                        .padding(.horizontal, 5)
-                                        .padding(.vertical, 3)
-                                        .background(Color(.tertiarySystemFill).opacity(0.65))
-                                        .foregroundStyle(.secondary)
-                                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                                }
-                            }
-                        }
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Color(.tertiarySystemFill))
+                        .clipShape(Capsule())
                     }
 
                     // Topplist-indikator
@@ -2527,7 +2493,9 @@ struct GameDetailView: View {
             return d.caseInsensitiveCompare(p) == .orderedSame
         }()
 
-        let hasAnyFact = (platformsText != nil && !platformsText!.isEmpty) || hasDev || hasPub
+        let modes = remote?.gameModes?.map(\.name) ?? []
+        let ageLabels = remote?.ageRatings?.compactMap({ $0.label }) ?? []
+        let hasAnyFact = (platformsText != nil && !platformsText!.isEmpty) || hasDev || hasPub || !modes.isEmpty || !ageLabels.isEmpty
 
         if hasAnyFact {
             detailCard(title: "Fakta") {
@@ -2539,7 +2507,7 @@ struct GameDetailView: View {
                                 .foregroundStyle(.primary)
                                 .multilineTextAlignment(.trailing)
                         }
-                        if hasDev || hasPub {
+                        if hasDev || hasPub || !modes.isEmpty || !ageLabels.isEmpty {
                             Divider()
                         }
                     }
@@ -2557,6 +2525,9 @@ struct GameDetailView: View {
                                 }
                             }
                         }
+                        if !modes.isEmpty || !ageLabels.isEmpty {
+                            Divider()
+                        }
                     } else {
                         if let dev = developerName, hasDev {
                             factRow(label: "Utvecklare") {
@@ -2571,7 +2542,7 @@ struct GameDetailView: View {
                                     }
                                 }
                             }
-                            if hasPub {
+                            if hasPub || !modes.isEmpty || !ageLabels.isEmpty {
                                 Divider()
                             }
                         }
@@ -2589,6 +2560,30 @@ struct GameDetailView: View {
                                     }
                                 }
                             }
+                            if !modes.isEmpty || !ageLabels.isEmpty {
+                                Divider()
+                            }
+                        }
+                    }
+
+                    if !modes.isEmpty {
+                        factRow(label: "Spellägen") {
+                            Text(modes.joined(separator: ", "))
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.primary)
+                                .multilineTextAlignment(.trailing)
+                        }
+                        if !ageLabels.isEmpty {
+                            Divider()
+                        }
+                    }
+
+                    if !ageLabels.isEmpty {
+                        factRow(label: "Åldersmärkning") {
+                            Text(ageLabels.joined(separator: ", "))
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.primary)
+                                .multilineTextAlignment(.trailing)
                         }
                     }
                 }

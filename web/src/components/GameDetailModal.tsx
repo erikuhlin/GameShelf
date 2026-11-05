@@ -214,6 +214,7 @@ function GameDetailModalContent({
   const [progressNoteDraft, setProgressNoteDraft] = useState('');
 
   // Modal / UI states
+  const [showPlatformModal, setShowPlatformModal] = useState(false);
   const [showMovePicker, setShowMovePicker] = useState(false);
   const [showCollectionPicker, setShowCollectionPicker] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState('');
@@ -329,6 +330,7 @@ function GameDetailModalContent({
       setSteamData(null);
       setMetacriticData(null);
       setShowMovePicker(false);
+      setShowPlatformModal(false);
       setShowCollectionPicker(false);
 
       // Hämta deal & butikslänkar
@@ -624,12 +626,31 @@ function GameDetailModalContent({
     });
   };
 
-  const handlePlatformChange = (newPlatform: string) => {
-    if (!newPlatform) return;
+  const handleTogglePlatform = (platform: string) => {
+    if (!platform) return;
     const currentPlats = platforms || [];
-    const updated = [newPlatform, ...currentPlats.filter((p) => p !== newPlatform)];
+    const exists = currentPlats.some((p) => p.toLowerCase() === platform.toLowerCase());
+    let updated: string[];
+    if (exists) {
+      updated = currentPlats.filter((p) => p.toLowerCase() !== platform.toLowerCase());
+    } else {
+      updated = [...currentPlats, platform];
+    }
     setPlatforms(updated);
     saveGameUpdates({ platforms: updated });
+  };
+
+  const handleSetPrimaryPlatform = (platform: string) => {
+    if (!platform) return;
+    const currentPlats = platforms || [];
+    const filtered = currentPlats.filter((p) => p.toLowerCase() !== platform.toLowerCase());
+    const updated = [platform, ...filtered];
+    setPlatforms(updated);
+    saveGameUpdates({ platforms: updated });
+  };
+
+  const handlePlatformChange = (newPlatform: string) => {
+    handleSetPrimaryPlatform(newPlatform);
   };
 
   const handleCompletedDateChange = (dateString: string) => {
@@ -1091,6 +1112,93 @@ function GameDetailModalContent({
             >
               Klar
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Plattformshanterare Modal (stödjer val av en eller flera plattformar) */}
+      {showPlatformModal && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Gamepad className="w-5 h-5 text-purple-400" />
+                  {status === 'completed' ? 'Spelade på' : 'Spelar på'}
+                </h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Välj en eller flera plattformar du äger eller spelar spelet på.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPlatformModal(false)}
+                className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="max-h-[360px] overflow-y-auto space-y-1.5 pr-1">
+              {availablePlatformChoices.map((plat) => {
+                const isSelected = platforms.some((p) => p.toLowerCase() === plat.toLowerCase());
+                const isPrimary = platforms[0]?.toLowerCase() === plat.toLowerCase();
+
+                return (
+                  <div
+                    key={plat}
+                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border transition cursor-pointer ${
+                      isSelected
+                        ? 'bg-purple-950/30 border-purple-500/40 text-white'
+                        : 'bg-zinc-950/60 border-zinc-800/80 text-zinc-300 hover:bg-zinc-800/50 hover:text-white'
+                    }`}
+                    onClick={() => handleTogglePlatform(plat)}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div
+                        className={`w-5 h-5 rounded-md flex items-center justify-center border transition ${
+                          isSelected
+                            ? 'bg-purple-600 border-purple-500 text-white'
+                            : 'border-zinc-700 bg-zinc-900'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3.5 h-3.5" />}
+                      </div>
+                      <span className="text-sm font-medium truncate">{plat}</span>
+                      {isSelected && isPrimary && platforms.length > 1 && (
+                        <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                          {status === 'completed' ? 'Spelade på' : 'Primär'}
+                        </span>
+                      )}
+                    </div>
+
+                    {isSelected && !isPrimary && platforms.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSetPrimaryPlatform(plat);
+                        }}
+                        className="text-[11px] font-semibold text-zinc-400 hover:text-purple-300 px-2 py-1 rounded hover:bg-purple-900/40 transition cursor-pointer"
+                        title="Sätt som huvudplattform"
+                      >
+                        Sätt som primär
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-2 border-t border-zinc-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowPlatformModal(false)}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+              >
+                Klar
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1584,23 +1692,25 @@ function GameDetailModalContent({
                   <span className="hidden sm:inline">Flytta till önskelista</span>
                 </button>
 
-                {/* Plattform selector */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-400 font-medium">
+                {/* Plattformar väljare (stödjer val av en eller flera plattformar) */}
+                <button
+                  type="button"
+                  onClick={() => setShowPlatformModal(true)}
+                  title="Välj vilka plattformar du spelar eller äger spelet på"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-950 hover:bg-zinc-850 text-white border border-zinc-700/80 rounded-lg text-xs font-semibold transition cursor-pointer"
+                >
+                  <Gamepad className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                  <span className="text-zinc-400 font-medium">
                     {status === 'completed' ? 'Spelade på:' : 'Plattform:'}
                   </span>
-                  <select
-                    value={platforms[0] || ''}
-                    onChange={(e) => handlePlatformChange(e.target.value)}
-                    className="bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-brand-red cursor-pointer max-w-[160px] truncate"
-                  >
-                    {availablePlatformChoices.map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  <span className="font-bold text-purple-300 max-w-[130px] truncate">
+                    {platforms.length === 0
+                      ? 'Välj...'
+                      : platforms.length === 1
+                      ? platforms[0]
+                      : `${platforms[0]} (+${platforms.length - 1})`}
+                  </span>
+                </button>
 
                 {/* Klarat år selector när status är Klar */}
                 {(status === 'completed' || storyProgress === 'completed') && (
@@ -1738,18 +1848,37 @@ function GameDetailModalContent({
                     <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-xl p-3 flex items-center gap-3">
                       <Gamepad className="w-5 h-5 text-purple-400 shrink-0" />
                       <div className="min-w-0 flex-1">
-                        <div className="text-[10px] text-zinc-400 uppercase font-semibold">Spelade på</div>
-                        <select
-                          value={platforms[0] || ''}
-                          onChange={(e) => handlePlatformChange(e.target.value)}
-                          className="w-full bg-zinc-900 border border-zinc-700/80 rounded-md px-2 py-1 text-xs font-bold text-white focus:outline-none focus:border-purple-400 cursor-pointer mt-0.5"
-                        >
-                          {availablePlatformChoices.map((p) => (
-                            <option key={p} value={p}>
-                              {p}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-zinc-400 uppercase font-semibold">Spelade på</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowPlatformModal(true)}
+                            className="text-[10px] text-purple-400 hover:text-purple-300 font-semibold cursor-pointer"
+                          >
+                            Hantera
+                          </button>
+                        </div>
+                        {platforms.length > 1 ? (
+                          <select
+                            value={platforms[0] || ''}
+                            onChange={(e) => handleSetPrimaryPlatform(e.target.value)}
+                            className="w-full bg-zinc-900 border border-zinc-700/80 rounded-md px-2 py-1 text-xs font-bold text-white focus:outline-none focus:border-purple-400 cursor-pointer mt-0.5"
+                          >
+                            {platforms.map((p) => (
+                              <option key={p} value={p}>
+                                🏆 {p} (Spelade på)
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setShowPlatformModal(true)}
+                            className="text-left w-full text-sm font-bold text-white truncate hover:text-purple-300 transition mt-0.5 cursor-pointer block"
+                          >
+                            {platforms[0] || 'Välj plattform...'}
+                          </button>
+                        )}
                       </div>
                     </div>
 

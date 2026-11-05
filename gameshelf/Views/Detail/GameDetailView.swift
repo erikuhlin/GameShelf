@@ -1142,32 +1142,59 @@ struct GameDetailView: View {
             List {
                 Section {
                     ForEach(availablePlatforms(for: g), id: \.self) { platform in
-                        let isSelected = g.platforms.first?.caseInsensitiveCompare(platform) == .orderedSame
-                        Button {
-                            selectPlatform(platform, for: g)
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        } label: {
-                            HStack {
-                                Image(systemName: platformHeaderIcon(for: platform))
-                                    .foregroundStyle(platformColor(for: platform))
-                                    .frame(width: 28)
+                        let isSelected = g.platforms.contains(where: { $0.caseInsensitiveCompare(platform) == .orderedSame })
+                        let isPrimary = g.platforms.first?.caseInsensitiveCompare(platform) == .orderedSame
 
-                                Text(platform)
-                                    .font(.body.weight(isSelected ? .semibold : .regular))
-                                    .foregroundStyle(.primary)
+                        HStack {
+                            Button {
+                                togglePlatform(platform, for: g)
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            } label: {
+                                HStack {
+                                    Image(systemName: platformHeaderIcon(for: platform))
+                                        .foregroundStyle(platformColor(for: platform))
+                                        .frame(width: 28)
 
-                                Spacer()
+                                    Text(platform)
+                                        .font(.body.weight(isSelected ? .semibold : .regular))
+                                        .foregroundStyle(.primary)
 
-                                if isSelected {
-                                    Image(systemName: "checkmark")
-                                        .font(.headline)
-                                        .foregroundStyle(.red)
+                                    if isSelected && isPrimary && g.platforms.count > 1 {
+                                        Text(g.status == .completed ? "Spelade på" : "Primär")
+                                            .font(.caption2.bold())
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color.purple.opacity(0.18), in: Capsule())
+                                            .foregroundStyle(.purple)
+                                    }
+
+                                    Spacer()
+
+                                    if isSelected {
+                                        Image(systemName: "checkmark")
+                                            .font(.headline)
+                                            .foregroundStyle(.red)
+                                    }
                                 }
+                            }
+                            .buttonStyle(.plain)
+
+                            if isSelected && !isPrimary && g.platforms.count > 1 {
+                                Button {
+                                    setPrimaryPlatform(platform, for: g)
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                } label: {
+                                    Image(systemName: "star")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.borderless)
+                                .help("Sätt som primär plattform")
                             }
                         }
                     }
                 } footer: {
-                    Text(g.status == .completed ? "Välj vilken plattform du genomförde spelet på." : "Välj vilken plattform du spelar eller äger spelet på.")
+                    Text(g.status == .completed ? "Välj vilken eller vilka plattformar du spelade eller äger spelet på. Om du har flera valda kan du markera med stjärnan vilken du spelade på." : "Välj vilken eller vilka plattformar du spelar eller äger spelet på. Om du har flera valda kan du markera med stjärnan vilken som är primär.")
                         .font(.caption)
                 }
             }
@@ -1601,18 +1628,61 @@ struct GameDetailView: View {
                 }
 
                 if let plat = g.platforms.first {
-                    HStack(spacing: 4) {
-                        Image(systemName: "gamecontroller.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.purple)
-                        Text(plat)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                    if g.platforms.count > 1 {
+                        Menu {
+                            Section("Spelade på") {
+                                ForEach(g.platforms, id: \.self) { p in
+                                    Button {
+                                        setPrimaryPlatform(p, for: g)
+                                    } label: {
+                                        HStack {
+                                            Text(p)
+                                            if p.caseInsensitiveCompare(plat) == .orderedSame {
+                                                Image(systemName: "checkmark")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Button("Hantera plattformar...") {
+                                showingPlatformSheet = true
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "gamecontroller.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(.purple)
+                                Text(plat)
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.purple.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
+                        }
+                    } else {
+                        Button {
+                            showingPlatformSheet = true
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "gamecontroller.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(.purple)
+                                Text(plat)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 8))
                 }
             }
         }
@@ -2170,11 +2240,27 @@ struct GameDetailView: View {
         return result.filter { seen.insert($0).inserted }
     }
 
-    private func selectPlatform(_ platform: String, for g: Game) {
+    private func togglePlatform(_ platform: String, for g: Game) {
         var copy = g
-        copy.platforms.removeAll(where: { $0.caseInsensitiveCompare(platform) == .orderedSame })
-        copy.platforms.insert(platform, at: 0)
+        let clean = platform.trimmingCharacters(in: .whitespacesAndNewlines)
+        if copy.platforms.contains(where: { $0.caseInsensitiveCompare(clean) == .orderedSame }) {
+            copy.platforms.removeAll(where: { $0.caseInsensitiveCompare(clean) == .orderedSame })
+        } else {
+            copy.platforms.append(clean)
+        }
         updateLocal(copy)
+    }
+
+    private func setPrimaryPlatform(_ platform: String, for g: Game) {
+        var copy = g
+        let clean = platform.trimmingCharacters(in: .whitespacesAndNewlines)
+        copy.platforms.removeAll(where: { $0.caseInsensitiveCompare(clean) == .orderedSame })
+        copy.platforms.insert(clean, at: 0)
+        updateLocal(copy)
+    }
+
+    private func selectPlatform(_ platform: String, for g: Game) {
+        setPrimaryPlatform(platform, for: g)
     }
 
     private func shortPlatformName(_ name: String) -> String {

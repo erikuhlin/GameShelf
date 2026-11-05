@@ -28,6 +28,32 @@ struct GameCompletionCelebrationSheet: View {
         _reviewNotes = State(initialValue: game.notes)
     }
 
+    private var availablePlatformChoices: [String] {
+        var result: [String] = []
+        for p in game.platforms where !p.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if !result.contains(where: { $0.caseInsensitiveCompare(p) == .orderedSame }) {
+                result.append(p)
+            }
+        }
+        let common = [
+            "PlayStation 5",
+            "PlayStation 4",
+            "Nintendo Switch",
+            "PC",
+            "Xbox Series X|S",
+            "Xbox One",
+            "Mac",
+            "iOS",
+            "Android"
+        ]
+        for c in common {
+            if !result.contains(where: { $0.caseInsensitiveCompare(c) == .orderedSame }) {
+                result.append(c)
+            }
+        }
+        return result
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -62,31 +88,23 @@ struct GameCompletionCelebrationSheet: View {
                         }
 
                         // Platform Selector
-                        if !game.platforms.isEmpty {
-                            Divider()
-                                .background(Color.white.opacity(0.1))
+                        Divider()
+                            .background(Color.white.opacity(0.1))
 
-                            HStack {
-                                Label("Plattform", systemImage: "gamecontroller.fill")
-                                    .font(.subheadline.bold())
-                                    .foregroundStyle(.primary)
+                        HStack {
+                            Label("Plattform", systemImage: "gamecontroller.fill")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.primary)
 
-                                Spacer()
+                            Spacer()
 
-                                if game.platforms.count == 1 {
-                                    Text(game.platforms[0])
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                } else {
-                                    Picker("Plattform", selection: $selectedPlatform) {
-                                        ForEach(game.platforms, id: \.self) { plat in
-                                            Text(plat).tag(plat)
-                                        }
-                                    }
-                                    .pickerStyle(.menu)
-                                    .tint(.purple)
+                            Picker("Plattform", selection: $selectedPlatform) {
+                                ForEach(availablePlatformChoices, id: \.self) { plat in
+                                    Text(plat).tag(plat)
                                 }
                             }
+                            .pickerStyle(.menu)
+                            .tint(.purple)
                         }
 
                         Divider()
@@ -333,8 +351,10 @@ struct GameCompletionCelebrationSheet: View {
             updated.notes = reviewNotes
             updated.noteUpdatedAt = Date()
         }
-        if !selectedPlatform.isEmpty && !updated.platforms.contains(selectedPlatform) {
-            updated.platforms.insert(selectedPlatform, at: 0)
+        let cleanPlat = selectedPlatform.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleanPlat.isEmpty {
+            updated.platforms.removeAll { $0.caseInsensitiveCompare(cleanPlat) == .orderedSame }
+            updated.platforms.insert(cleanPlat, at: 0)
         }
 
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()

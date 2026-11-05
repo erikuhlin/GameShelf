@@ -255,8 +255,13 @@ actor SupabaseSyncService {
             }
 
             var plats = platforms ?? []
-            if plats.isEmpty, let single = platform, !single.isEmpty {
-                plats = [single]
+            if let single = platform?.trimmingCharacters(in: .whitespacesAndNewlines), !single.isEmpty {
+                if !plats.contains(where: { $0.caseInsensitiveCompare(single) == .orderedSame }) {
+                    plats.insert(single, at: 0)
+                } else if plats.first?.caseInsensitiveCompare(single) != .orderedSame {
+                    plats.removeAll { $0.caseInsensitiveCompare(single) == .orderedSame }
+                    plats.insert(single, at: 0)
+                }
             }
 
             let intRating: Int? = rating.map { Int(round($0)) }

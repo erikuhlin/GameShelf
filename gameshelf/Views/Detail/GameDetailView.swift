@@ -932,7 +932,7 @@ struct GameDetailView: View {
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundStyle(.secondary)
                         }
-                        Text("SPELAR PÅ")
+                        Text(g.status == .completed ? "SPELADE PÅ" : "SPELAR PÅ")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(Color(.secondaryLabel))
                             .tracking(0.5)
@@ -1142,9 +1142,9 @@ struct GameDetailView: View {
             List {
                 Section {
                     ForEach(availablePlatforms(for: g), id: \.self) { platform in
-                        let isSelected = g.platforms.contains(platform)
+                        let isSelected = g.platforms.first?.caseInsensitiveCompare(platform) == .orderedSame
                         Button {
-                            togglePlatform(platform, for: g)
+                            selectPlatform(platform, for: g)
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         } label: {
                             HStack {
@@ -1167,11 +1167,11 @@ struct GameDetailView: View {
                         }
                     }
                 } footer: {
-                    Text("Välj vilken plattform du spelar eller äger spelet på.")
+                    Text(g.status == .completed ? "Välj vilken plattform du genomförde spelet på." : "Välj vilken plattform du spelar eller äger spelet på.")
                         .font(.caption)
                 }
             }
-            .navigationTitle("Spelar på")
+            .navigationTitle(g.status == .completed ? "Spelade på" : "Spelar på")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -2170,13 +2170,10 @@ struct GameDetailView: View {
         return result.filter { seen.insert($0).inserted }
     }
 
-    private func togglePlatform(_ platform: String, for g: Game) {
+    private func selectPlatform(_ platform: String, for g: Game) {
         var copy = g
-        if copy.platforms.contains(platform) {
-            copy.platforms.removeAll(where: { $0 == platform })
-        } else {
-            copy.platforms.append(platform)
-        }
+        copy.platforms.removeAll(where: { $0.caseInsensitiveCompare(platform) == .orderedSame })
+        copy.platforms.insert(platform, at: 0)
         updateLocal(copy)
     }
 

@@ -110,6 +110,18 @@ const STORY_MILESTONES: Array<{ id: GameStoryProgress; label: string; line1: str
   { id: 'completed', label: 'Klar', line1: 'Klar', line2: '' },
 ];
 
+const COMMON_PLATFORMS = [
+  'PlayStation 5',
+  'PlayStation 4',
+  'Nintendo Switch',
+  'PC',
+  'Xbox Series X|S',
+  'Xbox One',
+  'Mac',
+  'iOS',
+  'Android',
+];
+
 export function GameDetailModal(props: GameDetailModalProps) {
   if (!props.isOpen || !props.game) return null;
   return <GameDetailModalContent {...props} game={props.game} />;
@@ -165,6 +177,8 @@ function GameDetailModalContent({
   const [status, setStatus] = useState<PlayStatus>(game.status);
   const [isBacklog, setIsBacklog] = useState<boolean>(game.is_backlog ?? false);
   const [completedYear, setCompletedYear] = useState<number | null>(game.completed_year ?? null);
+  const [completedDate, setCompletedDate] = useState<string | null>(game.completed_date ?? null);
+  const [platforms, setPlatforms] = useState<string[]>(game.platforms || []);
   const [playTypes, setPlayTypes] = useState<GamePlayType[]>(
     game.play_types && game.play_types.length > 0
       ? game.play_types
@@ -175,6 +189,17 @@ function GameDetailModalContent({
   const [notes, setNotes] = useState<string>(game.notes || '');
   const [todos, setTodos] = useState<GameTodoItem[]>(game.todos || []);
   const [newTodoTitle, setNewTodoTitle] = useState('');
+
+  const availablePlatformChoices = useMemo(() => {
+    const list: string[] = [];
+    (platforms || []).forEach((p) => {
+      if (p && !list.includes(p)) list.push(p);
+    });
+    COMMON_PLATFORMS.forEach((c) => {
+      if (!list.includes(c)) list.push(c);
+    });
+    return list;
+  }, [platforms]);
 
   // Spelframsteg state
   const [hoursPlayed, setHoursPlayed] = useState<number>(game.hours_played ?? 0);
@@ -283,6 +308,8 @@ function GameDetailModalContent({
       setStatus(game.status);
       setIsBacklog(game.is_backlog ?? false);
       setCompletedYear(game.completed_year ?? null);
+      setCompletedDate(game.completed_date ?? null);
+      setPlatforms(game.platforms || []);
       setPlayTypes(
         game.play_types && game.play_types.length > 0
           ? game.play_types
@@ -348,6 +375,8 @@ function GameDetailModalContent({
     setStatus(game.status);
     setIsBacklog(game.is_backlog ?? false);
     setCompletedYear(game.completed_year ?? null);
+    setCompletedDate(game.completed_date ?? null);
+    setPlatforms(game.platforms || []);
     setRating(game.rating || null);
     setHoursPlayed(game.hours_played ?? 0);
     if (game.story_progress) setStoryProgress(game.story_progress);
@@ -358,6 +387,8 @@ function GameDetailModalContent({
     game?.status,
     game?.is_backlog,
     game?.completed_year,
+    game?.completed_date,
+    game?.platforms,
     game?.rating,
     game?.hours_played,
     game?.story_progress,
@@ -496,6 +527,8 @@ function GameDetailModalContent({
       status,
       is_backlog: isBacklog,
       completed_year: completedYear,
+      completed_date: completedDate,
+      platforms,
       play_types: playTypes,
       rating,
       notes,
@@ -541,7 +574,7 @@ function GameDetailModalContent({
 
     let nextStoryProgress = storyProgress;
     let targetCompletedYear = completedYear;
-    let targetCompletedDate = game.completed_date;
+    let targetCompletedDate = completedDate;
 
     if (isCompleted) {
       nextStoryProgress = 'completed';
@@ -557,6 +590,8 @@ function GameDetailModalContent({
       targetCompletedYear = null;
       setCompletedYear(null);
     }
+
+    setCompletedDate(targetCompletedDate);
 
     const updates: Partial<Game> = {
       status: newStatus,
@@ -576,16 +611,38 @@ function GameDetailModalContent({
     let newCompletedDate: string | null = null;
 
     if (year === currentYear) {
-      newCompletedDate = game.completed_date || new Date().toISOString();
+      newCompletedDate = completedDate || new Date().toISOString();
     } else {
       // Om "Ej angivet" eller ett äldre år: nollställ completed_date så att det inte auto-stämplas felaktigt
       newCompletedDate = null;
     }
 
+    setCompletedDate(newCompletedDate);
     saveGameUpdates({
       completed_year: year,
       completed_date: newCompletedDate,
     });
+  };
+
+  const handlePlatformChange = (newPlatform: string) => {
+    if (!newPlatform) return;
+    const currentPlats = platforms || [];
+    const updated = [newPlatform, ...currentPlats.filter((p) => p !== newPlatform)];
+    setPlatforms(updated);
+    saveGameUpdates({ platforms: updated });
+  };
+
+  const handleCompletedDateChange = (dateString: string) => {
+    if (!dateString) {
+      setCompletedDate(null);
+      saveGameUpdates({ completed_date: null });
+      return;
+    }
+    const year = new Date(dateString).getFullYear();
+    const isoDate = new Date(`${dateString}T12:00:00Z`).toISOString();
+    setCompletedDate(isoDate);
+    setCompletedYear(year);
+    saveGameUpdates({ completed_date: isoDate, completed_year: year });
   };
 
   // Kvalitativ milstolpeändring (Enkelriktad: ändrar INTE spelets status)
@@ -645,6 +702,7 @@ function GameDetailModalContent({
     setStatus(newStatus);
     setIsBacklog(newIsBacklog);
     setCompletedYear(newCompletedYear);
+    setCompletedDate(newCompletedDate);
 
     if (isPreview) {
       const fullGame: Game = {
@@ -1526,6 +1584,24 @@ function GameDetailModalContent({
                   <span className="hidden sm:inline">Flytta till önskelista</span>
                 </button>
 
+                {/* Plattform selector */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-400 font-medium">
+                    {status === 'completed' ? 'Spelade på:' : 'Plattform:'}
+                  </span>
+                  <select
+                    value={platforms[0] || ''}
+                    onChange={(e) => handlePlatformChange(e.target.value)}
+                    className="bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-brand-red cursor-pointer max-w-[160px] truncate"
+                  >
+                    {availablePlatformChoices.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Klarat år selector när status är Klar */}
                 {(status === 'completed' || storyProgress === 'completed') && (
                   <div className="flex items-center gap-1.5 bg-teal-950/40 border border-teal-500/30 rounded-lg px-2 py-1">
@@ -1614,7 +1690,7 @@ function GameDetailModalContent({
               {/* Sektion: Genomspelning & Speldagbok */}
               {status === 'completed' && (
                 <div className="bg-gradient-to-br from-amber-500/10 via-zinc-900 to-zinc-900 border border-amber-500/30 rounded-2xl p-4 sm:p-5 space-y-4 shadow-lg">
-                  <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-400 flex items-center justify-center text-black font-bold shadow-md">
                         <Trophy className="w-4 h-4" />
@@ -1624,13 +1700,25 @@ function GameDetailModalContent({
                           Genomspelat
                         </span>
                         <span className="text-[11px] text-zinc-400">
-                          {game.completed_date && (completedYear || game.completed_year)
-                            ? `Avklarat ${new Date(game.completed_date).toLocaleDateString('sv-SE', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                          {completedDate && (completedYear || game.completed_year)
+                            ? `Avklarat ${new Date(completedDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'long', year: 'numeric' })}`
                             : (completedYear || game.completed_year)
                             ? `Klarat ${completedYear || game.completed_year}`
                             : 'Spelminne / Nostalgi'}
                         </span>
                       </div>
+                    </div>
+
+                    {/* Ändra klardatum */}
+                    <div className="flex items-center gap-2 bg-zinc-950/70 border border-amber-500/30 rounded-lg px-2.5 py-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span className="text-[11px] text-zinc-400 font-medium">Klardatum:</span>
+                      <input
+                        type="date"
+                        value={completedDate ? completedDate.slice(0, 10) : ''}
+                        onChange={(e) => handleCompletedDateChange(e.target.value)}
+                        className="bg-zinc-900 border border-zinc-700/80 rounded px-1.5 py-0.5 text-xs text-white focus:outline-none focus:border-amber-400 cursor-pointer"
+                      />
                     </div>
                   </div>
 
@@ -1649,11 +1737,19 @@ function GameDetailModalContent({
                     {/* Plattform */}
                     <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-xl p-3 flex items-center gap-3">
                       <Gamepad className="w-5 h-5 text-purple-400 shrink-0" />
-                      <div>
-                        <div className="text-[10px] text-zinc-400 uppercase font-semibold">Plattform</div>
-                        <div className="text-sm font-bold text-white truncate">
-                          {game.platforms?.[0] || 'Okänd'}
-                        </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10px] text-zinc-400 uppercase font-semibold">Spelade på</div>
+                        <select
+                          value={platforms[0] || ''}
+                          onChange={(e) => handlePlatformChange(e.target.value)}
+                          className="w-full bg-zinc-900 border border-zinc-700/80 rounded-md px-2 py-1 text-xs font-bold text-white focus:outline-none focus:border-purple-400 cursor-pointer mt-0.5"
+                        >
+                          {availablePlatformChoices.map((p) => (
+                            <option key={p} value={p}>
+                              {p}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
 

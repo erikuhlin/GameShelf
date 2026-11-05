@@ -1324,7 +1324,6 @@ struct ExploreView: View {
                 )
             }
 
-            let cal = Calendar.current
             let now = Date()
 
             // Gruppera spelen per datum (ÅÅÅÅ-MM-DD)

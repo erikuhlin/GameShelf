@@ -116,6 +116,10 @@ public struct SteamQuerySummary: Codable, Sendable {
 
 public struct SteamAPIEnvelope: Codable, Sendable {
     public let response: SteamReviewsResponse?
+    
+    public nonisolated init(response: SteamReviewsResponse? = nil) {
+        self.response = response
+    }
 }
 
 public struct SteamReviewsResponse: Codable, Sendable {
@@ -129,6 +133,18 @@ public struct SteamReviewsResponse: Codable, Sendable {
         case success
         case querySummary = "query_summary"
         case reviews
+    }
+    
+    public nonisolated init(
+        appID: String? = nil,
+        success: Int? = nil,
+        querySummary: SteamQuerySummary? = nil,
+        reviews: [SteamReviewItem]? = nil
+    ) {
+        self.appID = appID
+        self.success = success
+        self.querySummary = querySummary
+        self.reviews = reviews
     }
 }
 
@@ -240,9 +256,7 @@ public actor SteamReviewService {
         
         let task = Task<SteamReviewsResponse?, Never> {
             defer {
-                Task { [cleanID] in
-                    await self.removeInFlight(cleanID)
-                }
+                self.removeInFlight(cleanID)
             }
             
             // Använd officiella Steamworks Web API (den gamla store.steampowered.com/appreviews endpointen är pensionerad av Valve)
@@ -262,7 +276,7 @@ public actor SteamReviewService {
                 // Nya API:et returnerar { "response": { "query_summary": ..., "reviews": [...] } }
                 if let envelope = try? JSONDecoder().decode(SteamAPIEnvelope.self, from: data), var res = envelope.response {
                     res.appID = cleanID
-                    await self.storeInCache(key: cacheKey, response: res)
+                    self.storeInCache(key: cacheKey, response: res)
                     return res
                 }
                 
@@ -270,7 +284,7 @@ public actor SteamReviewService {
                 if var decoded = try? JSONDecoder().decode(SteamReviewsResponse.self, from: data) {
                     if decoded.querySummary != nil || decoded.success == 1 {
                         decoded.appID = cleanID
-                        await self.storeInCache(key: cacheKey, response: decoded)
+                        self.storeInCache(key: cacheKey, response: decoded)
                         return decoded
                     }
                 }

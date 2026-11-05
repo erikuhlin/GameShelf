@@ -566,7 +566,7 @@ struct GameDetailView: View {
                                             .foregroundStyle(.primary)
                                         Text(isCommunityReliable ? "IGDB" : "Få röster")
                                             .font(.system(size: 8.5, weight: .medium))
-                                            .foregroundStyle(isCommunityReliable ? .secondary : .orange)
+                                            .foregroundStyle(isCommunityReliable ? Color.secondary : Color.orange)
                                     }
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 3.5)

@@ -222,6 +222,25 @@ public struct GameRatingsDetailSheet: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            
+            // Varning om litet underlag (< 5 spelarröster)
+            if let v = votes, v < 5 {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Text(v > 0
+                        ? "Litet röstunderlag: Betyget är baserat på endast \(v) spelarröst\(v == 1 ? "" : "er") på IGDB och kan därför vara missvisande."
+                        : "Litet röstunderlag: Mycket få spelarröster registrerade på IGDB.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Color.orange.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
         }
         .padding(16)
         .background(Color(.secondarySystemGroupedBackground))
@@ -274,6 +293,25 @@ public struct GameRatingsDetailSheet: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+            }
+            
+            // Info om få kritikerrecensioner (< 3 recensioner)
+            if let c = count, c < 3 {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.blue)
+                    Text(c > 0
+                        ? "Få recensioner: Endast \(c) kritikerrecension\(c == 1 ? "" : "er") registrerade på IGDB."
+                        : "Få recensioner: Mycket få kritikerrecensioner registrerade på IGDB.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Color.blue.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
         }
         .padding(16)

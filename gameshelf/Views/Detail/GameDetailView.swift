@@ -537,9 +537,22 @@ struct GameDetailView: View {
 
                     // Betyg: IGDB, Kritiker och Steam – alla ryms på en rad och är klickbara för fullständig röstinformation
                     let hasSteamRating = (steamReviews?.querySummary?.totalReviews ?? 0) > 0
-                    if communityRating != nil || criticRating != nil || hasSteamRating {
+                    let communityVotes = remote?.ratingCount ?? remote?.totalRatingCount
+                    let criticCount = remote?.aggregatedRatingCount
+
+                    // Tillförlitlighetströsklar: Minst 5 spelarröster för IGDB Community, minst 3 för Kritiker
+                    let isCommunityReliable = (communityVotes ?? 0) >= 5
+                    let isCriticReliable = (criticCount ?? 0) >= 3
+
+                    // Om ett betyg har för få röster döljs det från headern om det finns ett annat pålitligt betyg
+                    let hasAnyReliableRating = hasSteamRating || (criticRating != nil && isCriticReliable) || (communityRating != nil && isCommunityReliable)
+                    let showCommunityInHeader = communityRating != nil && (isCommunityReliable || !hasAnyReliableRating)
+                    let showCriticInHeader = criticRating != nil && (isCriticReliable || !hasAnyReliableRating)
+                    let showSteamInHeader = hasSteamRating
+
+                    if showCommunityInHeader || showCriticInHeader || showSteamInHeader {
                         HStack(spacing: 5) {
-                            if let cRating = communityRating {
+                            if let cRating = communityRating, showCommunityInHeader {
                                 Button {
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                     showingRatingsDetailSheet = true
@@ -551,9 +564,9 @@ struct GameDetailView: View {
                                         Text(cRating.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(cRating))" : String(format: "%.1f", cRating))
                                             .font(.system(size: 11, weight: .bold))
                                             .foregroundStyle(.primary)
-                                        Text("IGDB")
+                                        Text(isCommunityReliable ? "IGDB" : "Få röster")
                                             .font(.system(size: 8.5, weight: .medium))
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(isCommunityReliable ? .secondary : .orange)
                                     }
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 3.5)
@@ -563,7 +576,7 @@ struct GameDetailView: View {
                                 .buttonStyle(.plain)
                             }
 
-                            if let cr = criticRating {
+                            if let cr = criticRating, showCriticInHeader {
                                 Button {
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                     showingRatingsDetailSheet = true
@@ -575,7 +588,7 @@ struct GameDetailView: View {
                                         Text(cr.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(cr))" : String(format: "%.1f", cr))
                                             .font(.system(size: 11, weight: .bold))
                                             .foregroundStyle(.primary)
-                                        Text("Kritiker")
+                                        Text(isCriticReliable ? "Kritiker" : "Få rec.")
                                             .font(.system(size: 8.5, weight: .medium))
                                             .foregroundStyle(.secondary)
                                     }
@@ -587,7 +600,7 @@ struct GameDetailView: View {
                                 .buttonStyle(.plain)
                             }
 
-                            if let steamSummary = steamReviews?.querySummary, (steamSummary.totalReviews ?? 0) > 0 {
+                            if let steamSummary = steamReviews?.querySummary, showSteamInHeader {
                                 Button {
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                     showingRatingsDetailSheet = true

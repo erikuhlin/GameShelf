@@ -1128,98 +1128,119 @@ function GameDetailModalContent({
               </div>
 
               {/* Betygsbrickor */}
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                {playerRating ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowRatingsModal(true)}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 transition border border-zinc-800 text-xs font-bold cursor-pointer"
-                    title={remoteDetails?.ratingCount ? `${remoteDetails.ratingCount.toLocaleString('sv-SE')} spelarbetyg på IGDB (klicka för detaljer)` : 'IGDB Spelarbetyg (klicka för detaljer)'}
-                  >
-                    <span className="text-amber-400">★</span>
-                    <span className="text-zinc-200">{playerRating}%</span>
-                    <span className="text-zinc-500 font-normal">Spelare</span>
-                  </button>
-                ) : null}
+              {(() => {
+                const hasSteam = Boolean(steamData?.query_summary && steamData.query_summary.total_reviews > 0);
+                const commVotes = remoteDetails?.ratingCount ?? null;
+                const critCount = remoteDetails?.aggregatedRatingCount ?? null;
 
-                {criticRating ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowRatingsModal(true)}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 transition border border-blue-500/30 text-xs font-bold cursor-pointer"
-                    title={remoteDetails?.aggregatedRatingCount ? `${remoteDetails.aggregatedRatingCount.toLocaleString('sv-SE')} kritikerrecensioner på IGDB (klicka för detaljer)` : 'IGDB Kritikerbetyg (klicka för detaljer)'}
-                  >
-                    <span className="text-blue-400">✓</span>
-                    <span className="text-blue-300">{criticRating}%</span>
-                    <span className="text-zinc-500 font-normal">Kritiker</span>
-                  </button>
-                ) : null}
+                const isCommReliable = commVotes !== null ? commVotes >= 5 : false;
+                const isCritReliable = critCount !== null ? critCount >= 3 : false;
 
-                {steamData?.query_summary && steamData.query_summary.total_reviews > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowRatingsModal(true)}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 transition border border-sky-500/30 text-xs font-bold cursor-pointer"
-                    title={`${steamData.query_summary.total_positive.toLocaleString('sv-SE')} av ${steamData.query_summary.total_reviews.toLocaleString('sv-SE')} positiva omdömen på Steam (klicka för detaljer)`}
-                  >
-                    <span className="text-sky-400">👍</span>
-                    <span className="text-sky-200">
-                      {Math.round((steamData.query_summary.total_positive / steamData.query_summary.total_reviews) * 100)}%
-                    </span>
-                    <span className="text-zinc-500 font-normal">Steam</span>
-                  </button>
-                ) : null}
+                const hasAnyReliable = hasSteam || (Boolean(criticRating) && isCritReliable) || (Boolean(playerRating) && isCommReliable);
 
-                {game.rating ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowRatingsModal(true)}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 transition border border-amber-500/30 text-xs font-bold text-amber-400 cursor-pointer"
-                    title="Ditt personliga betyg"
-                  >
-                    <span>★</span>
-                    <span>{game.rating}/10</span>
-                    <span className="text-zinc-500 font-normal">Ditt betyg</span>
-                  </button>
-                ) : null}
+                const showCommunityBadge = Boolean(playerRating) && (isCommReliable || !hasAnyReliable);
+                const showCriticBadge = Boolean(criticRating) && (isCritReliable || !hasAnyReliable);
+                const showSteamBadge = hasSteam;
 
-                {/* Topplist-indikator */}
-                {toplistBadge ? (
-                  <div
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/35 text-xs font-bold text-amber-300 shadow-sm"
-                    title="IGDB Weighted Rating Topplista"
-                  >
-                    <Trophy className="w-3.5 h-3.5 text-amber-400" />
-                    <span>{toplistBadge.title}</span>
+                return (
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                    {showCommunityBadge && (
+                      <button
+                        type="button"
+                        onClick={() => setShowRatingsModal(true)}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 transition border border-zinc-800 text-xs font-bold cursor-pointer"
+                        title={commVotes ? `${commVotes.toLocaleString('sv-SE')} spelarbetyg på IGDB (klicka för detaljer)` : 'IGDB Spelarbetyg (klicka för detaljer)'}
+                      >
+                        <span className="text-amber-400">★</span>
+                        <span className="text-zinc-200">{playerRating}%</span>
+                        <span className={`font-normal ${isCommReliable ? 'text-zinc-500' : 'text-amber-500/80 text-[10px]'}`}>
+                          {isCommReliable ? 'Spelare' : 'Få röster'}
+                        </span>
+                      </button>
+                    )}
+
+                    {showCriticBadge && (
+                      <button
+                        type="button"
+                        onClick={() => setShowRatingsModal(true)}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 transition border border-blue-500/30 text-xs font-bold cursor-pointer"
+                        title={critCount ? `${critCount.toLocaleString('sv-SE')} kritikerrecensioner på IGDB (klicka för detaljer)` : 'IGDB Kritikerbetyg (klicka för detaljer)'}
+                      >
+                        <span className="text-blue-400">✓</span>
+                        <span className="text-blue-300">{criticRating}%</span>
+                        <span className={`font-normal ${isCritReliable ? 'text-zinc-500' : 'text-blue-400/80 text-[10px]'}`}>
+                          {isCritReliable ? 'Kritiker' : 'Få rec.'}
+                        </span>
+                      </button>
+                    )}
+
+                    {showSteamBadge && steamData?.query_summary && (
+                      <button
+                        type="button"
+                        onClick={() => setShowRatingsModal(true)}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 transition border border-sky-500/30 text-xs font-bold cursor-pointer"
+                        title={`${steamData.query_summary.total_positive.toLocaleString('sv-SE')} av ${steamData.query_summary.total_reviews.toLocaleString('sv-SE')} positiva omdömen på Steam (klicka för detaljer)`}
+                      >
+                        <span className="text-sky-400">👍</span>
+                        <span className="text-sky-200">
+                          {Math.round((steamData.query_summary.total_positive / steamData.query_summary.total_reviews) * 100)}%
+                        </span>
+                        <span className="text-zinc-500 font-normal">Steam</span>
+                      </button>
+                    )}
+
+                    {game.rating ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowRatingsModal(true)}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 transition border border-amber-500/30 text-xs font-bold text-amber-400 cursor-pointer"
+                        title="Ditt personliga betyg"
+                      >
+                        <span>★</span>
+                        <span>{game.rating}/10</span>
+                        <span className="text-zinc-500 font-normal">Ditt betyg</span>
+                      </button>
+                    ) : null}
+
+                    {/* Topplist-indikator */}
+                    {toplistBadge ? (
+                      <div
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/35 text-xs font-bold text-amber-300 shadow-sm"
+                        title="IGDB Weighted Rating Topplista"
+                      >
+                        <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                        <span>{toplistBadge.title}</span>
+                      </div>
+                    ) : null}
+
+                    {/* Klarat år (Spelmål) badge i headern - motsvarande appens GameDetailView */}
+                    {isOwned && status === 'completed' && (
+                      <div className="relative inline-flex items-center">
+                        <select
+                          value={completedYear !== null && completedYear !== undefined ? completedYear : ''}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? null : Number(e.target.value);
+                            handleCompletedYearChange(val);
+                          }}
+                          className="appearance-none flex items-center gap-1.5 pl-2.5 pr-7 py-1 rounded-lg bg-teal-950/50 border border-teal-500/40 hover:border-teal-500/70 text-xs font-semibold text-teal-300 focus:outline-none focus:border-teal-400 cursor-pointer transition shadow-sm"
+                          title="Välj vilket år du klarade spelet (används för årligt spelmål)"
+                        >
+                          <option value="">🏁 Klarat (år ej valt)</option>
+                          <option value={new Date().getFullYear()}>
+                            🏁 Klarat {new Date().getFullYear()} (I år)
+                          </option>
+                          {Array.from({ length: 25 }, (_, i) => new Date().getFullYear() - 1 - i).map((y) => (
+                            <option key={y} value={y}>
+                              🏁 Klarat {y}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="w-3.5 h-3.5 text-teal-400 absolute right-2 pointer-events-none" />
+                      </div>
+                    )}
                   </div>
-                ) : null}
-
-                {/* Klarat år (Spelmål) badge i headern - motsvarande appens GameDetailView */}
-                {isOwned && status === 'completed' && (
-                  <div className="relative inline-flex items-center">
-                    <select
-                      value={completedYear !== null && completedYear !== undefined ? completedYear : ''}
-                      onChange={(e) => {
-                        const val = e.target.value === '' ? null : Number(e.target.value);
-                        handleCompletedYearChange(val);
-                      }}
-                      className="appearance-none flex items-center gap-1.5 pl-2.5 pr-7 py-1 rounded-lg bg-teal-950/50 border border-teal-500/40 hover:border-teal-500/70 text-xs font-semibold text-teal-300 focus:outline-none focus:border-teal-400 cursor-pointer transition shadow-sm"
-                      title="Välj vilket år du klarade spelet (används för årligt spelmål)"
-                    >
-                      <option value="">🏁 Klarat (år ej valt)</option>
-                      <option value={new Date().getFullYear()}>
-                        🏁 Klarat {new Date().getFullYear()} (I år)
-                      </option>
-                      {Array.from({ length: 25 }, (_, i) => new Date().getFullYear() - 1 - i).map((y) => (
-                        <option key={y} value={y}>
-                          🏁 Klarat {y}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="w-3.5 h-3.5 text-teal-400 absolute right-2 pointer-events-none" />
-                  </div>
-                )}
-              </div>
+                );
+              })()}
 
               {/* Genrer & Singleplayer */}
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 pt-1">
@@ -2469,7 +2490,7 @@ function GameDetailModalContent({
               )}
 
               {playerRating && (
-                <div className="p-3.5 bg-zinc-950/60 border border-amber-500/30 rounded-xl space-y-1.5">
+                <div className="p-3.5 bg-zinc-950/60 border border-amber-500/30 rounded-xl space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="text-amber-400">★</span>
@@ -2484,11 +2505,19 @@ function GameDetailModalContent({
                       <>Spelarnas communitybetyg på IGDB.</>
                     )}
                   </div>
+                  {typeof remoteDetails?.ratingCount === 'number' && remoteDetails.ratingCount < 5 && (
+                    <div className="flex items-start gap-2 p-2 bg-amber-500/10 border border-amber-500/25 rounded-lg text-[11px] text-amber-300">
+                      <span>⚠️</span>
+                      <span>
+                        Litet röstunderlag: Betyget är baserat på endast {remoteDetails.ratingCount} spelarröst{remoteDetails.ratingCount === 1 ? '' : 'er'} och kan därför vara missvisande.
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 
               {criticRating && (
-                <div className="p-3.5 bg-zinc-950/60 border border-blue-500/30 rounded-xl space-y-1.5">
+                <div className="p-3.5 bg-zinc-950/60 border border-blue-500/30 rounded-xl space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="text-blue-400">✓</span>
@@ -2503,6 +2532,14 @@ function GameDetailModalContent({
                       <>Aggregerat genomsnitt från speltidningar och sajter.</>
                     )}
                   </div>
+                  {typeof remoteDetails?.aggregatedRatingCount === 'number' && remoteDetails.aggregatedRatingCount < 3 && (
+                    <div className="flex items-start gap-2 p-2 bg-blue-500/10 border border-blue-500/25 rounded-lg text-[11px] text-blue-300">
+                      <span>ℹ️</span>
+                      <span>
+                        Få recensioner: Endast {remoteDetails.aggregatedRatingCount} kritikerrecension{remoteDetails.aggregatedRatingCount === 1 ? '' : 'er'} registrerade på IGDB.
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 

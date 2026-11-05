@@ -69,6 +69,7 @@ struct GameDetailView: View {
     @State private var showingToplistSheet = false
     @State private var steamReviews: SteamReviewsResponse? = nil
     @State private var isLoadingSteamReviews = false
+    @State private var metacriticData: MetacriticGameData? = nil
     @State private var showingRatingsDetailSheet = false
 
     // Spelframsteg state
@@ -373,9 +374,11 @@ struct GameDetailView: View {
                 criticReviewsCount: remote?.aggregatedRatingCount,
                 steamSummary: steamReviews?.querySummary,
                 steamAppID: resolvedSteamAppID,
-                userRating: currentGame?.rating
+                userRating: currentGame?.rating,
+                metacriticData: metacriticData,
+                currentPlatform: currentGame?.platforms.first ?? remote?.platforms?.first?.name
             )
-            .presentationDetents([.fraction(0.55), .large])
+            .presentationDetents([.fraction(0.6), .large])
             .presentationDragIndicator(.visible)
         }
         .confirmationDialog(
@@ -535,7 +538,11 @@ struct GameDetailView: View {
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    // Betyg: IGDB, Kritiker och Steam – alla ryms på en rad och är klickbara för fullständig röstinformation
+                    // Betyg: Metacritic, IGDB, Kritiker och Steam – alla ryms på en rad och är klickbara för fullständig röstinformation
+                    let preferredPlatform = currentGame?.platforms.first ?? remote?.platforms?.first?.name
+                    let effectiveMetascore = metacriticData?.score(forPlatform: preferredPlatform)
+                    let hasMetascore = (effectiveMetascore ?? 0) > 0
+
                     let hasSteamRating = (steamReviews?.querySummary?.totalReviews ?? 0) > 0
                     let communityVotes = remote?.ratingCount ?? remote?.totalRatingCount
                     let criticCount = remote?.aggregatedRatingCount
@@ -545,13 +552,41 @@ struct GameDetailView: View {
                     let isCriticReliable = (criticCount ?? 0) >= 3
 
                     // Om ett betyg har för få röster döljs det från headern om det finns ett annat pålitligt betyg
-                    let hasAnyReliableRating = hasSteamRating || (criticRating != nil && isCriticReliable) || (communityRating != nil && isCommunityReliable)
+                    let hasAnyReliableRating = hasMetascore || hasSteamRating || (criticRating != nil && isCriticReliable) || (communityRating != nil && isCommunityReliable)
                     let showCommunityInHeader = communityRating != nil && (isCommunityReliable || !hasAnyReliableRating)
                     let showCriticInHeader = criticRating != nil && (isCriticReliable || !hasAnyReliableRating)
                     let showSteamInHeader = hasSteamRating
+                    let showMetascoreInHeader = hasMetascore
 
-                    if showCommunityInHeader || showCriticInHeader || showSteamInHeader {
+                    if showMetascoreInHeader || showCommunityInHeader || showCriticInHeader || showSteamInHeader {
                         HStack(spacing: 5) {
+                            if let ms = effectiveMetascore, showMetascoreInHeader {
+                                Button {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    showingRatingsDetailSheet = true
+                                } label: {
+                                    HStack(spacing: 3) {
+                                        Text("M")
+                                            .font(.system(size: 9.5, weight: .black, design: .rounded))
+                                            .foregroundStyle(.white)
+                                            .padding(.horizontal, 3.5)
+                                            .padding(.vertical, 1)
+                                            .background(ms >= 75 ? Color.green : (ms >= 50 ? Color.yellow : Color.red))
+                                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                                        Text("\(ms)")
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundStyle(.primary)
+                                        Text("Metascore")
+                                            .font(.system(size: 8.5, weight: .medium))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3.5)
+                                    .background(Color(.tertiarySystemFill))
+                                    .clipShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
+                            }
                             if let cRating = communityRating, showCommunityInHeader {
                                 Button {
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -2894,10 +2929,13 @@ struct GameDetailView: View {
     private func configureInitialState() {
         print("[GameDetailView] configureInitialState triggered for mode: \(mode)")
         
-        // Om vi redan laddat IGDB-informationen, gör inget (men hämta Steam-reviews om de saknas)
+        // Om vi redan laddat IGDB-informationen, gör inget (men hämta Steam-reviews och Metascore om de saknas)
         if case .loaded(let game) = remoteState {
             if steamReviews == nil {
                 Task { await loadSteamReviews(for: game) }
+            }
+            if metacriticData == nil {
+                Task { await loadMetacritic(for: game) }
             }
             return
         }
@@ -2915,12 +2953,15 @@ struct GameDetailView: View {
             Task { await loadRemote(id: id) }
             Task { await loadToplistBadge(id: id) }
             Task { await loadSteamReviews() }
+            Task { await loadMetacritic() }
         } else if let g = currentGame {
             Task { await ensureRemoteForLocal(g) }
             Task { await loadSteamReviews() }
+            Task { await loadMetacritic() }
         } else if case .local(let g) = mode {
             Task { await ensureRemoteForLocal(g) }
             Task { await loadSteamReviews() }
+            Task { await loadMetacritic() }
         }
 
         if let g = currentGame {
@@ -3126,6 +3167,16 @@ struct GameDetailView: View {
         await MainActor.run {
             self.steamReviews = result
             self.isLoadingSteamReviews = false
+        }
+    }
+
+    private func loadMetacritic(for igdbGame: IGDBGame? = nil) async {
+        let title = currentGame?.title ?? igdbGame?.name ?? remote?.name ?? ""
+        guard !title.isEmpty else { return }
+
+        let result = await MetacriticService.shared.fetchMetascore(forTitle: title)
+        await MainActor.run {
+            self.metacriticData = result
         }
     }
 

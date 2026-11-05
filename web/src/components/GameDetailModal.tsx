@@ -219,6 +219,24 @@ function GameDetailModalContent({
     }>;
   } | null>(null);
 
+  const [metacriticData, setMetacriticData] = useState<{
+    found: boolean;
+    title?: string;
+    slug?: string;
+    url?: string;
+    metascore?: number | null;
+    reviewCount?: number | null;
+    mustPlay?: boolean;
+    sentiment?: string | null;
+    platforms?: Array<{
+      name: string;
+      slug: string;
+      score: number | null;
+      reviewCount: number | null;
+      isLeadPlatform: boolean;
+    }>;
+  } | null>(null);
+
   const fetchSteamReviews = (appId?: string | null, title?: string | null) => {
     let url = '';
     if (appId) {
@@ -233,6 +251,18 @@ function GameDetailModalContent({
       .then((data) => {
         if (data && data.success === 1 && data.query_summary) {
           setSteamData(data);
+        }
+      })
+      .catch(() => {});
+  };
+
+  const fetchMetacritic = (title?: string | null) => {
+    if (!title || !title.trim()) return;
+    fetch(`/api/metacritic?title=${encodeURIComponent(title.trim())}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.found && typeof data.metascore === 'number') {
+          setMetacriticData(data);
         }
       })
       .catch(() => {});
@@ -270,6 +300,7 @@ function GameDetailModalContent({
       setLiveReleaseDate(game.first_release_date || null);
       setRemoteDetails(null);
       setSteamData(null);
+      setMetacriticData(null);
       setShowMovePicker(false);
       setShowCollectionPicker(false);
 
@@ -281,6 +312,7 @@ function GameDetailModalContent({
         setStoreLinks(getStoreLinks(game, d));
         fetchSteamReviews(d?.steamAppID, game.title);
       });
+      fetchMetacritic(game.title);
 
       // Hämta ev. topplist-ranking från game_ratings
       setToplistBadge(null);
@@ -1129,6 +1161,16 @@ function GameDetailModalContent({
 
               {/* Betygsbrickor */}
               {(() => {
+                const preferredPlatform = game.platforms?.[0];
+                const matchedPlatformScore = metacriticData?.platforms?.find((p: any) => {
+                  if (!preferredPlatform) return false;
+                  const pref = preferredPlatform.toLowerCase();
+                  const pName = p.name.toLowerCase();
+                  return pName.includes(pref) || pref.includes(pName);
+                })?.score;
+                const metascore = matchedPlatformScore ?? metacriticData?.metascore;
+                const hasMetascore = typeof metascore === 'number' && metascore > 0;
+
                 const hasSteam = Boolean(steamData?.query_summary && steamData.query_summary.total_reviews > 0);
                 const commVotes = remoteDetails?.ratingCount ?? null;
                 const critCount = remoteDetails?.aggregatedRatingCount ?? null;
@@ -1136,14 +1178,31 @@ function GameDetailModalContent({
                 const isCommReliable = commVotes !== null ? commVotes >= 5 : false;
                 const isCritReliable = critCount !== null ? critCount >= 3 : false;
 
-                const hasAnyReliable = hasSteam || (Boolean(criticRating) && isCritReliable) || (Boolean(playerRating) && isCommReliable);
+                const hasAnyReliable = hasMetascore || hasSteam || (Boolean(criticRating) && isCritReliable) || (Boolean(playerRating) && isCommReliable);
 
                 const showCommunityBadge = Boolean(playerRating) && (isCommReliable || !hasAnyReliable);
                 const showCriticBadge = Boolean(criticRating) && (isCritReliable || !hasAnyReliable);
                 const showSteamBadge = hasSteam;
+                const showMetascoreBadge = hasMetascore;
 
                 return (
                   <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                    {showMetascoreBadge && (
+                      <button
+                        type="button"
+                        onClick={() => setShowRatingsModal(true)}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 transition border border-emerald-500/30 text-xs font-bold cursor-pointer"
+                        title={metacriticData?.reviewCount ? `Metascore: ${metascore}/100 baserat på ${metacriticData.reviewCount} professionella recensioner` : `Metascore: ${metascore}/100`}
+                      >
+                        <span className={`text-[10px] font-black text-white px-1.5 py-0.5 rounded ${
+                          metascore! >= 75 ? 'bg-emerald-600' : metascore! >= 50 ? 'bg-amber-600' : 'bg-red-600'
+                        }`}>
+                          M
+                        </span>
+                        <span className="text-zinc-200">{metascore}</span>
+                        <span className="text-zinc-500 font-normal">Metascore</span>
+                      </button>
+                    )}
                     {showCommunityBadge && (
                       <button
                         type="button"
@@ -2467,6 +2526,101 @@ function GameDetailModalContent({
             </div>
 
             <div className="space-y-3">
+              {metacriticData && typeof metacriticData.metascore === 'number' && (() => {
+                const preferredPlatform = game.platforms?.[0];
+                const matchedPlatformScore = metacriticData.platforms?.find((p: any) => {
+                  if (!preferredPlatform) return false;
+                  const pref = preferredPlatform.toLowerCase();
+                  const pName = p.name.toLowerCase();
+                  return pName.includes(pref) || pref.includes(pName);
+                })?.score;
+                const activeScore = matchedPlatformScore ?? metacriticData.metascore;
+
+                return (
+                  <div className="p-3.5 bg-zinc-950/60 border border-emerald-500/30 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-black text-white px-1.5 py-0.5 rounded ${
+                          activeScore >= 75 ? 'bg-emerald-600' : activeScore >= 50 ? 'bg-amber-600' : 'bg-red-600'
+                        }`}>
+                          M
+                        </span>
+                        <span className="text-sm font-bold text-white">Metacritic Metascore</span>
+                      </div>
+                      {metacriticData.mustPlay ? (
+                        <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30">
+                          ★ Must-Play
+                        </span>
+                      ) : (
+                        <span className="text-xs font-extrabold text-emerald-400">
+                          {activeScore} / 100
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-zinc-400">
+                      {metacriticData.sentiment && (
+                        <span className="text-zinc-200 font-semibold">{metacriticData.sentiment}. </span>
+                      )}
+                      {metacriticData.reviewCount ? (
+                        <>Baserat på <strong className="text-zinc-200">{metacriticData.reviewCount}</strong> professionella recensioner.</>
+                      ) : (
+                        <>Officiellt branschsnitt från Metacritic.</>
+                      )}
+                    </div>
+                    {metacriticData.platforms && metacriticData.platforms.filter((p: any) => p.score).length > 1 && (
+                      <div className="pt-2 border-t border-zinc-800/80 space-y-1.5">
+                        <div className="text-[11px] font-semibold text-zinc-400">Betyg per plattform:</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                          {metacriticData.platforms.filter((p: any) => p.score).map((p: any) => {
+                            const isUsers = preferredPlatform && (
+                              p.name.toLowerCase().includes(preferredPlatform.toLowerCase()) ||
+                              preferredPlatform.toLowerCase().includes(p.name.toLowerCase())
+                            );
+                            const pScore = p.score;
+                            return (
+                              <div
+                                key={p.slug || p.name}
+                                className={`flex items-center justify-between px-2.5 py-1 rounded-lg text-xs ${
+                                  isUsers ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-zinc-900/60 border border-zinc-800/60'
+                                }`}
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded text-white ${
+                                    pScore >= 75 ? 'bg-emerald-600' : pScore >= 50 ? 'bg-amber-600' : 'bg-red-600'
+                                  }`}>
+                                    {pScore}
+                                  </span>
+                                  <span className={isUsers ? 'font-bold text-white' : 'text-zinc-300'}>{p.name}</span>
+                                  {isUsers && (
+                                    <span className="text-[9px] text-emerald-400 uppercase tracking-wider font-extrabold">Din</span>
+                                  )}
+                                </div>
+                                {p.reviewCount && (
+                                  <span className="text-[10px] text-zinc-500">{p.reviewCount} rec.</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {metacriticData.url && (
+                      <div className="pt-1">
+                        <a
+                          href={metacriticData.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-sky-400 hover:text-sky-300 inline-flex items-center gap-1 font-medium"
+                        >
+                          <span>Läs alla recensioner på Metacritic</span>
+                          <span>↗</span>
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {steamData?.query_summary && steamData.query_summary.total_reviews > 0 && (
                 <div className="p-3.5 bg-zinc-950/60 border border-sky-500/30 rounded-xl space-y-1.5">
                   <div className="flex items-center justify-between">

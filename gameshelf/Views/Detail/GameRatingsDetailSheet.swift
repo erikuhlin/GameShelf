@@ -9,6 +9,8 @@ public struct GameRatingsDetailSheet: View {
     public let steamSummary: SteamQuerySummary?
     public let steamAppID: String?
     public let userRating: Int?
+    public let metacriticData: MetacriticGameData?
+    public let currentPlatform: String?
     
     @Environment(\.dismiss) private var dismiss
     
@@ -20,7 +22,9 @@ public struct GameRatingsDetailSheet: View {
         criticReviewsCount: Int?,
         steamSummary: SteamQuerySummary?,
         steamAppID: String?,
-        userRating: Int?
+        userRating: Int?,
+        metacriticData: MetacriticGameData? = nil,
+        currentPlatform: String? = nil
     ) {
         self.gameTitle = gameTitle
         self.communityRating = communityRating
@@ -30,34 +34,42 @@ public struct GameRatingsDetailSheet: View {
         self.steamSummary = steamSummary
         self.steamAppID = steamAppID
         self.userRating = userRating
+        self.metacriticData = metacriticData
+        self.currentPlatform = currentPlatform
     }
     
     public var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    // 1. Steam Spelaromdömen
+                    // 1. Metacritic (om det finns)
+                    if let mc = metacriticData, let score = mc.metascore, score > 0 {
+                        metacriticCard(mc)
+                    }
+                    
+                    // 2. Steam Spelaromdömen
                     if let steam = steamSummary, (steam.totalReviews ?? 0) > 0 {
                         steamRatingCard(steam)
                     }
                     
-                    // 2. IGDB Community
+                    // 3. IGDB Community
                     if let cRating = communityRating {
                         igdbCommunityCard(rating: cRating, votes: communityVotes)
                     }
                     
-                    // 3. Kritikerbetyg
+                    // 4. IGDB Kritikerbetyg
                     if let cr = criticRating {
                         criticRatingCard(rating: cr, count: criticReviewsCount)
                     }
                     
-                    // 4. Ditt eget betyg
+                    // 5. Ditt eget betyg
                     if let ur = userRating, ur > 0 {
                         userRatingCard(ur)
                     }
                     
                     // Om inga betyg finns alls
-                    if steamSummary == nil && communityRating == nil && criticRating == nil && (userRating == nil || userRating == 0) {
+                    if (metacriticData?.metascore == nil || (metacriticData?.metascore ?? 0) == 0) &&
+                        steamSummary == nil && communityRating == nil && criticRating == nil && (userRating == nil || userRating == 0) {
                         VStack(spacing: 8) {
                             Image(systemName: "star.slash")
                                 .font(.system(size: 32))
@@ -83,6 +95,154 @@ public struct GameRatingsDetailSheet: View {
                 }
             }
         }
+    }
+    
+    // MARK: - Metacritic Card
+    private func metacriticCard(_ mc: MetacriticGameData) -> some View {
+        let preferredScore = mc.score(forPlatform: currentPlatform) ?? mc.metascore ?? 0
+        let color: Color = preferredScore >= 75 ? .green : (preferredScore >= 50 ? .yellow : .red)
+        
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                HStack(spacing: 6) {
+                    Text("M")
+                        .font(.system(size: 13, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(color)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                    Text("Metacritic Metascore")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                }
+                
+                Spacer()
+                
+                if mc.mustPlay == true {
+                    HStack(spacing: 3) {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.yellow)
+                        Text("Must-Play")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.primary)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2.5)
+                    .background(Color.yellow.opacity(0.15), in: Capsule())
+                } else {
+                    Text("Kritikerbetyg")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color(.tertiarySystemFill), in: Capsule())
+                }
+            }
+            
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                HStack(spacing: 4) {
+                    Text("\(preferredScore)")
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .foregroundStyle(color)
+                    Text("/ 100")
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    if let sentiment = mc.sentiment, !sentiment.isEmpty {
+                        Text(sentiment)
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.primary)
+                    } else {
+                        Text("Metascore")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.primary)
+                    }
+                    
+                    if let count = mc.reviewCount, count > 0 {
+                        Text("Baserat på \(formatNumber(count)) professionella recensioner")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Aggregerat branschsnitt")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            
+            // Plattformsöversikt om det finns fler än 1 plattform med betyg
+            if let plats = mc.platforms, plats.filter({ ($0.score ?? 0) > 0 }).count > 1 {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Betyg per plattform")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    
+                    ForEach(plats.filter { ($0.score ?? 0) > 0 }) { p in
+                        let pScore = p.score ?? 0
+                        let pColor: Color = pScore >= 75 ? .green : (pScore >= 50 ? .yellow : .red)
+                        let isUsersPlatform: Bool = {
+                            guard let cur = currentPlatform?.lowercased() else { return false }
+                            return p.name.lowercased().contains(cur) || cur.contains(p.name.lowercased())
+                        }()
+                        
+                        HStack(spacing: 8) {
+                            Text("\(pScore)")
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .frame(minWidth: 26)
+                                .padding(.vertical, 2)
+                                .background(pColor)
+                                .clipShape(RoundedRectangle(cornerRadius: 3))
+                            
+                            Text(p.name)
+                                .font(.caption.weight(isUsersPlatform ? .bold : .regular))
+                                .foregroundStyle(.primary)
+                            
+                            if isUsersPlatform {
+                                Text("Din plattform")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 1)
+                                    .background(Color(.tertiarySystemFill), in: Capsule())
+                            }
+                            
+                            Spacer()
+                            
+                            if let rc = p.reviewCount, rc > 0 {
+                                Text("\(rc) rec.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(isUsersPlatform ? Color.primary.opacity(0.04) : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                }
+                .padding(.top, 4)
+            }
+            
+            if let urlStr = mc.url, let url = URL(string: urlStr) {
+                Link(destination: url) {
+                    HStack(spacing: 4) {
+                        Text("Läs alla recensioner på Metacritic")
+                        Image(systemName: "arrow.up.right")
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.blue)
+                }
+                .padding(.top, 2)
+            }
+        }
+        .padding(16)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
     
     // MARK: - Steam Card

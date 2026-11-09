@@ -152,7 +152,7 @@ public struct SteamReviewsResponse: Codable, Sendable {
 private final class SteamCacheBox: @unchecked Sendable {
     let response: SteamReviewsResponse
     let fetchedAt: Date
-    init(response: SteamReviewsResponse) {
+    nonisolated init(response: SteamReviewsResponse) {
         self.response = response
         self.fetchedAt = Date()
     }
@@ -206,19 +206,11 @@ public actor SteamReviewService {
                 return nil
             }
             
-            // 1. Exakt match
-            if let exact = items.first(where: { $0.name.lowercased() == lowerKey }) {
-                let idStr = "\(exact.id)"
-                titleToAppIDCache[lowerKey] = idStr
-                return idStr
-            }
-            
-            // 2. Första match som innehåller titeln
-            if let first = items.first(where: {
-                let iname = $0.name.lowercased()
-                return iname.contains(lowerKey) || lowerKey.contains(iname)
-            }) ?? items.first {
-                let idStr = "\(first.id)"
+            // Sök efter matchande kandidat med strikt titellogik via GameTitleMatcher
+            if let matched = items.first(where: {
+                GameTitleMatcher.isMatch(gameTitle: clean, candidateTitle: $0.name)
+            }) {
+                let idStr = "\(matched.id)"
                 titleToAppIDCache[lowerKey] = idStr
                 return idStr
             }

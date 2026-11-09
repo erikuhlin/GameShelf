@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isTitleMatch } from '@/lib/titleMatcher';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 86400; // Cacha i 24 timmar
@@ -57,17 +58,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ found: false }, { status: 200 });
     }
 
-    // Hitta bästa matchning (exakt titelmatch eller första)
-    const normSearch = normalizeTitle(title);
-    const matchedItem =
-      items.find((i: any) => normalizeTitle(i.title || '') === normSearch) ||
-      items.find((i: any) => normalizeTitle(i.title || '').includes(normSearch)) ||
-      items[0];
+    // Hitta bästa matchning med strikt titelmatchning
+    const matchedItem = items.find((i: any) => isTitleMatch(title, i.title || ''));
 
-    const slug = matchedItem.slug;
-    if (!slug) {
+    if (!matchedItem || !matchedItem.slug) {
       return NextResponse.json({ found: false }, { status: 200 });
     }
+
+    const slug = matchedItem.slug;
 
     // 2. Hämta produktdetaljer med alla plattformsbetyg och recensionsantal
     const detailUrl = `https://backend.metacritic.com/games/metacritic/${encodeURIComponent(

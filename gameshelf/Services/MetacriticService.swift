@@ -187,14 +187,11 @@ public actor MetacriticService {
                     return empty
                 }
                 
-                // Välj bästa matchning
-                let matched = items.first(where: {
-                    self.normalizeTitle($0.title ?? "") == normKey
-                }) ?? items.first(where: {
-                    self.normalizeTitle($0.title ?? "").contains(normKey)
-                }) ?? items[0]
-                
-                guard let slug = matched.slug, !slug.isEmpty else {
+                // Välj bästa matchning med strikt titellogik via GameTitleMatcher
+                guard let matched = items.first(where: {
+                    guard let itemTitle = $0.title else { return false }
+                    return GameTitleMatcher.isMatch(gameTitle: clean, candidateTitle: itemTitle)
+                }), let slug = matched.slug, !slug.isEmpty else {
                     let empty = MetacriticGameData(found: false)
                     self.storeInCache(key: cacheKey, data: empty)
                     return empty

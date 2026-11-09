@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isTitleMatch } from '@/lib/titleMatcher';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 3600; // Cacha i 1 timme
@@ -17,18 +18,19 @@ export async function GET(request: NextRequest) {
       if (searchRes.ok) {
         const searchData = await searchRes.json();
         if (searchData.items && searchData.items.length > 0) {
-          const lower = title.toLowerCase();
-          const match = searchData.items.find(
-            (i: any) => i.name.toLowerCase() === lower
-          ) || searchData.items[0];
-          appId = String(match.id);
+          const match = searchData.items.find((i: any) =>
+            isTitleMatch(title, i.name || '')
+          );
+          if (match) {
+            appId = String(match.id);
+          }
         }
       }
     } catch (_) {}
   }
 
   if (!appId) {
-    return NextResponse.json({ error: 'Missing or unresolvable appId/title' }, { status: 400 });
+    return NextResponse.json({ error: 'Missing or unresolvable appId/title' }, { status: 404 });
   }
 
   try {

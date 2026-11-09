@@ -575,8 +575,8 @@ struct GameDetailView: View {
                     let showMetascore = hasMetascore
                     let showIGDBCritic = !hasMetascore && (criticRating != nil) && (isCriticReliable || !hasAnyReliableRating)
 
-                    // 2. Spelare: Steam i första hand, annars IGDB Community
-                    let showSteam = hasSteamRating
+                    // 2. Spelare: Steam i första hand, annars IGDB Community (Steam-betyg visas aldrig för osläppta spel)
+                    let showSteam = hasSteamRating && !isUpcomingGame
                     let showIGDBCommunity = !hasSteamRating && (communityRating != nil) && (isCommunityReliable || !hasAnyReliableRating)
 
                     if showMetascore || showIGDBCritic || showSteam || showIGDBCommunity {
@@ -3208,6 +3208,7 @@ struct GameDetailView: View {
     }
 
     private var resolvedSteamAppID: String? {
+        if isUpcomingGame { return nil }
         if let id = steamReviews?.appID, !id.isEmpty {
             return id
         }
@@ -3222,6 +3223,15 @@ struct GameDetailView: View {
     }
 
     private func loadSteamReviews(for igdbGame: IGDBGame? = nil) async {
+        // Osläppta spel kan aldrig ha Steam-användarrecensioner
+        if isUpcomingGame {
+            await MainActor.run {
+                self.steamReviews = nil
+                self.isLoadingSteamReviews = false
+            }
+            return
+        }
+
         let appID: String? = {
             if let id = (igdbGame ?? remote)?.steamAppID, !id.isEmpty {
                 return id

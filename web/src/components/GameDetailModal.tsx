@@ -264,6 +264,13 @@ function GameDetailModalContent({
   } | null>(null);
 
   const fetchSteamReviews = (appId?: string | null, title?: string | null) => {
+    // Osläppta spel kan aldrig ha Steam-recensioner
+    const releaseTimestamp = liveReleaseDate || game.first_release_date;
+    if (releaseTimestamp && releaseTimestamp * 1000 > Date.now()) {
+      setSteamData(null);
+      return;
+    }
+
     let url = '';
     if (appId) {
       url = `/api/steam/reviews?appId=${encodeURIComponent(appId)}`;
